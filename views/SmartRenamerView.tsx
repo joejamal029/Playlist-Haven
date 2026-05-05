@@ -19,6 +19,7 @@ interface NamingPart {
 interface LogicState {
   id: string;
   counter: number;
+  counterPadding: number; // Keep track of how many zeros to pad
   name: string;
   month: number; // 0-11
   year: number; // Full year e.g. 2024
@@ -72,6 +73,7 @@ export default function SmartRenamerView({ onBack }: SmartRenamerViewProps) {
   const [logicState, setLogicState] = useState<LogicState>({
     id: 'ZY',
     counter: 7,
+    counterPadding: 2,
     name: 'Relapse Demo',
     month: 9, // October
     year: 2023
@@ -211,6 +213,7 @@ export default function SmartRenamerView({ onBack }: SmartRenamerViewProps) {
     return {
       ...current,
       counter: nextCount,
+      counterPadding: current.counterPadding,
       month: nextMonth,
       year: nextYear
     };
@@ -222,7 +225,7 @@ export default function SmartRenamerView({ onBack }: SmartRenamerViewProps) {
       if (!part.enabled) return;
       switch (part.type) {
         case 'id': name += state.id; break;
-        case 'counter': name += state.counter.toString().padStart(2, '0'); break; // Default padding
+        case 'counter': name += state.counter.toString().padStart(state.counterPadding, '0'); break;
         case 'name': name += state.name; break;
         case 'text': name += part.value; break;
         case 'month': 
@@ -243,7 +246,7 @@ export default function SmartRenamerView({ onBack }: SmartRenamerViewProps) {
     structure.forEach(part => {
       if (!part.enabled) return;
       switch (part.type) {
-        case 'id': regexStr += "(?<id>[a-zA-Z0-9]+)"; break;
+        case 'id': regexStr += "(?<id>[a-zA-Z0-9_\\-]+)"; break;
         case 'counter': regexStr += "(?<counter>\\d+)"; break;
         case 'name': regexStr += "(?<name>.+?)"; break; // Non-greedy match
         case 'month': regexStr += "(?<month>[a-zA-Z]+)"; break;
@@ -266,7 +269,10 @@ export default function SmartRenamerView({ onBack }: SmartRenamerViewProps) {
       const newState: LogicState = { ...logicState };
       
       if (g.id) newState.id = g.id;
-      if (g.counter) newState.counter = parseInt(g.counter);
+      if (g.counter) {
+        newState.counter = parseInt(g.counter);
+        newState.counterPadding = g.counter.length; // Preserve the original padding length
+      }
       if (g.name) newState.name = g.name.trim();
       
       if (g.month) {
@@ -432,17 +438,18 @@ export default function SmartRenamerView({ onBack }: SmartRenamerViewProps) {
     setRenamedFiles(results);
   };
 
-  const downloadAll = () => {
-    renamedFiles.forEach((res, index) => {
-      setTimeout(() => {
+  const downloadAll = async () => {
+    for (let i = 0; i < renamedFiles.length; i++) {
+        const res = renamedFiles[i];
         const a = document.createElement('a');
         a.href = res.url;
         a.download = res.newName;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-      }, index * 200);
-    });
+        // Add a small delay to prevent browser crash/blocking
+        await new Promise(resolve => setTimeout(resolve, 300));
+    }
   };
 
   // Render a part setting block
