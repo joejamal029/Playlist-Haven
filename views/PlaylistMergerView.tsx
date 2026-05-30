@@ -213,7 +213,7 @@ export default function PlaylistMergerView({ onBack }: PlaylistMergerViewProps) 
         }
       }
     }
-    return { content, totalCount, duplicates, tracks };
+    return { content: outputContent, totalCount, duplicates, tracks };
   };
 
   const handleMerge = async () => {

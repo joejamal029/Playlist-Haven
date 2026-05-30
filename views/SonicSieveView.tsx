@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Download, Play, RefreshCw, Terminal, AlertTriangle, FileText, LayoutGrid, Layers, HelpCircle, X, Info, CheckCircle2, Sliders, ArrowLeft, ChevronDown, ChevronUp, Music } from 'lucide-react';
 import FileUploader from '../components/FileUploader';
 import { ProcessingLog, SieveResult, SieveFile } from '../types';
-import { WORKER_CODE } from '../services/sieveWorkerCode';
+import { runSieve, SieveLog } from '../services/sieveEngine2';
 
 type SieveMode = 'sonic' | 'ranking';
 
@@ -11,12 +11,14 @@ interface SonicSieveViewProps {
 }
 
 export default function SonicSieveView({ onBack }: SonicSieveViewProps) {
+  const [sieveType, setSieveType] = useState<'classic' | 'musicolet-csv'>('classic');
   const [mode, setMode] = useState<SieveMode>('sonic');
   const [tierFiles, setTierFiles] = useState<File[]>([]);
   const [penaltyFiles, setPenaltyFiles] = useState<File[]>([]);
   const [anchorFile, setAnchorFile] = useState<File | null>(null);
   const [customFileName, setCustomFileName] = useState("");
   const [threshold, setThreshold] = useState(2);
+  const [filenameCountThreshold, setFilenameCountThreshold] = useState(2);
   const [maxThreshold, setMaxThreshold] = useState(20);
   const [showHelp, setShowHelp] = useState(false);
   
@@ -52,6 +54,74 @@ export default function SonicSieveView({ onBack }: SonicSieveViewProps) {
     return { title, artist };
   };
 
+  const parseCSVText = (text: string, delimiter: string = ','): string[][] => {
+    const sanitizedText = text.replace(/^\uFEFF/, '');
+    const rows: string[][] = [];
+    let currentRow: string[] = [];
+    let currentCell = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < sanitizedText.length; i++) {
+      const char = sanitizedText[i];
+      const nextChar = sanitizedText[i + 1];
+      
+      if (char === '"') {
+        if (inQuotes && nextChar === '"') {
+          currentCell += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === delimiter && !inQuotes) {
+        currentRow.push(currentCell);
+        currentCell = '';
+      } else if ((char === '\r' || char === '\n') && !inQuotes) {
+        if (char === '\r' && nextChar === '\n') {
+          i++;
+        }
+        currentRow.push(currentCell);
+        rows.push(currentRow);
+        currentRow = [];
+        currentCell = '';
+      } else {
+        currentCell += char;
+      }
+    }
+    
+    if (currentCell || currentRow.length > 0) {
+      currentRow.push(currentCell);
+      rows.push(currentRow);
+    }
+    return rows;
+  };
+
+  const parseCSVContent = (content: string) => {
+    const parsedRows = parseCSVText(content);
+    if (parsedRows.length === 0) return [];
+    
+    const headers = parsedRows[0].map(h => h.trim().replace(/^["']|["']$/g, '').trim().toUpperCase());
+    const fileIdx = headers.indexOf('FILE_PATH');
+    const titleIdx = headers.indexOf('TITLE');
+    const artistIdx = headers.indexOf('ARTIST');
+    
+    if (fileIdx === -1) return [];
+    
+    const tracks = [];
+    for (let i = 1; i < parsedRows.length; i++) {
+      const row = parsedRows[i];
+      if (row.length <= fileIdx) continue;
+      
+      const path = row[fileIdx].trim().replace(/^["']|["']$/g, '').trim();
+      if (!path) continue;
+      
+      const title = titleIdx !== -1 && row[titleIdx] ? row[titleIdx].trim().replace(/^["']|["']$/g, '').trim() : path.split(/[\/\\]/).pop() || path;
+      const artist = artistIdx !== -1 && row[artistIdx] ? row[artistIdx].trim().replace(/^["']|["']$/g, '').trim() : 'Unknown Artist';
+      
+      tracks.push({ path, title, artist });
+    }
+    return tracks;
+  };
+
   const parseM3UContent = (content: string) => {
     const lines = content.split(/\r?\n/);
     const tracks = [];
@@ -76,19 +146,13 @@ export default function SonicSieveView({ onBack }: SonicSieveViewProps) {
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
   const logsEndRef = useRef<HTMLDivElement>(null);
-  const workerRef = useRef<Worker | null>(null);
+  const workerRef = useRef<null>(null);
 
   useEffect(() => {
     if (logsEndRef.current) {
       logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [logs]);
-
-  useEffect(() => {
-    return () => {
-      if (workerRef.current) workerRef.current.terminate();
-    };
-  }, []);
 
   // Simplified main-thread calculation for live threshold count updates
   useEffect(() => {
@@ -97,27 +161,66 @@ export default function SonicSieveView({ onBack }: SonicSieveViewProps) {
       return;
     }
 
+    const getTracksFromCSV = (content: string): Map<string, number> => {
+      const parsedRows = parseCSVText(content);
+      const trackScores = new Map<string, number>();
+      if (parsedRows.length === 0) return trackScores;
+      
+      const headers = parsedRows[0].map(h => h.trim().toUpperCase());
+      const fileIdx = headers.indexOf('FILE_PATH');
+      const playCountIdx = headers.indexOf('PLAY_COUNT');
+      
+      if (fileIdx === -1 || playCountIdx === -1) return trackScores;
+      
+      for (let i = 1; i < parsedRows.length; i++) {
+        const row = parsedRows[i];
+        if (row.length <= Math.max(fileIdx, playCountIdx)) continue;
+        
+        const path = row[fileIdx].trim();
+        const playCountVal = parseInt(row[playCountIdx], 10);
+        if (!path) continue;
+        
+        const plays = isNaN(playCountVal) ? 0 : playCountVal;
+        trackScores.set(path, plays);
+      }
+      return trackScores;
+    };
+
     const runPreview = async () => {
       setIsPreviewLoading(true);
       try {
         const songScores = new Map<string, number>();
         
         // Ingest Tiers
-        for (const file of tierFiles) {
-          const match = file.name.match(/(\d+)\s*plays?/i);
-          const points = match ? parseInt(match[1], 10) : 0;
-          if (points === 0) continue;
+        if (sieveType === 'musicolet-csv') {
+          for (const file of tierFiles) {
+            const buffer = await file.arrayBuffer();
+            let content = "";
+            try { content = new TextDecoder('utf-8').decode(buffer); } 
+            catch { content = new TextDecoder('windows-1252').decode(buffer); }
 
-          const buffer = await file.arrayBuffer();
-          let content = "";
-          try { content = new TextDecoder('utf-8').decode(buffer); } 
-          catch { content = new TextDecoder('windows-1252').decode(buffer); }
+            const trackScores = getTracksFromCSV(content);
+            trackScores.forEach((plays, path) => {
+              songScores.set(path, Math.max(songScores.get(path) || 0, plays));
+            });
+          }
+        } else {
+          for (const file of tierFiles) {
+            const match = file.name.match(/(\d+)\s*plays?/i);
+            const points = match ? parseInt(match[1], 10) : 0;
+            if (points === 0) continue;
 
-          const lines = content.split(/\r?\n/);
-          for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (!line || line.startsWith('#')) continue;
-            songScores.set(line, Math.max(songScores.get(line) || 0, points));
+            const buffer = await file.arrayBuffer();
+            let content = "";
+            try { content = new TextDecoder('utf-8').decode(buffer); } 
+            catch { content = new TextDecoder('windows-1252').decode(buffer); }
+
+            const lines = content.split(/\r?\n/);
+            for (let i = 0; i < lines.length; i++) {
+              const line = lines[i].trim();
+              if (!line || line.startsWith('#')) continue;
+              songScores.set(line, Math.max(songScores.get(line) || 0, points));
+            }
           }
         }
 
@@ -128,12 +231,32 @@ export default function SonicSieveView({ onBack }: SonicSieveViewProps) {
           try { content = new TextDecoder('utf-8').decode(buffer); } 
           catch { content = new TextDecoder('windows-1252').decode(buffer); }
 
-          const lines = content.split(/\r?\n/);
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed.startsWith('#')) continue;
-            if (songScores.has(trimmed)) {
-              songScores.set(trimmed, songScores.get(trimmed)! - 1);
+          const firstLine = content.split(/\r?\n/)[0] || '';
+          const isCsv = firstLine.toUpperCase().includes('FILE_PATH');
+          
+          if (isCsv) {
+            const parsed = parseCSVText(content);
+            const headers = parsed[0].map(h => h.trim().toUpperCase());
+            const fileIdx = headers.indexOf('FILE_PATH');
+            if (fileIdx !== -1) {
+              for (let i = 1; i < parsed.length; i++) {
+                const row = parsed[i];
+                if (row.length > fileIdx && row[fileIdx].trim()) {
+                  const path = row[fileIdx].trim();
+                  if (songScores.has(path)) {
+                    songScores.set(path, songScores.get(path)! - 1);
+                  }
+                }
+              }
+            }
+          } else {
+            const lines = content.split(/\r?\n/);
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed || trimmed.startsWith('#')) continue;
+              if (songScores.has(trimmed)) {
+                songScores.set(trimmed, songScores.get(trimmed)! - 1);
+              }
             }
           }
         }
@@ -146,7 +269,7 @@ export default function SonicSieveView({ onBack }: SonicSieveViewProps) {
     };
 
     runPreview();
-  }, [tierFiles, penaltyFiles]);
+  }, [tierFiles, penaltyFiles, sieveType]);
 
   const remainingCount = useMemo(() => {
     if (!previewScores) return 0;
@@ -163,86 +286,59 @@ export default function SonicSieveView({ onBack }: SonicSieveViewProps) {
     setAnchorFile(null);
     setCustomFileName("");
     setThreshold(2);
+    setFilenameCountThreshold(2);
     setMaxThreshold(20);
     setResult(null);
     setLogs([]);
     setExpandedIndex(null);
-    if (workerRef.current) {
-      workerRef.current.terminate();
-      workerRef.current = null;
-    }
   };
 
   const handleRun = async () => {
     if (tierFiles.length === 0) {
-      const errLog: ProcessingLog = { timestamp: new Date().toLocaleTimeString(), message: "No Tier Files selected!", type: 'ERROR' };
-      setLogs(prev => [...prev, errLog]);
+      setLogs([{ timestamp: new Date().toLocaleTimeString(), message: "No Tier Files selected!", type: 'ERROR' }]);
       return;
     }
-
     if (mode === 'sonic' && !anchorFile && !customFileName.trim()) {
-      const errLog: ProcessingLog = { timestamp: new Date().toLocaleTimeString(), message: "Please provide an Anchor file OR a result name!", type: 'ERROR' };
-      setLogs(prev => [...prev, errLog]);
+      setLogs([{ timestamp: new Date().toLocaleTimeString(), message: "Please provide an Anchor file OR a result name!", type: 'ERROR' }]);
       return;
     }
 
     setIsProcessing(true);
     setResult(null);
-    setLogs([{ timestamp: new Date().toLocaleTimeString(), message: "Starting Logic Engine (Inlined Worker)...", type: 'INFO' }]);
+    const startLogs: SieveLog[] = [{ timestamp: new Date().toLocaleTimeString(), message: "Reading files...", type: 'INFO' }];
+    setLogs(startLogs);
 
-    if (workerRef.current) workerRef.current.terminate();
-    
     try {
-      const blob = new Blob([WORKER_CODE], { type: 'application/javascript' });
-      const blobUrl = URL.createObjectURL(blob);
-      
-      workerRef.current = new Worker(blobUrl);
-      
-      workerRef.current.onmessage = (e) => {
-        const { type, log, result: workerResult } = e.data;
-        if (type === 'LOG') {
-          setLogs(prev => [...prev, log]);
-        } else if (type === 'RESULT') {
-          setResult(workerResult);
-          setIsProcessing(false);
-          workerRef.current?.terminate();
-          workerRef.current = null;
-          URL.revokeObjectURL(blobUrl);
-        }
+      const readFile = async (file: File): Promise<string> => {
+        const buf = await file.arrayBuffer();
+        try { return new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+        catch { return new TextDecoder('windows-1252').decode(buf); }
       };
 
-      workerRef.current.onerror = (err) => {
-        console.error('Worker error:', err);
-        setLogs(prev => [...prev, { 
-          timestamp: new Date().toLocaleTimeString(), 
-          message: `Worker Error: The background thread encountered a problem.`, 
-          type: 'ERROR' 
-        }]);
-        setIsProcessing(false);
+      const tierData = await Promise.all(tierFiles.map(async f => ({ name: f.name, content: await readFile(f) })));
+      const penaltyData = await Promise.all(penaltyFiles.map(async f => ({ name: f.name, content: await readFile(f) })));
+      const anchorData = anchorFile ? { name: anchorFile.name, content: await readFile(anchorFile) } : null;
+
+      const allLogs: SieveLog[] = [...startLogs];
+      const onLog = (log: SieveLog) => {
+        allLogs.push(log);
+        setLogs([...allLogs]);
       };
 
-      workerRef.current.postMessage({
-        mode,
-        tierFiles,
-        penaltyFiles,
-        anchorFile,
-        customName: customFileName,
-        threshold
-      });
+      onLog({ timestamp: new Date().toLocaleTimeString(), message: `Files loaded. Running ${sieveType === 'musicolet-csv' ? 'Musicolet CSV' : 'Classic'} sieve...`, type: 'INFO' });
 
+      const result = await runSieve(mode, sieveType, tierData, penaltyData, anchorData, customFileName, threshold, onLog, filenameCountThreshold);
+      setResult(result);
     } catch (err: any) {
-      console.error('Worker spawn failure:', err);
-      setLogs(prev => [...prev, { 
-        timestamp: new Date().toLocaleTimeString(), 
-        message: `System Error: Could not initialize background process (${err.message}).`, 
-        type: 'ERROR' 
-      }]);
+      setLogs(prev => [...prev, { timestamp: new Date().toLocaleTimeString(), message: `Error: ${err?.message ?? String(err)}`, type: 'ERROR' }]);
+    } finally {
       setIsProcessing(false);
     }
   };
 
   const downloadFile = (file: SieveFile) => {
-    const blob = new Blob([file.content], { type: 'audio/x-mpegurl' });
+    const isCsv = file.fileName.endsWith('.csv');
+    const blob = new Blob([file.content], { type: isCsv ? 'text/csv;charset=utf-8;' : 'audio/x-mpegurl' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -325,6 +421,30 @@ export default function SonicSieveView({ onBack }: SonicSieveViewProps) {
               <LayoutGrid size={14} />
               <span>Ranking Sieve</span>
             </button>
+        </div>
+
+        {/* Sieve Source Type Selector */}
+        <div className="space-y-2 bg-slate-900/30 border border-slate-800/60 p-3 rounded-xl">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Sieve Data Source</span>
+            <span className="text-[9px] text-slate-600 italic">Musicolet CSV vs M3U</span>
+          </div>
+          <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800/60">
+              <button 
+                onClick={() => { setSieveType('classic'); handleReset(); }}
+                className={`flex-1 py-1.5 text-[10px] font-bold rounded-md transition-all text-center
+                  ${sieveType === 'classic' ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+              >
+                Classic Tiers (M3U)
+              </button>
+              <button 
+                onClick={() => { setSieveType('musicolet-csv'); handleReset(); }}
+                className={`flex-1 py-1.5 text-[10px] font-bold rounded-md transition-all text-center
+                  ${sieveType === 'musicolet-csv' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+              >
+                Musicolet CSV Exports
+              </button>
+          </div>
         </div>
 
         {/* Help Modal */}
@@ -430,13 +550,13 @@ export default function SonicSieveView({ onBack }: SonicSieveViewProps) {
 
         <section className="space-y-2">
           <FileUploader 
-            label="Tier Playlists" 
-            subLabel="Files named 'X plays' (e.g. 15 plays)"
+            label={sieveType === 'musicolet-csv' ? "Most played Songs CSVs" : "Tier Playlists"} 
+            subLabel={sieveType === 'musicolet-csv' ? "Upload 'Most played Songs' exports (not Artist/Album)" : "Files named 'X plays' (e.g. 15 plays)"}
             files={tierFiles}
             onFilesSelected={(files) => setTierFiles(prev => [...prev, ...files])}
             onClear={() => setTierFiles([])}
             multiple={true}
-            accept=".m3u,.m3u8,.csv,text/csv,application/csv,application/vnd.ms-excel"
+            accept={sieveType === 'musicolet-csv' ? ".csv,text/csv,application/csv" : ".m3u,.m3u8"}
             colorClass="emerald"
           />
 
@@ -448,7 +568,7 @@ export default function SonicSieveView({ onBack }: SonicSieveViewProps) {
             onClear={() => setPenaltyFiles([])}
             multiple={true}
             colorClass="rose"
-            accept=".m3u,.m3u8,.csv,text/csv,application/csv,application/vnd.ms-excel"
+            accept={sieveType === 'musicolet-csv' ? ".m3u,.m3u8,.csv,text/csv,application/csv" : ".m3u,.m3u8"}
           />
 
           {mode === 'sonic' && (
@@ -503,6 +623,28 @@ export default function SonicSieveView({ onBack }: SonicSieveViewProps) {
                     />
                   </div>
                 </div>
+
+                <div className="border-t border-slate-850 pt-3 flex items-center justify-between">
+                  <div className="flex items-center space-x-2 text-cyan-400">
+                    <FileText size={16} />
+                    <div>
+                      <span className="text-[11px] font-bold uppercase tracking-wider block">Parenthesis Play Tier</span>
+                      <span className="text-[9px] text-slate-500">Play count tier referenced in generated filename</span>
+                    </div>
+                  </div>
+                  <div className="flex items-baseline space-x-1">
+                    <input 
+                      type="number"
+                      value={filenameCountThreshold}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        setFilenameCountThreshold(isNaN(val) ? 0 : val);
+                      }}
+                      className="w-14 bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-sm font-bold text-white text-center outline-none focus:border-cyan-500"
+                    />
+                    <span className="text-[9px] text-slate-500 font-bold uppercase">Plays</span>
+                  </div>
+                </div>
               </div>
 
               <FileUploader 
@@ -512,7 +654,7 @@ export default function SonicSieveView({ onBack }: SonicSieveViewProps) {
                 onFilesSelected={(files) => setAnchorFile(files[0])}
                 onClear={() => { setAnchorFile(null); setCustomFileName(""); }}
                 multiple={false}
-                accept=".m3u,.m3u8,.csv,text/csv,application/csv,application/vnd.ms-excel"
+                accept={sieveType === 'musicolet-csv' ? ".m3u,.m3u8,.csv,text/csv,application/csv" : ".m3u,.m3u8"}
                 colorClass="amber"
               />
               {!anchorFile && (
@@ -573,7 +715,9 @@ export default function SonicSieveView({ onBack }: SonicSieveViewProps) {
             </div>
             <div className="grid grid-cols-1 gap-3">
               {result.files.map((file, idx) => {
-                const tracks = expandedIndex === idx ? parseM3UContent(file.content) : [];
+                const tracks = expandedIndex === idx 
+                  ? (sieveType === 'musicolet-csv' ? parseCSVContent(file.content) : parseM3UContent(file.content))
+                  : [];
                 return (
                 <div key={idx} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden transition-colors">
                   <div 

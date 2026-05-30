@@ -56,20 +56,20 @@ const Dashboard = ({ onViewSelect }: { onViewSelect: (view: AppView) => void }) 
     <div className="flex flex-col min-h-screen pb-10">
       <header className="p-6 pt-8 pb-2">
         <h1 className="text-3xl font-black tracking-tighter bg-gradient-to-r from-slate-100 to-slate-500 bg-clip-text text-transparent">
-          M3U Haven
+          Playlist Haven
         </h1>
         <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Mobile Playlist Toolkit</p>
       </header>
 
       <main className="flex-1 px-4 space-y-6 mt-4">
         
-        {/* Main Tools Grid */}
-        <div className="grid grid-cols-1 gap-4">
+        {/* Unified, Balanced & Fully Responsive Tools Grid */}
+        <div className="grid grid-cols-2 gap-4">
           
-          {/* Sonic Sieve Card */}
+          {/* Sonic Sieve Card - Featured */}
           <button 
             onClick={() => onViewSelect('sieve')}
-            className="group relative overflow-hidden p-6 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-indigo-500/50 hover:shadow-2xl hover:shadow-indigo-900/10 active:scale-[0.98]"
+            className="group relative overflow-hidden p-6 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-indigo-500/50 hover:shadow-2xl hover:shadow-indigo-900/10 active:scale-[0.98] col-span-2"
           >
             <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
               <Layers size={80} />
@@ -85,10 +85,10 @@ const Dashboard = ({ onViewSelect }: { onViewSelect: (view: AppView) => void }) 
             </div>
           </button>
           
-          {/* Vision to Playlist Card - Featured New Tool */}
+          {/* Vision to Playlist Card - Featured */}
           <button 
             onClick={() => onViewSelect('vision')}
-            className="group relative overflow-hidden p-6 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-violet-500/50 hover:shadow-2xl hover:shadow-violet-900/10 active:scale-[0.98]"
+            className="group relative overflow-hidden p-6 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-violet-500/50 hover:shadow-2xl hover:shadow-violet-900/10 active:scale-[0.98] col-span-2"
           >
             <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
               <Eye size={80} />
@@ -104,165 +104,157 @@ const Dashboard = ({ onViewSelect }: { onViewSelect: (view: AppView) => void }) 
             </div>
           </button>
 
-          <div className="grid grid-cols-2 gap-4">
-            {/* Playlist Manipulator Card */}
-            <button 
-              onClick={() => onViewSelect('manipulator')}
-              className="group relative overflow-hidden p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-indigo-500/50 hover:shadow-2xl hover:shadow-indigo-900/10 active:scale-[0.98] col-span-2"
-            >
+          {/* Playlist Manipulator Card */}
+          <button 
+            onClick={() => onViewSelect('manipulator')}
+            className="group relative overflow-hidden p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-indigo-500/50 hover:shadow-2xl hover:shadow-indigo-900/10 active:scale-[0.98] col-span-2"
+          >
+            <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+              <SlidersHorizontal size={60} />
+            </div>
+            <div className="relative z-10">
+              <div className="w-8 h-8 bg-indigo-500/20 text-indigo-400 rounded-lg flex items-center justify-center mb-3 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
+                <SlidersHorizontal size={16} />
+              </div>
+              <h2 className="text-sm font-bold text-slate-200 mb-1">Manipulator</h2>
+              <p className="text-[10px] text-slate-500 leading-tight font-medium">
+                Power tool. Rearrange, delete, sort, and select tracks from M3U or CSV.
+              </p>
+            </div>
+          </button>
+
+          {/* Smart Renamer Card */}
+          <button 
+              onClick={() => onViewSelect('renamer')}
+              className="group relative overflow-hidden p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-teal-500/50 hover:shadow-2xl hover:shadow-teal-900/10 active:scale-[0.98]"
+          >
               <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
-                <SlidersHorizontal size={60} />
+              <Type size={60} />
               </div>
               <div className="relative z-10">
-                <div className="w-8 h-8 bg-indigo-500/20 text-indigo-400 rounded-lg flex items-center justify-center mb-3 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
-                  <SlidersHorizontal size={16} />
-                </div>
-                <h2 className="text-sm font-bold text-slate-200 mb-1">Manipulator</h2>
-                <p className="text-[10px] text-slate-500 leading-tight font-medium">
-                  Power tool. Rearrange, delete, sort, and select tracks from M3U or CSV.
-                </p>
+              <div className="w-8 h-8 bg-teal-500/20 text-teal-400 rounded-lg flex items-center justify-center mb-3 group-hover:bg-teal-500 group-hover:text-white transition-colors">
+                  <Type size={16} />
               </div>
-            </button>
+              <h2 className="text-sm font-bold text-slate-200 mb-1">Renamer</h2>
+              <p className="text-[10px] text-slate-500 leading-tight font-medium">
+                  Logical sequences.
+              </p>
+              </div>
+          </button>
 
-            {/* Smart Renamer Card */}
-            <button 
-                onClick={() => onViewSelect('renamer')}
-                className="group relative overflow-hidden p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-teal-500/50 hover:shadow-2xl hover:shadow-teal-900/10 active:scale-[0.98]"
-            >
-                <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
-                <Type size={60} />
-                </div>
-                <div className="relative z-10">
-                <div className="w-8 h-8 bg-teal-500/20 text-teal-400 rounded-lg flex items-center justify-center mb-3 group-hover:bg-teal-500 group-hover:text-white transition-colors">
-                    <Type size={16} />
-                </div>
-                <h2 className="text-sm font-bold text-slate-200 mb-1">Renamer</h2>
-                <p className="text-[10px] text-slate-500 leading-tight font-medium">
-                    Logical sequences.
-                </p>
-                </div>
-            </button>
-
-             {/* Appearance Counter Card */}
-             <button 
-                onClick={() => onViewSelect('appearance')}
-                className="group relative overflow-hidden p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-sky-500/50 hover:shadow-2xl hover:shadow-sky-900/10 active:scale-[0.98]"
-            >
-                <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
-                <BarChart3 size={60} />
-                </div>
-                <div className="relative z-10">
-                <div className="w-8 h-8 bg-sky-500/20 text-sky-400 rounded-lg flex items-center justify-center mb-3 group-hover:bg-sky-500 group-hover:text-white transition-colors">
-                    <BarChart3 size={16} />
-                </div>
-                <h2 className="text-sm font-bold text-slate-200 mb-1">Frequency</h2>
-                <p className="text-[10px] text-slate-500 leading-tight font-medium">
-                    Count song occurrences.
-                </p>
-                </div>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            {/* Playlist Randomizer Card */}
-            <button 
-              onClick={() => onViewSelect('randomizer')}
-              className="group relative overflow-hidden p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-fuchsia-500/50 hover:shadow-2xl hover:shadow-fuchsia-900/10 active:scale-[0.98]"
-            >
+           {/* Appearance Counter Card */}
+           <button 
+              onClick={() => onViewSelect('appearance')}
+              className="group relative overflow-hidden p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-sky-500/50 hover:shadow-2xl hover:shadow-sky-900/10 active:scale-[0.98]"
+          >
               <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
-                <Shuffle size={60} />
+              <BarChart3 size={60} />
               </div>
               <div className="relative z-10">
-                <div className="w-8 h-8 bg-fuchsia-500/20 text-fuchsia-400 rounded-lg flex items-center justify-center mb-3 group-hover:bg-fuchsia-500 group-hover:text-white transition-colors">
-                  <Shuffle size={16} />
-                </div>
-                <h2 className="text-sm font-bold text-slate-200 mb-1">Randomizer</h2>
-                <p className="text-[10px] text-slate-500 leading-tight font-medium">
-                  Mix and shuffle batches.
-                </p>
+              <div className="w-8 h-8 bg-sky-500/20 text-sky-400 rounded-lg flex items-center justify-center mb-3 group-hover:bg-sky-500 group-hover:text-white transition-colors">
+                  <BarChart3 size={16} />
               </div>
-            </button>
+              <h2 className="text-sm font-bold text-slate-200 mb-1">Frequency</h2>
+              <p className="text-[10px] text-slate-500 leading-tight font-medium">
+                  Count song occurrences.
+              </p>
+              </div>
+          </button>
 
-            {/* Playlist Pruner Card */}
-            <button 
-              onClick={() => onViewSelect('pruner')}
-              className="group relative overflow-hidden p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-rose-500/50 hover:shadow-2xl hover:shadow-rose-900/10 active:scale-[0.98]"
-            >
-              <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
-                <Eraser size={60} />
+          {/* Playlist Randomizer Card */}
+          <button 
+            onClick={() => onViewSelect('randomizer')}
+            className="group relative overflow-hidden p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-fuchsia-500/50 hover:shadow-2xl hover:shadow-fuchsia-900/10 active:scale-[0.98]"
+          >
+            <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Shuffle size={60} />
+            </div>
+            <div className="relative z-10">
+              <div className="w-8 h-8 bg-fuchsia-500/20 text-fuchsia-400 rounded-lg flex items-center justify-center mb-3 group-hover:bg-fuchsia-500 group-hover:text-white transition-colors">
+                <Shuffle size={16} />
               </div>
-              <div className="relative z-10">
-                <div className="w-8 h-8 bg-rose-500/20 text-rose-400 rounded-lg flex items-center justify-center mb-3 group-hover:bg-rose-500 group-hover:text-white transition-colors">
-                  <Eraser size={16} />
-                </div>
-                <h2 className="text-sm font-bold text-slate-200 mb-1">Pruner</h2>
-                <p className="text-[10px] text-slate-500 leading-tight font-medium">
-                  Smart remove tracks.
-                </p>
-              </div>
-            </button>
-          </div>
+              <h2 className="text-sm font-bold text-slate-200 mb-1">Randomizer</h2>
+              <p className="text-[10px] text-slate-500 leading-tight font-medium">
+                Mix and shuffle batches.
+              </p>
+            </div>
+          </button>
 
-          <div className="grid grid-cols-2 gap-4">
-            {/* Playlist Merger Card */}
-            <button 
-              onClick={() => onViewSelect('merger')}
-              className="group relative overflow-hidden p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-cyan-500/50 hover:shadow-2xl hover:shadow-cyan-900/10 active:scale-[0.98]"
-            >
-              <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
-                <Merge size={60} />
+          {/* Playlist Pruner Card */}
+          <button 
+            onClick={() => onViewSelect('pruner')}
+            className="group relative overflow-hidden p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-rose-500/50 hover:shadow-2xl hover:shadow-rose-900/10 active:scale-[0.98]"
+          >
+            <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Eraser size={60} />
+            </div>
+            <div className="relative z-10">
+              <div className="w-8 h-8 bg-rose-500/20 text-rose-400 rounded-lg flex items-center justify-center mb-3 group-hover:bg-rose-500 group-hover:text-white transition-colors">
+                <Eraser size={16} />
               </div>
-              <div className="relative z-10">
-                <div className="w-8 h-8 bg-cyan-500/20 text-cyan-400 rounded-lg flex items-center justify-center mb-3 group-hover:bg-cyan-500 group-hover:text-white transition-colors">
-                  <Merge size={16} />
-                </div>
-                <h2 className="text-sm font-bold text-slate-200 mb-1">Merger</h2>
-                <p className="text-[10px] text-slate-500 leading-tight font-medium">
-                  Combine & deduplicate.
-                </p>
-              </div>
-            </button>
-          </div>
+              <h2 className="text-sm font-bold text-slate-200 mb-1">Pruner</h2>
+              <p className="text-[10px] text-slate-500 leading-tight font-medium">
+                Smart remove tracks.
+              </p>
+            </div>
+          </button>
 
-          <div className="grid grid-cols-2 gap-4">
-            {/* Tier Filtering Card */}
-            <button 
-              onClick={() => onViewSelect('tier')}
-              className="group relative overflow-hidden p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-emerald-500/50 hover:shadow-2xl hover:shadow-emerald-900/10 active:scale-[0.98]"
-            >
-              <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
-                <Filter size={60} />
+          {/* Playlist Merger Card */}
+          <button 
+            onClick={() => onViewSelect('merger')}
+            className="group relative overflow-hidden p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-cyan-500/50 hover:shadow-2xl hover:shadow-cyan-900/10 active:scale-[0.98]"
+          >
+            <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Merge size={60} />
+            </div>
+            <div className="relative z-10">
+              <div className="w-8 h-8 bg-cyan-500/20 text-cyan-400 rounded-lg flex items-center justify-center mb-3 group-hover:bg-cyan-500 group-hover:text-white transition-colors">
+                <Merge size={16} />
               </div>
-              <div className="relative z-10">
-                <div className="w-8 h-8 bg-emerald-500/20 text-emerald-400 rounded-lg flex items-center justify-center mb-3 group-hover:bg-emerald-500 group-hover:text-white transition-colors">
-                  <Filter size={16} />
-                </div>
-                <h2 className="text-sm font-bold text-slate-200 mb-1">Tier Filter</h2>
-                <p className="text-[10px] text-slate-500 leading-tight font-medium">
-                  Top N, Range & Percent.
-                </p>
-              </div>
-            </button>
+              <h2 className="text-sm font-bold text-slate-200 mb-1">Merger</h2>
+              <p className="text-[10px] text-slate-500 leading-tight font-medium">
+                Combine & deduplicate.
+              </p>
+            </div>
+          </button>
 
-            {/* Playlist Splitter Card */}
-            <button 
-              onClick={() => onViewSelect('splitter')}
-              className="group relative overflow-hidden p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-orange-500/50 hover:shadow-2xl hover:shadow-orange-900/10 active:scale-[0.98]"
-            >
-              <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
-                <Scissors size={60} />
+          {/* Tier Filtering Card */}
+          <button 
+            onClick={() => onViewSelect('tier')}
+            className="group relative overflow-hidden p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-emerald-500/50 hover:shadow-2xl hover:shadow-emerald-900/10 active:scale-[0.98]"
+          >
+            <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Filter size={60} />
+            </div>
+            <div className="relative z-10">
+              <div className="w-8 h-8 bg-emerald-500/20 text-emerald-400 rounded-lg flex items-center justify-center mb-3 group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+                <Filter size={16} />
               </div>
-              <div className="relative z-10">
-                <div className="w-8 h-8 bg-orange-500/20 text-orange-400 rounded-lg flex items-center justify-center mb-3 group-hover:bg-orange-500 group-hover:text-white transition-colors">
-                  <Scissors size={16} />
-                </div>
-                <h2 className="text-sm font-bold text-slate-200 mb-1">Splitter</h2>
-                <p className="text-[10px] text-slate-500 leading-tight font-medium">
-                  Cut into parts.
-                </p>
+              <h2 className="text-sm font-bold text-slate-200 mb-1">Tier Filter</h2>
+              <p className="text-[10px] text-slate-500 leading-tight font-medium">
+                Top N, Range & Percent.
+              </p>
+            </div>
+          </button>
+
+          {/* Playlist Splitter Card */}
+          <button 
+            onClick={() => onViewSelect('splitter')}
+            className="group relative overflow-hidden p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-orange-500/50 hover:shadow-2xl hover:shadow-orange-900/10 active:scale-[0.98] col-span-2"
+          >
+            <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Scissors size={60} />
+            </div>
+            <div className="relative z-10">
+              <div className="w-8 h-8 bg-orange-500/20 text-orange-400 rounded-lg flex items-center justify-center mb-3 group-hover:bg-orange-500 group-hover:text-white transition-colors">
+                <Scissors size={16} />
               </div>
-            </button>
-          </div>
+              <h2 className="text-sm font-bold text-slate-200 mb-1">Splitter</h2>
+              <p className="text-[10px] text-slate-500 leading-tight font-medium">
+                Cut into parts.
+              </p>
+            </div>
+          </button>
         </div>
 
         {/* Status / Coming Soon Area */}

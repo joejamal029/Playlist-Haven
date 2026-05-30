@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Eye, Plus, Trash2, Upload, FileText, CheckCircle2, AlertCircle, Loader2, Download, Sparkles, Image, Search, Filter, CheckSquare, Square } from 'lucide-react';
+import { ArrowLeft, Eye, Plus, Trash2, Upload, FileText, CheckCircle2, AlertCircle, Loader2, Download, Sparkles, Image, Search, Filter, CheckSquare, Square, Settings } from 'lucide-react';
 import FileUploader from '../components/FileUploader';
 import { 
   parseScreenshot, 
@@ -10,7 +10,9 @@ import {
   parseScreenshotWithArt,
   enrichMetadataWithSearch,
   EnrichedSong,
-  ArtContextSong
+  ArtContextSong,
+  getAIConfig,
+  setAIConfig
 } from '../services/visionEngine';
 
 interface VisionToPlaylistViewProps {
@@ -34,6 +36,8 @@ interface ProcessingStatus {
 type VisionMode = 'standard' | 'experimental';
 
 export default function VisionToPlaylistView({ onBack }: VisionToPlaylistViewProps) {
+  const [aiConfig, setAiConfigState] = useState(() => getAIConfig());
+  const [showSettings, setShowSettings] = useState(false);
   const [mode, setMode] = useState<VisionMode>('standard');
   const [groups, setGroups] = useState<ImageGroup[]>([
     { id: '1', name: 'Screenshots', files: [] }
@@ -312,23 +316,132 @@ export default function VisionToPlaylistView({ onBack }: VisionToPlaylistViewPro
           </div>
         </div>
         
-        {/* Mode Switcher */}
-        <div className="flex bg-slate-800 p-1 rounded-lg">
-          <button
-            onClick={() => setMode('standard')}
-            className={`px-3 py-1.5 text-[10px] font-bold rounded-md transition-colors ${mode === 'standard' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+        <div className="flex items-center space-x-2">
+          {/* AI Settings Config Toggle */}
+          <button 
+            onClick={() => setShowSettings(!showSettings)}
+            className={`p-2 rounded-lg border transition-all ${showSettings ? 'bg-violet-500/20 border-violet-500/40 text-violet-300' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-700'}`}
+            title="Configure AI Models (Local vs Cloud)"
           >
-            Standard
+            <Settings size={14} className={showSettings ? 'animate-spin-slow' : ''} />
           </button>
-          <button
-            onClick={() => setMode('experimental')}
-            className={`px-3 py-1.5 text-[10px] font-bold rounded-md transition-colors flex items-center gap-1 ${mode === 'experimental' ? 'bg-amber-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
-          >
-            <Sparkles size={10} />
-            Art Matcher
-          </button>
+
+          {/* Mode Switcher */}
+          <div className="flex bg-slate-800 p-1 rounded-lg">
+            <button
+              onClick={() => setMode('standard')}
+              className={`px-3 py-1.5 text-[10px] font-bold rounded-md transition-colors ${mode === 'standard' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              Standard
+            </button>
+            <button
+              onClick={() => setMode('experimental')}
+              className={`px-3 py-1.5 text-[10px] font-bold rounded-md transition-colors flex items-center gap-1 ${mode === 'experimental' ? 'bg-amber-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              <Sparkles size={10} />
+              Art Matcher
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Collapsible AI Config Settings */}
+      {showSettings && (
+        <div className="bg-slate-900 border-b border-slate-800 p-4 animate-in slide-in-from-top duration-200">
+          <div className="max-w-4xl mx-auto bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+              <h3 className="text-xs font-bold text-violet-400 uppercase tracking-widest flex items-center gap-1.5">
+                <Settings size={14} />
+                AI Engine Settings
+              </h3>
+              <button 
+                onClick={() => setShowSettings(false)} 
+                className="text-[10px] text-slate-500 hover:text-slate-300 font-bold"
+              >
+                Close Settings
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-[10px] text-slate-500 font-bold block mb-1 uppercase tracking-wider">AI Provider</label>
+                <select
+                  value={aiConfig.provider}
+                  onChange={(e) => {
+                    const provider = e.target.value as 'gemini' | 'openai-compatible';
+                    const modelName = provider === 'gemini' ? 'gemini-3-flash-preview' : 'llava';
+                    const updates = { provider, modelName };
+                    const updated = { ...aiConfig, ...updates };
+                    setAiConfigState(updated);
+                    setAIConfig(updated);
+                  }}
+                  className="w-full bg-slate-900 border border-slate-800 focus:border-violet-500 outline-none rounded-lg p-2.5 text-xs text-slate-200"
+                >
+                  <option value="gemini">Gemini (Cloud SDK)</option>
+                  <option value="openai-compatible">Custom / Local (OpenAI Compatible API)</option>
+                </select>
+                <p className="text-[9px] text-slate-500 mt-1 leading-tight">
+                  {aiConfig.provider === 'gemini' 
+                    ? "Uses Google GenAI SDK. Perfect for premium web-search grounding." 
+                    : "Connect to Ollama, LM Studio, DeepSeek, or other local engines."}
+                </p>
+              </div>
+
+              <div>
+                <label className="text-[10px] text-slate-500 font-bold block mb-1 uppercase tracking-wider">Model Name</label>
+                <input
+                  type="text"
+                  value={aiConfig.modelName}
+                  onChange={(e) => {
+                    const updated = { ...aiConfig, modelName: e.target.value };
+                    setAiConfigState(updated);
+                    setAIConfig(updated);
+                  }}
+                  placeholder={aiConfig.provider === 'gemini' ? 'gemini-3-flash-preview' : 'llava'}
+                  className="w-full bg-slate-900 border border-slate-800 focus:border-violet-500 outline-none rounded-lg p-2.5 text-xs text-slate-200 placeholder:text-slate-600"
+                />
+              </div>
+
+              {aiConfig.provider === 'openai-compatible' && (
+                <div className="md:col-span-2">
+                  <label className="text-[10px] text-slate-500 font-bold block mb-1 uppercase tracking-wider">Custom Base URL</label>
+                  <input
+                    type="text"
+                    value={aiConfig.baseUrl}
+                    onChange={(e) => {
+                      const updated = { ...aiConfig, baseUrl: e.target.value };
+                      setAiConfigState(updated);
+                      setAIConfig(updated);
+                    }}
+                    placeholder="http://localhost:11434/v1"
+                    className="w-full bg-slate-900 border border-slate-800 focus:border-violet-500 outline-none rounded-lg p-2.5 text-xs text-slate-200 placeholder:text-slate-600"
+                  />
+                  <p className="text-[9px] text-slate-500 mt-1">
+                    Base endpoint of the OpenAI-compatible service (e.g. <code>http://localhost:11434/v1</code> for Ollama, <code>http://localhost:1234/v1</code> for LM Studio).
+                  </p>
+                </div>
+              )}
+
+              <div className="md:col-span-2">
+                <label className="text-[10px] text-slate-500 font-bold block mb-1 uppercase tracking-wider">
+                  {aiConfig.provider === 'gemini' ? 'Gemini API Key (Overrides env)' : 'API Key (Optional / Bearer Token)'}
+                </label>
+                <input
+                  type="password"
+                  value={aiConfig.apiKey}
+                  onChange={(e) => {
+                    const updated = { ...aiConfig, apiKey: e.target.value };
+                    setAiConfigState(updated);
+                    setAIConfig(updated);
+                  }}
+                  placeholder={aiConfig.provider === 'gemini' ? 'AIzaSy...' : 'Optional Auth Token'}
+                  className="w-full bg-slate-900 border border-slate-800 focus:border-violet-500 outline-none rounded-lg p-2.5 text-xs text-slate-200 placeholder:text-slate-600"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto p-4 pb-20 space-y-6">
         

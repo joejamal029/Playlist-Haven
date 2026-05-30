@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Agent Artifacts, Brain, Scratch & VibeCode
+.vibecode/
+*.vibecode
+.gemini/
+brain/
+scratch/
+

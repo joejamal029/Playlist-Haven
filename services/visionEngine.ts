@@ -1,7 +1,129 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Initialize Gemini Client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const LOCAL_STORAGE_KEY = 'playlist-haven-ai-config';
+
+export interface AIConfig {
+  provider: 'gemini' | 'openai-compatible';
+  apiKey: string;
+  baseUrl: string;
+  modelName: string;
+}
+
+const DEFAULT_CONFIG: AIConfig = {
+  provider: 'gemini',
+  apiKey: '',
+  baseUrl: 'http://localhost:11434/v1',
+  modelName: 'gemini-3-flash-preview',
+};
+
+let currentAIConfig: AIConfig = (() => {
+  try {
+    const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (saved) {
+      return { ...DEFAULT_CONFIG, ...JSON.parse(saved) };
+    }
+  } catch (e) {
+    console.error("Failed to load AI config from localStorage:", e);
+  }
+  return DEFAULT_CONFIG;
+})();
+
+export const getAIConfig = (): AIConfig => {
+  return currentAIConfig;
+};
+
+export const setAIConfig = (config: Partial<AIConfig>) => {
+  currentAIConfig = { ...currentAIConfig, ...config };
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(currentAIConfig));
+  } catch (e) {
+    console.error("Failed to save AI config to localStorage:", e);
+  }
+  aiInstance = null;
+};
+
+// Initialize Gemini Client Lazily to prevent crash on startup if API key is missing
+let aiInstance: GoogleGenAI | null = null;
+const getAIClient = (): GoogleGenAI => {
+  if (!aiInstance) {
+    let apiKey = currentAIConfig.apiKey || "";
+    if (!apiKey) {
+      try {
+        apiKey = (typeof process !== "undefined" && process.env ? (process.env.API_KEY || process.env.GEMINI_API_KEY) : "") || "";
+      } catch (e) {}
+    }
+    if (!apiKey) {
+      try {
+        // @ts-ignore
+        apiKey = (import.meta.env?.VITE_GEMINI_API_KEY || import.meta.env?.VITE_API_KEY) || "";
+      } catch (e) {}
+    }
+    
+    if (!apiKey && currentAIConfig.provider === 'gemini') {
+      console.warn("Gemini API Key is missing. Vision-to-Playlist functionality will be unavailable.");
+    }
+    aiInstance = new GoogleGenAI({ apiKey });
+  }
+  return aiInstance;
+};
+
+const callOpenAICompatible = async (
+  prompt: string,
+  base64Image?: { data: string; mimeType: string }
+): Promise<string> => {
+  const config = currentAIConfig;
+  const baseUrl = config.baseUrl.replace(/\/$/, "");
+  const url = `${baseUrl}/chat/completions`;
+  
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  
+  if (config.apiKey) {
+    headers["Authorization"] = `Bearer ${config.apiKey}`;
+  }
+
+  let content: any = prompt;
+  if (base64Image) {
+    content = [
+      {
+        type: "text",
+        text: prompt
+      },
+      {
+        type: "image_url",
+        image_url: {
+          url: `data:${base64Image.mimeType};base64,${base64Image.data}`
+        }
+      }
+    ];
+  }
+
+  const body = {
+    model: config.modelName || "llava",
+    messages: [
+      {
+        role: "user",
+        content: content
+      }
+    ],
+    response_format: prompt.toLowerCase().includes("json") ? { type: "json_object" } : undefined
+  };
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body)
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`AI API request failed with status ${response.status}: ${errorText}`);
+  }
+
+  const resJson = await response.json();
+  return resJson?.choices?.[0]?.message?.content || "";
+};
 
 export interface ExtractedSong {
   artist: string;
@@ -188,29 +310,41 @@ export const parseScreenshot = async (file: File): Promise<ExtractedSong[]> => {
   return smartRetry(async () => {
     try {
       const part = await fileToGenerativePart(file);
+      let text = "";
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: {
-          parts: [
-            {
-              inlineData: {
-                mimeType: part.mimeType,
-                data: part.data
+      if (currentAIConfig.provider === 'gemini') {
+        const response = await getAIClient().models.generateContent({
+          model: currentAIConfig.modelName || "gemini-3-flash-preview",
+          contents: {
+            parts: [
+              {
+                inlineData: {
+                  mimeType: part.mimeType,
+                  data: part.data
+                }
+              },
+              {
+                text: `Analyze this playlist screenshot. Extract a list of songs. 
+                Ignore UI elements (time, battery, navigation, duration). 
+                If a song is cut off at the bottom, ignore it.
+                Return ONLY a JSON array where each object has 'artist', 'title', and 'album'.
+                If album is not visible, leave it empty. No markdown formatting.`
               }
-            },
-            {
-              text: `Analyze this playlist screenshot. Extract a list of songs. 
-              Ignore UI elements (time, battery, navigation, duration). 
-              If a song is cut off at the bottom, ignore it.
-              Return ONLY a JSON array where each object has 'artist', 'title', and 'album'.
-              If album is not visible, leave it empty. No markdown formatting.`
-            }
-          ]
-        }
-      });
+            ]
+          }
+        });
+        text = response.text || "[]";
+      } else {
+        text = await callOpenAICompatible(
+          `Analyze this playlist screenshot. Extract a list of songs. 
+          Ignore UI elements (time, battery, navigation, duration). 
+          If a song is cut off at the bottom, ignore it.
+          Return ONLY a JSON array where each object has 'artist', 'title', and 'album'.
+          If album is not visible, leave it empty. Do not include any explanation or markdown formatting outside of raw JSON.`,
+          part
+        );
+      }
 
-      let text = response.text || "[]";
       text = text.replace(/```json/g, '').replace(/```/g, '').trim();
       
       try {
@@ -221,7 +355,7 @@ export const parseScreenshot = async (file: File): Promise<ExtractedSong[]> => {
         return [];
       }
     } catch (error) {
-      console.error("Gemini Vision Error:", error);
+      console.error("Vision Parse Error:", error);
       throw error; // Re-throw for smartRetry to catch
     }
   });
@@ -235,31 +369,45 @@ export const parseScreenshotWithArt = async (file: File): Promise<ArtContextSong
   return smartRetry(async () => {
     try {
       const part = await fileToGenerativePart(file);
+      let text = "";
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: {
-          parts: [
-            {
-              inlineData: {
-                mimeType: part.mimeType,
-                data: part.data
+      if (currentAIConfig.provider === 'gemini') {
+        const response = await getAIClient().models.generateContent({
+          model: currentAIConfig.modelName || "gemini-3-flash-preview",
+          contents: {
+            parts: [
+              {
+                inlineData: {
+                  mimeType: part.mimeType,
+                  data: part.data
+                }
+              },
+              {
+                text: `Analyze this playlist screenshot. 
+                For EACH visible song entry, extract:
+                1. 'title' (the larger text)
+                2. 'listed_artist' (the smaller text - note if it looks like a duplicate of the title)
+                3. 'art_description': A detailed visual description of the album artwork (colors, objects, style, text if any).
+                
+                Return ONLY a JSON array with these exact keys, no markdown formatting.`
               }
-            },
-            {
-              text: `Analyze this playlist screenshot. 
-              For EACH visible song entry, extract:
-              1. 'title' (the larger text)
-              2. 'listed_artist' (the smaller text - note if it looks like a duplicate of the title)
-              3. 'art_description': A detailed visual description of the album artwork (colors, objects, style, text if any).
-              
-              Return ONLY a JSON array with these exact keys, no markdown formatting.`
-            }
-          ]
-        }
-      });
+            ]
+          }
+        });
+        text = response.text || "[]";
+      } else {
+        text = await callOpenAICompatible(
+          `Analyze this playlist screenshot. 
+          For EACH visible song entry, extract:
+          1. 'title' (the larger text)
+          2. 'listed_artist' (the smaller text - note if it looks like a duplicate of the title)
+          3. 'art_description': A detailed visual description of the album artwork (colors, objects, style, text if any).
+          
+          Return ONLY a JSON array with these exact keys. Do not include any explanation or markdown formatting outside of raw JSON.`,
+          part
+        );
+      }
 
-      let text = response.text || "[]";
       text = text.replace(/```json/g, '').replace(/```/g, '').trim();
       
       try {
@@ -270,7 +418,7 @@ export const parseScreenshotWithArt = async (file: File): Promise<ArtContextSong
         return [];
       }
     } catch (error) {
-      console.error("Gemini Experimental Vision Error:", error);
+      console.error("Experimental Vision Error:", error);
       throw error;
     }
   });
@@ -283,41 +431,56 @@ export const parseScreenshotWithArt = async (file: File): Promise<ArtContextSong
 export const enrichMetadataWithSearch = async (song: ArtContextSong): Promise<EnrichedSong> => {
   return smartRetry(async () => {
     try {
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Find the correct music metadata for this song.
-        
-        Known Title: "${song.title}"
-        Listed Artist (likely incorrect/missing): "${song.listed_artist}"
-        Album Artwork Visual Description: ${song.art_description}
-        
-        Search the web to find the correct Artist and Album name that matches this title and artwork description.
-        
-        Return ONLY a JSON object with this exact structure, no markdown formatting or other text:
-        { "artist": "string", "album": "string", "title": "string", "confidence": "high" | "medium" | "low" }`,
-        config: {
-          tools: [{ googleSearch: {} }]
-        }
-      });
+      let text = "";
+      let search_url = "";
 
-      let text = response.text || "{}";
-      // Clean up markdown formatting if the model still includes it
+      if (currentAIConfig.provider === 'gemini') {
+        const response = await getAIClient().models.generateContent({
+          model: currentAIConfig.modelName || "gemini-3-flash-preview",
+          contents: `Find the correct music metadata for this song.
+          
+          Known Title: "${song.title}"
+          Listed Artist (likely incorrect/missing): "${song.listed_artist}"
+          Album Artwork Visual Description: ${song.art_description}
+          
+          Search the web to find the correct Artist and Album name that matches this title and artwork description.
+          
+          Return ONLY a JSON object with this exact structure, no markdown formatting or other text:
+          { "artist": "string", "album": "string", "title": "string", "confidence": "high" | "medium" | "low" }`,
+          config: {
+            tools: [{ googleSearch: {} }]
+          }
+        });
+        text = response.text || "{}";
+
+        // Extract a relevant URL if available
+        const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+        if (chunks && chunks.length > 0) {
+          const webChunk = chunks.find((c: any) => c.web?.uri);
+          if (webChunk) search_url = webChunk.web.uri;
+        }
+      } else {
+        text = await callOpenAICompatible(
+          `Find the correct music metadata for this song.
+          
+          Known Title: "${song.title}"
+          Listed Artist (likely incorrect/missing): "${song.listed_artist}"
+          Album Artwork Visual Description: ${song.art_description}
+          
+          Identify the correct Artist and Album name that matches this title and artwork description based on your knowledge base.
+          
+          Return ONLY a JSON object with this exact structure. Do not include any explanation or markdown formatting outside of raw JSON:
+          { "artist": "string", "album": "string", "title": "string", "confidence": "high" | "medium" | "low" }`
+        );
+      }
+
       text = text.replace(/```json/g, '').replace(/```/g, '').trim();
       
       let data: any = {};
       try {
         data = JSON.parse(text);
       } catch (e) {
-        console.error("Failed to parse JSON from search response:", text);
-      }
-      
-      // Extract a relevant URL if available
-      const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-      let search_url = "";
-      if (chunks && chunks.length > 0) {
-        // Try to find a chunk with a web URI
-        const webChunk = chunks.find((c: any) => c.web?.uri);
-        if (webChunk) search_url = webChunk.web.uri;
+        console.error("Failed to parse JSON from response:", text);
       }
 
       return {
