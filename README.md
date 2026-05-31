@@ -27,6 +27,10 @@ graph LR
     E --> A
 ```
 
+This application was designed to serve as the technological engine for my music blog, where I explore the deep intersections of technology, listening autonomy, and the preservation of art:
+*   **Read my essays on Substack**: [Playlist Haven / Experience Engine on Substack](https://your-username.substack.com) — *where I publish in-depth analyses on the digitization of the music experience, playlist functional layers, and curational metrics.*
+*   **Follow my articles on Medium**: [Experience Engine Series on Medium](https://medium.com/@your-username) — *featuring long-form pieces on escaping cloud novelty loops and cultivating library depth.*
+
 ---
 
 ## 🌉 Bridging Walled Gardens: Streaming Extension Pipeline
