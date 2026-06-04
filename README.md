@@ -4,6 +4,9 @@
 
 # Playlist Haven - The Experience Engine Made Real
 
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Vercel-blueviolet?style=for-the-badge&logo=vercel)](https://playlist-haven.vercel.app)
+
+
 > *"I once saw a quote about how the difference between art shoved in the attic and art hung on your wall is experience. To have your art on the wall is to experience it. To find your art is to use the discovery engine; to stop there is to put it in the attic. To use the experience engine is to put your art on your wall and live with it."*
 
 **Playlist Haven** is a premium, state-of-the-art mobile playlist utility suite built to empower music audiophiles to take back autonomy over their media libraries, resist algorithmic feed fatigue, and intentionally cultivate their own listening environments. It serves as the physical realization of the **Experience Engine**—a local-first "swiss army knife" designed to organize, sort, slice, and sieve music assets with absolute control.
@@ -27,9 +30,11 @@ graph LR
     E --> A
 ```
 
-This application was designed to serve as the technological engine for my music blog, where I explore the deep intersections of technology, listening autonomy, and the preservation of art:
-*   **Read my essays on Substack**: [Playlist Haven / Experience Engine on Substack](https://your-username.substack.com) — *where I publish in-depth analyses on the digitization of the music experience, playlist functional layers, and curational metrics.*
-*   **Follow my articles on Medium**: [Experience Engine Series on Medium](https://medium.com/@your-username) — *featuring long-form pieces on escaping cloud novelty loops and cultivating library depth.*
+This application was designed to serve as the technological engine for my music blog, **Beyond Shuffle & Algorithms**, where I explore the deep intersections of technology, listening autonomy, playlist functional layers, and the preservation of art in an age of algorithmic feed fatigue. 
+
+I cross-publish the exact same essays on both platforms, so you can follow the series on whichever reader interface you prefer:
+*   **Substack**: [Beyond Shuffle & Algorithms on Substack](https://substack.com/@beyondshuffleandalgorithms)
+*   **Medium**: [Beyond Shuffle & Algorithms on Medium](https://beyondshuffleandalgorithms.medium.com/)
 
 ---
 
