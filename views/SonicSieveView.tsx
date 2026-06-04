@@ -3,6 +3,7 @@ import { Download, Play, RefreshCw, Terminal, AlertTriangle, FileText, LayoutGri
 import FileUploader from '../components/FileUploader';
 import { ProcessingLog, SieveResult, SieveFile } from '../types';
 import { runSieve, SieveLog } from '../services/sieveEngine2';
+import { downloadPlaylistFile } from '../services/downloadHelper';
 
 type SieveMode = 'sonic' | 'ranking';
 
@@ -336,24 +337,18 @@ export default function SonicSieveView({ onBack }: SonicSieveViewProps) {
     }
   };
 
-  const downloadFile = (file: SieveFile) => {
+  const downloadFile = async (file: SieveFile) => {
     const isCsv = file.fileName.endsWith('.csv');
-    const blob = new Blob([file.content], { type: isCsv ? 'text/csv;charset=utf-8;' : 'audio/x-mpegurl' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = file.fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    await downloadPlaylistFile(file.content, file.fileName, isCsv ? 'text/csv;charset=utf-8;' : 'audio/x-mpegurl');
   };
 
-  const downloadAll = () => {
+  const downloadAll = async () => {
     if (!result || !result.files) return;
-    result.files.forEach((file, index) => {
-      setTimeout(() => downloadFile(file), index * 300);
-    });
+    for (let i = 0; i < result.files.length; i++) {
+      const file = result.files[i];
+      await new Promise(resolve => setTimeout(resolve, i * 300));
+      await downloadFile(file);
+    }
   };
 
   const canRun = tierFiles.length > 0 && (mode === 'ranking' || anchorFile || customFileName.trim().length > 0);

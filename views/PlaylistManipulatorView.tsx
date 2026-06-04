@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { ArrowLeft, SlidersHorizontal, Download, Trash2, GripVertical, CheckSquare, Square, SortAsc, Filter, Music, RefreshCcw, Search, ArrowUpToLine, ArrowDownToLine, CopyMinus, ArrowUpDown, Dices, Plus, X, Layers, Sparkles, BarChart3 } from 'lucide-react';
 import FileUploader from '../components/FileUploader';
-import { saveAs } from 'file-saver';
+import { downloadPlaylistFile } from '../services/downloadHelper';
 
 interface PlaylistManipulatorViewProps {
   onBack: () => void;
@@ -824,7 +824,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
     setDraggedId(null);
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!activePlaylist || activePlaylist.tracks.length === 0) return;
     
     let content = '';
@@ -843,8 +843,8 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
       }
     }
     
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    saveAs(blob, `manipulated_${activePlaylist.originalFilename}`);
+    const mimeType = activePlaylist.fileType === 'csv' ? 'text/csv;charset=utf-8;' : 'audio/x-mpegurl';
+    await downloadPlaylistFile(content, `manipulated_${activePlaylist.originalFilename}`, mimeType);
   };
 
   return (

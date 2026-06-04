@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { ArrowLeft, BarChart3, Download, Search, CheckCircle2, ListFilter, ChevronDown, ChevronUp, Music } from 'lucide-react';
 import FileUploader from '../components/FileUploader';
 import { readFile } from '../services/sieveEngine';
+import { downloadPlaylistFile } from '../services/downloadHelper';
+
 
 interface PlaylistAppearanceViewProps {
   onBack: () => void;
@@ -16,6 +18,7 @@ interface ParsedTrack {
 interface AppearanceResult {
   fileName: string;
   url: string;
+  content: string;
   trackCount: number;
   appearanceLevel: number;
   tracks: ParsedTrack[];
@@ -138,6 +141,7 @@ export default function PlaylistAppearanceView({ onBack }: PlaylistAppearanceVie
           newResults.push({
               fileName,
               url,
+              content: outputContent,
               trackCount: tracks.length,
               appearanceLevel: level,
               tracks: parsedTracks
@@ -155,17 +159,12 @@ export default function PlaylistAppearanceView({ onBack }: PlaylistAppearanceVie
     }
   };
 
-  const downloadAll = () => {
-    results.forEach((res, index) => {
-      setTimeout(() => {
-        const a = document.createElement('a');
-        a.href = res.url;
-        a.download = res.fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      }, index * 200);
-    });
+  const downloadAll = async () => {
+    for (let i = 0; i < results.length; i++) {
+      const res = results[i];
+      await new Promise(resolve => setTimeout(resolve, i * 200));
+      await downloadPlaylistFile(res.content, res.fileName, 'audio/x-mpegurl');
+    }
   };
 
   return (
@@ -268,14 +267,9 @@ export default function PlaylistAppearanceView({ onBack }: PlaylistAppearanceVie
                     </div>
                     <div className="flex items-center space-x-2">
                       <button 
-                        onClick={(e) => {
+                        onClick={async (e) => {
                           e.stopPropagation();
-                          const a = document.createElement('a');
-                          a.href = res.url;
-                          a.download = res.fileName;
-                          document.body.appendChild(a);
-                          a.click();
-                          document.body.removeChild(a);
+                          await downloadPlaylistFile(res.content, res.fileName, 'audio/x-mpegurl');
                         }}
                         className="p-2 bg-slate-800 hover:bg-sky-500 hover:text-white text-slate-400 rounded-lg transition-colors"
                       >

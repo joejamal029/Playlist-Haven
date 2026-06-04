@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ArrowLeft, Scissors, Download, FileAudio, Check, Divide, ChevronDown, ChevronUp, Music } from 'lucide-react';
 import FileUploader from '../components/FileUploader';
 import { readFile } from '../services/sieveEngine';
+import { downloadPlaylistFile } from '../services/downloadHelper';
 
 interface PlaylistSplitterViewProps {
   onBack: () => void;
@@ -16,6 +17,7 @@ interface ParsedTrack {
 interface SplitResult {
   fileName: string;
   url: string;
+  content: string;
   count: number;
   tracks: ParsedTrack[];
 }
@@ -115,6 +117,7 @@ export default function PlaylistSplitterView({ onBack }: PlaylistSplitterViewPro
         newResults.push({
           fileName: `${baseName} (Part ${i + 1}).m3u`,
           url,
+          content: outputContent,
           count: chunk.length,
           tracks: parsedChunkTracks
         });
@@ -230,14 +233,9 @@ export default function PlaylistSplitterView({ onBack }: PlaylistSplitterViewPro
                       </div>
                       <div className="flex items-center space-x-2">
                         <button 
-                          onClick={(e) => {
+                          onClick={async (e) => {
                             e.stopPropagation();
-                            const a = document.createElement('a');
-                            a.href = part.url;
-                            a.download = part.fileName;
-                            document.body.appendChild(a);
-                            a.click();
-                            document.body.removeChild(a);
+                            await downloadPlaylistFile(part.content, part.fileName, 'audio/x-mpegurl');
                           }}
                           className="p-2 bg-slate-800 hover:bg-orange-500 hover:text-white text-slate-400 rounded-lg transition-colors"
                         >

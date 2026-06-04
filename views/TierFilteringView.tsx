@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Filter, Layers, Settings2, Download, Check, Combine, ChevronDown, ChevronUp, Music } from 'lucide-react';
 import FileUploader from '../components/FileUploader';
+import { downloadPlaylistFile } from '../services/downloadHelper';
 
 interface TierFilteringViewProps {
   onBack: () => void;
@@ -78,6 +79,7 @@ export default function TierFilteringView({ onBack }: TierFilteringViewProps) {
   
   const [deduplicate, setDeduplicate] = useState(true);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [resultContent, setResultContent] = useState<string>("");
   const [resultCount, setResultCount] = useState(0);
   const [resultTracks, setResultTracks] = useState<M3USong[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -146,6 +148,7 @@ export default function TierFilteringView({ onBack }: TierFilteringViewProps) {
       
       const blob = new Blob([m3uContent], { type: 'audio/x-mpegurl' });
       setResultUrl(URL.createObjectURL(blob));
+      setResultContent(m3uContent);
       setResultCount(combinedSongs.length);
       setResultTracks(combinedSongs);
       setExpandedResult(false);
@@ -315,14 +318,15 @@ export default function TierFilteringView({ onBack }: TierFilteringViewProps) {
                         {expandedResult ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                      </button>
                  )}
-                 <a 
-                   href={resultUrl}
-                   download="Tier_Filtered_Combined.m3u"
-                   className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg flex items-center justify-center space-x-2 transition-all"
-                 >
-                   <Download size={16} />
-                   <span className="font-bold">Download File</span>
-                 </a>
+                  <button 
+                    onClick={async () => {
+                      await downloadPlaylistFile(resultContent, "Tier_Filtered_Combined.m3u", 'audio/x-mpegurl');
+                    }}
+                    className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg flex items-center justify-center space-x-2 transition-all"
+                  >
+                    <Download size={16} />
+                    <span className="font-bold">Download File</span>
+                  </button>
                </div>
 
                {expandedResult && resultTracks.length > 0 && (

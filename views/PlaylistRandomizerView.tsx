@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ArrowLeft, Shuffle, Download, Sparkles, Dices, List, Layers, ChevronDown, ChevronUp, Music } from 'lucide-react';
 import FileUploader from '../components/FileUploader';
 import { readFile } from '../services/sieveEngine';
+import { downloadPlaylistFile } from '../services/downloadHelper';
 
 interface PlaylistRandomizerViewProps {
   onBack: () => void;
@@ -17,6 +18,7 @@ interface BatchResult {
   originalName: string;
   fileName: string;
   url: string;
+  content: string;
   count: number;
   tracks: ParsedTrack[];
 }
@@ -28,6 +30,7 @@ export default function PlaylistRandomizerView({ onBack }: PlaylistRandomizerVie
 
   // Single Merge Mode Results
   const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [resultContent, setResultContent] = useState<string>("");
   const [trackCount, setTrackCount] = useState<number>(0);
   const [shuffleCount, setShuffleCount] = useState<number>(0);
   const [standardTracks, setStandardTracks] = useState<ParsedTrack[]>([]);
@@ -101,7 +104,7 @@ export default function PlaylistRandomizerView({ onBack }: PlaylistRandomizerVie
       outputContent += t.path + "\n";
     });
     const blob = new Blob([outputContent], { type: 'audio/x-mpegurl' });
-    return URL.createObjectURL(blob);
+    return { url: URL.createObjectURL(blob), content: outputContent };
   };
 
   const handleShuffle = async () => {
@@ -127,11 +130,12 @@ export default function PlaylistRandomizerView({ onBack }: PlaylistRandomizerVie
           const content = await readFile(file);
           const tracks = parseTracks(content);
           shuffleArray(tracks);
-          const url = generateBlobUrl(tracks);
+          const { url, content: outContent } = generateBlobUrl(tracks);
           results.push({
             originalName: file.name,
             fileName: `(Random) ${file.name}`,
             url,
+            content: outContent,
             count: tracks.length,
             tracks: tracks.map(t => t.parsed)
           });
@@ -146,8 +150,9 @@ export default function PlaylistRandomizerView({ onBack }: PlaylistRandomizerVie
           allTracks = [...allTracks, ...tracks];
         }
         shuffleArray(allTracks);
-        const url = generateBlobUrl(allTracks);
+        const { url, content: outContent } = generateBlobUrl(allTracks);
         setResultUrl(url);
+        setResultContent(outContent);
         setTrackCount(allTracks.length);
         setStandardTracks(allTracks.map(t => t.parsed));
         setShuffleCount(prev => prev + 1);
@@ -160,17 +165,12 @@ export default function PlaylistRandomizerView({ onBack }: PlaylistRandomizerVie
     }
   };
 
-  const downloadAllBatches = () => {
-    batchResults.forEach((res, index) => {
-      setTimeout(() => {
-        const a = document.createElement('a');
-        a.href = res.url;
-        a.download = res.fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      }, index * 200);
-    });
+  const downloadAllBatches = async () => {
+    for (let i = 0; i < batchResults.length; i++) {
+      const res = batchResults[i];
+      await new Promise(resolve => setTimeout(resolve, i * 200));
+      await downloadPlaylistFile(res.content, res.fileName, 'audio/x-mpegurl');
+    }
   };
 
   return (
@@ -288,14 +288,15 @@ export default function PlaylistRandomizerView({ onBack }: PlaylistRandomizerVie
                      </button>
                  )}
                  
-                 <a 
-                   href={resultUrl} 
-                   download={`randomized_playlist_${new Date().getTime()}.m3u`}
-                   className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg flex items-center justify-center space-x-2 transition-all"
-                 >
-                   <Download size={16} />
-                   <span className="font-bold">Download M3U</span>
-                 </a>
+                  <button 
+                    onClick={async () => {
+                      await downloadPlaylistFile(resultContent, `randomized_playlist_${new Date().getTime()}.m3u`, 'audio/x-mpegurl');
+                    }}
+                    className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg flex items-center justify-center space-x-2 transition-all"
+                  >
+                    <Download size={16} />
+                    <span className="font-bold">Download M3U</span>
+                  </button>
                </div>
 
                {expandedStandard && standardTracks.length > 0 && (
@@ -348,14 +349,9 @@ export default function PlaylistRandomizerView({ onBack }: PlaylistRandomizerVie
                     </div>
                     <div className="flex items-center space-x-2">
                       <button 
-                        onClick={(e) => {
+                        onClick={async (e) => {
                           e.stopPropagation();
-                          const a = document.createElement('a');
-                          a.href = res.url;
-                          a.download = res.fileName;
-                          document.body.appendChild(a);
-                          a.click();
-                          document.body.removeChild(a);
+                          await downloadPlaylistFile(res.content, res.fileName, 'audio/x-mpegurl');
                         }}
                         className="p-2 bg-slate-800 hover:bg-pink-500 hover:text-white text-slate-400 rounded-lg transition-colors"
                       >

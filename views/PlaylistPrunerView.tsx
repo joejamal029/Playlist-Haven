@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ArrowLeft, Eraser, Download, FileMinus, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Music } from 'lucide-react';
 import FileUploader from '../components/FileUploader';
 import { readFile } from '../services/sieveEngine';
+import { downloadPlaylistFile } from '../services/downloadHelper';
 
 interface PlaylistPrunerViewProps {
   onBack: () => void;
@@ -16,6 +17,7 @@ interface ParsedTrack {
 interface PruneResult {
   fileName: string;
   url: string;
+  content: string;
   originalCount: number;
   removedCount: number;
   finalCount: number;
@@ -129,6 +131,7 @@ export default function PlaylistPrunerView({ onBack }: PlaylistPrunerViewProps) 
         newResults.push({
           fileName: file.name, // Keeping original name as requested
           url,
+          content: outputContent,
           originalCount,
           removedCount: originalCount - keptCount,
           finalCount: keptCount,
@@ -147,17 +150,12 @@ export default function PlaylistPrunerView({ onBack }: PlaylistPrunerViewProps) 
     }
   };
 
-  const downloadAll = () => {
-    results.forEach((res, index) => {
-      setTimeout(() => {
-        const a = document.createElement('a');
-        a.href = res.url;
-        a.download = res.fileName; // Browser will handle duplicate names usually by appending (1)
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      }, index * 200);
-    });
+  const downloadAll = async () => {
+    for (let i = 0; i < results.length; i++) {
+      const res = results[i];
+      await new Promise(resolve => setTimeout(resolve, i * 200));
+      await downloadPlaylistFile(res.content, res.fileName, 'audio/x-mpegurl');
+    }
   };
 
   return (
@@ -264,14 +262,9 @@ export default function PlaylistPrunerView({ onBack }: PlaylistPrunerViewProps) 
                     </div>
                     <div className="flex items-center space-x-2">
                       <button 
-                        onClick={(e) => {
+                        onClick={async (e) => {
                           e.stopPropagation();
-                          const a = document.createElement('a');
-                          a.href = res.url;
-                          a.download = res.fileName;
-                          document.body.appendChild(a);
-                          a.click();
-                          document.body.removeChild(a);
+                          await downloadPlaylistFile(res.content, res.fileName, 'audio/x-mpegurl');
                         }}
                         className="p-2 bg-slate-800 hover:bg-rose-500 hover:text-white text-slate-400 rounded-lg transition-colors"
                       >

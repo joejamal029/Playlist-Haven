@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, ArrowUp, ArrowDown, Plus, X, Type, Calendar, Hash, Settings, Download, ChevronRight, ChevronLeft, ChevronUp, ChevronDown, Music, Wand2, RefreshCw, Filter, FileAudio, CheckCircle2, AlertCircle } from 'lucide-react';
 import FileUploader from '../components/FileUploader';
+import { downloadPlaylistFile } from '../services/downloadHelper';
 
 interface SmartRenamerViewProps {
   onBack: () => void;
@@ -128,7 +129,7 @@ export default function SmartRenamerView({ onBack }: SmartRenamerViewProps) {
   const [deduplicate, setDeduplicate] = useState(true);
   const [renameMode, setRenameMode] = useState<'generator' | 'matcher'>('generator');
 
-  const [renamedFiles, setRenamedFiles] = useState<{ original: string, newName: string, url: string, entries: M3UEntry[] }[]>([]);
+  const [renamedFiles, setRenamedFiles] = useState<{ original: string, newName: string, url: string, content: string, entries: M3UEntry[] }[]>([]);
 
   // -------------------------------------------------------------
   // LOGIC & PARSING
@@ -513,6 +514,7 @@ export default function SmartRenamerView({ onBack }: SmartRenamerViewProps) {
         original: `${targetFiles.length} playlists combined`,
         newName,
         url: URL.createObjectURL(blob),
+        content: m3uContent,
         entries: combinedEntries
       });
     } else {
@@ -590,6 +592,7 @@ export default function SmartRenamerView({ onBack }: SmartRenamerViewProps) {
           original: item.originalName,
           newName,
           url: URL.createObjectURL(blob),
+          content: m3uContent,
           entries
         });
       }
@@ -602,12 +605,7 @@ export default function SmartRenamerView({ onBack }: SmartRenamerViewProps) {
   const downloadAll = async () => {
     for (let i = 0; i < renamedFiles.length; i++) {
         const res = renamedFiles[i];
-        const a = document.createElement('a');
-        a.href = res.url;
-        a.download = res.newName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        await downloadPlaylistFile(res.content, res.newName, 'audio/x-mpegurl');
         await new Promise(resolve => setTimeout(resolve, 300));
     }
   };
@@ -1155,14 +1153,15 @@ export default function SmartRenamerView({ onBack }: SmartRenamerViewProps) {
                                     </div>
                                 </div>
                                 <div className="flex items-center space-x-3">
-                                    <a 
-                                        href={res.url} 
-                                        download={res.newName}
-                                        onClick={(e) => e.stopPropagation()}
+                                    <button 
+                                        onClick={async (e) => {
+                                            e.stopPropagation();
+                                            await downloadPlaylistFile(res.content, res.newName, 'audio/x-mpegurl');
+                                        }}
                                         className="p-2.5 bg-slate-800 hover:bg-purple-500 hover:text-white text-slate-400 rounded-lg transition-colors flex-shrink-0"
                                     >
                                         <Download size={16} />
-                                    </a>
+                                    </button>
                                     <div className="text-slate-500 flex-shrink-0">
                                         {expandedOutputIndex === idx ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                                     </div>

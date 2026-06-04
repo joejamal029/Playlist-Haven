@@ -3,7 +3,7 @@ import { ArrowLeft, Merge, Download, FileAudio, Check, AlertCircle, Calendar, Ar
 import FileUploader from '../components/FileUploader';
 import { readFile } from '../services/sieveEngine';
 import JSZip from 'jszip';
-import { saveAs } from 'file-saver';
+import { downloadPlaylistFile } from '../services/downloadHelper';
 
 interface PlaylistMergerViewProps {
   onBack: () => void;
@@ -135,9 +135,10 @@ export default function PlaylistMergerView({ onBack }: PlaylistMergerViewProps) 
   const [outputFilename, setOutputFilename] = useState<string>('merged_playlist');
 
   const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [resultBlob, setResultBlob] = useState<Blob | null>(null);
   const [resultStats, setResultStats] = useState<{ count: number; duplicatesRemoved: number; groups?: number } | null>(null);
   const [isZip, setIsZip] = useState(false);
-  const [generatedFiles, setGeneratedFiles] = useState<{name: string, url: string, count: number, tracks: ParsedTrack[]}[]>([]);
+  const [generatedFiles, setGeneratedFiles] = useState<{name: string, url: string, content: string, count: number, tracks: ParsedTrack[]}[]>([]);
   const [standardTracks, setStandardTracks] = useState<ParsedTrack[]>([]);
   const [expandedStandard, setExpandedStandard] = useState(false);
   const [expandedZipIndex, setExpandedZipIndex] = useState<number | null>(null);
@@ -237,6 +238,7 @@ export default function PlaylistMergerView({ onBack }: PlaylistMergerViewProps) 
         const blob = new Blob([content], { type: 'audio/x-mpegurl' });
         const url = URL.createObjectURL(blob);
         setResultUrl(url);
+        setResultBlob(blob);
         setResultStats({ count: totalCount, duplicatesRemoved: duplicates });
         setStandardTracks(tracks);
       } else {
@@ -254,7 +256,7 @@ export default function PlaylistMergerView({ onBack }: PlaylistMergerViewProps) 
         let totalCount = 0;
         let totalDuplicates = 0;
         let groupCount = 0;
-        const newGeneratedFiles: {name: string, url: string, count: number, tracks: ParsedTrack[]}[] = [];
+        const newGeneratedFiles: {name: string, url: string, content: string, count: number, tracks: ParsedTrack[]}[] = [];
 
         for (const [key, groupFiles] of Object.entries(groups)) {
           const { content, totalCount: c, duplicates: d, tracks } = await processFiles(groupFiles);
@@ -263,7 +265,7 @@ export default function PlaylistMergerView({ onBack }: PlaylistMergerViewProps) 
           
           const blob = new Blob([content], { type: 'audio/x-mpegurl' });
           const url = URL.createObjectURL(blob);
-          newGeneratedFiles.push({ name: filename, url, count: c, tracks });
+          newGeneratedFiles.push({ name: filename, url, content, count: c, tracks });
 
           totalCount += c;
           totalDuplicates += d;
@@ -273,6 +275,7 @@ export default function PlaylistMergerView({ onBack }: PlaylistMergerViewProps) 
         const zipBlob = await zip.generateAsync({ type: 'blob' });
         const url = URL.createObjectURL(zipBlob);
         setResultUrl(url);
+        setResultBlob(zipBlob);
         setIsZip(true);
         setGeneratedFiles(newGeneratedFiles);
         setResultStats({ count: totalCount, duplicatesRemoved: totalDuplicates, groups: groupCount });
@@ -285,13 +288,13 @@ export default function PlaylistMergerView({ onBack }: PlaylistMergerViewProps) 
     }
   };
 
-  const handleDownload = () => {
-    if (!resultUrl) return;
+  const handleDownload = async () => {
+    if (!resultBlob) return;
     if (isZip) {
-      saveAs(resultUrl, `Merged_Playlists_${groupBy}.zip`);
+      await downloadPlaylistFile(resultBlob, `Merged_Playlists_${groupBy}.zip`, 'application/zip');
     } else {
       const name = outputFilename.trim() ? outputFilename.trim() : 'merged_playlist';
-      saveAs(resultUrl, `${name}.m3u`);
+      await downloadPlaylistFile(resultBlob, `${name}.m3u`, 'audio/x-mpegurl');
     }
   };
 
@@ -548,14 +551,9 @@ export default function PlaylistMergerView({ onBack }: PlaylistMergerViewProps) 
                            </div>
                            <div className="flex items-center space-x-2">
                              <button
-                               onClick={(e) => {
+                               onClick={async (e) => {
                                  e.stopPropagation();
-                                 const a = document.createElement('a');
-                                 a.href = file.url;
-                                 a.download = file.name;
-                                 document.body.appendChild(a);
-                                 a.click();
-                                 document.body.removeChild(a);
+                                 await downloadPlaylistFile(file.content, file.name, 'audio/x-mpegurl');
                                }}
                                className="p-2 bg-slate-800 hover:bg-cyan-500/20 text-cyan-400 rounded-lg transition-colors flex-shrink-0"
                                title="Download Individual File"

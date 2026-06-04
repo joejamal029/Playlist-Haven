@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Eye, Plus, Trash2, Upload, FileText, CheckCircle2, AlertCircle, Loader2, Download, Sparkles, Image, Search, Filter, CheckSquare, Square, Settings } from 'lucide-react';
 import FileUploader from '../components/FileUploader';
+import { downloadPlaylistFile } from '../services/downloadHelper';
 import { 
   parseScreenshot, 
   aggregateSongs, 
@@ -274,7 +275,7 @@ export default function VisionToPlaylistView({ onBack }: VisionToPlaylistViewPro
     }
   };
 
-  const downloadCsv = () => {
+  const downloadCsv = async () => {
     let data;
     if (mode === 'standard') {
       // Only include selected songs in Standard Mode
@@ -289,14 +290,7 @@ export default function VisionToPlaylistView({ onBack }: VisionToPlaylistViewPro
     }
 
     const csvContent = generateCSV(data as any[]);
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `m3u_haven_${mode}_export.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    await downloadPlaylistFile(csvContent, `playlist_haven_${mode}_export.csv`, 'text/csv;charset=utf-8;');
   };
 
   const totalFiles = groups.reduce((acc, g) => acc + g.files.length, 0);
