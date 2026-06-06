@@ -85,6 +85,26 @@ function escapeCSV(str: string) {
   return str;
 }
 
+function formatDuration(durationStr: string) {
+  if (!durationStr) return '';
+  if (durationStr.includes(':')) return durationStr;
+  
+  const val = parseInt(durationStr, 10);
+  if (isNaN(val)) return durationStr;
+  
+  // Convert milliseconds (> 5000) to seconds, otherwise keep as seconds
+  const totalSeconds = val > 5000 ? Math.round(val / 1000) : val;
+  
+  const hrs = Math.floor(totalSeconds / 3600);
+  const mins = Math.floor((totalSeconds % 3600) / 60);
+  const secs = totalSeconds % 60;
+  
+  if (hrs > 0) {
+    return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
 function getBigrams(str: string) {
   const bigrams = [];
   for (let i = 0; i < str.length - 1; i++) {
@@ -235,15 +255,28 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
             
             const parsedPlays = playCountIdx !== -1 && row[playCountIdx] ? parseInt(row[playCountIdx], 10) : undefined;
             const rowPath = pathIdx !== -1 && row[pathIdx] ? row[pathIdx] : '';
+            
+            let seconds = -1;
+            if (durationIdx !== -1 && row[durationIdx]) {
+              const durVal = parseInt(row[durationIdx], 10);
+              if (!isNaN(durVal)) {
+                seconds = durVal > 5000 ? Math.round(durVal / 1000) : durVal;
+              }
+            }
+
+            const title = titleIdx !== -1 && row[titleIdx] ? row[titleIdx] : `Track ${i}`;
+            const artist = artistIdx !== -1 && row[artistIdx] ? row[artistIdx] : 'Unknown';
+            const normPath = rowPath ? rowPath.replace(/\\/g, '/') : '';
+
             newTracks.push({
               id: generateId(),
-              title: titleIdx !== -1 && row[titleIdx] ? row[titleIdx] : `Track ${i}`,
-              artist: artistIdx !== -1 && row[artistIdx] ? row[artistIdx] : 'Unknown',
+              title,
+              artist,
               album: albumIdx !== -1 && row[albumIdx] ? row[albumIdx] : '',
               duration: durationIdx !== -1 && row[durationIdx] ? row[durationIdx] : '',
               playCount: isNaN(parsedPlays as number) ? undefined : parsedPlays,
-              m3uPath: rowPath || undefined,
-              m3uMeta: `#EXTINF:-1,${artistIdx !== -1 && row[artistIdx] ? row[artistIdx] : 'Unknown'} - ${titleIdx !== -1 && row[titleIdx] ? row[titleIdx] : `Track ${i}`}`,
+              m3uPath: normPath || undefined,
+              m3uMeta: `#EXTINF:${seconds},${artist} - ${title}`,
               csvRow: row
             });
           }
@@ -849,13 +882,33 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
       content += '#EXTM3U\n';
       for (const t of activePlaylist.tracks) {
         if (t.m3uMeta) {
+          if (t.m3uMeta.startsWith('#EXTINF:-1,') && t.duration) {
+            const durVal = parseInt(t.duration, 10);
+            if (!isNaN(durVal)) {
+              const seconds = durVal > 5000 ? Math.round(durVal / 1000) : durVal;
+              content += `#EXTINF:${seconds},${t.artist} - ${t.title}\n`;
+              if (t.m3uPath) {
+                content += t.m3uPath.replace(/\\/g, '/') + '\n';
+              } else {
+                content += `${t.artist} - ${t.title}.mp3\n`;
+              }
+              continue;
+            }
+          }
           content += t.m3uMeta + '\n';
         } else {
-          content += `#EXTINF:-1,${t.artist} - ${t.title}\n`;
+          let seconds = -1;
+          if (t.duration) {
+            const durVal = parseInt(t.duration, 10);
+            if (!isNaN(durVal)) {
+              seconds = durVal > 5000 ? Math.round(durVal / 1000) : durVal;
+            }
+          }
+          content += `#EXTINF:${seconds},${t.artist} - ${t.title}\n`;
         }
         
         if (t.m3uPath) {
-          content += t.m3uPath + '\n';
+          content += t.m3uPath.replace(/\\/g, '/') + '\n';
         } else {
           content += `${t.artist} - ${t.title}.mp3\n`;
         }
@@ -1259,7 +1312,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
                           )}
                           {track.duration && (
                             <div className="text-xs text-slate-500">
-                              {track.duration}
+                              {formatDuration(track.duration)}
                             </div>
                           )}
                         </div>
