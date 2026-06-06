@@ -223,16 +223,18 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
         if (rows.length > 0) {
           csvHeaders = rows[0];
           
-          const titleIdx = csvHeaders.findIndex(h => /title|track|name/i.test(h));
+           const titleIdx = csvHeaders.findIndex(h => /title|track|name/i.test(h));
           const artistIdx = csvHeaders.findIndex(h => /artist/i.test(h));
           const albumIdx = csvHeaders.findIndex(h => /album/i.test(h));
           const durationIdx = csvHeaders.findIndex(h => /duration|time|length/i.test(h));
           const playCountIdx = csvHeaders.findIndex(h => /play_count|plays?/i.test(h));
+          const pathIdx = csvHeaders.findIndex(h => /path|file_path|url|location/i.test(h));
           
           for (let i = 1; i < rows.length; i++) {
             const row = rows[i];
             
             const parsedPlays = playCountIdx !== -1 && row[playCountIdx] ? parseInt(row[playCountIdx], 10) : undefined;
+            const rowPath = pathIdx !== -1 && row[pathIdx] ? row[pathIdx] : '';
             newTracks.push({
               id: generateId(),
               title: titleIdx !== -1 && row[titleIdx] ? row[titleIdx] : `Track ${i}`,
@@ -240,6 +242,8 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
               album: albumIdx !== -1 && row[albumIdx] ? row[albumIdx] : '',
               duration: durationIdx !== -1 && row[durationIdx] ? row[durationIdx] : '',
               playCount: isNaN(parsedPlays as number) ? undefined : parsedPlays,
+              m3uPath: rowPath || undefined,
+              m3uMeta: `#EXTINF:-1,${artistIdx !== -1 && row[artistIdx] ? row[artistIdx] : 'Unknown'} - ${titleIdx !== -1 && row[titleIdx] ? row[titleIdx] : `Track ${i}`}`,
               csvRow: row
             });
           }
@@ -824,27 +828,46 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
     setDraggedId(null);
   };
 
-  const handleExport = async () => {
+  const handleExport = async (format?: 'csv' | 'm3u') => {
     if (!activePlaylist || activePlaylist.tracks.length === 0) return;
     
+    const exportFormat = format || (activePlaylist.fileType === 'csv' ? 'csv' : 'm3u');
+    
     let content = '';
-    if (activePlaylist.fileType === 'csv') {
+    let exportFilename = `manipulated_${activePlaylist.originalFilename}`;
+    let mimeType = 'audio/x-mpegurl';
+    
+    if (exportFormat === 'csv') {
       content += activePlaylist.csvHeaders.map(escapeCSV).join(activePlaylist.csvDelimiter) + '\n';
       for (const t of activePlaylist.tracks) {
         if (t.csvRow) {
           content += t.csvRow.map(escapeCSV).join(activePlaylist.csvDelimiter) + '\n';
         }
       }
+      mimeType = 'text/csv;charset=utf-8;';
     } else {
       content += '#EXTM3U\n';
       for (const t of activePlaylist.tracks) {
-        if (t.m3uMeta) content += t.m3uMeta + '\n';
-        if (t.m3uPath) content += t.m3uPath + '\n';
+        if (t.m3uMeta) {
+          content += t.m3uMeta + '\n';
+        } else {
+          content += `#EXTINF:-1,${t.artist} - ${t.title}\n`;
+        }
+        
+        if (t.m3uPath) {
+          content += t.m3uPath + '\n';
+        } else {
+          content += `${t.artist} - ${t.title}.mp3\n`;
+        }
       }
+      
+      if (activePlaylist.fileType === 'csv') {
+        exportFilename = exportFilename.replace(/\.csv$/i, '.m3u');
+      }
+      mimeType = 'audio/x-mpegurl';
     }
     
-    const mimeType = activePlaylist.fileType === 'csv' ? 'text/csv;charset=utf-8;' : 'audio/x-mpegurl';
-    await downloadPlaylistFile(content, `manipulated_${activePlaylist.originalFilename}`, mimeType);
+    await downloadPlaylistFile(content, exportFilename, mimeType);
   };
 
   return (
@@ -863,13 +886,36 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
             </div>
           </div>
           {activePlaylist && activePlaylist.tracks.length > 0 && (
-            <button 
-              onClick={handleExport}
-              className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors"
-            >
-              <Download size={14} />
-              <span>Export Active</span>
-            </button>
+            <div className="flex items-center space-x-2">
+              {activePlaylist.fileType === 'csv' ? (
+                <>
+                  <button 
+                    onClick={() => handleExport('csv')}
+                    className="flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-lg text-xs font-bold transition-colors"
+                    title="Export as CSV (preserves original column metadata)"
+                  >
+                    <Download size={14} />
+                    <span>Export CSV</span>
+                  </button>
+                  <button 
+                    onClick={() => handleExport('m3u')}
+                    className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors"
+                    title="Convert and export as a playable M3U playlist file for Musicolet"
+                  >
+                    <Download size={14} />
+                    <span>Convert to M3U</span>
+                  </button>
+                </>
+              ) : (
+                <button 
+                  onClick={() => handleExport('m3u')}
+                  className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors"
+                >
+                  <Download size={14} />
+                  <span>Export M3U</span>
+                </button>
+              )}
+            </div>
           )}
         </div>
 
