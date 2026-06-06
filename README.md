@@ -34,6 +34,25 @@ I cross-publish the exact same essays on both platforms, so you can follow the s
 
 ---
 
+## 🖼️ Application Interface & Features
+
+<table align="center">
+  <tr>
+    <td colspan="2" align="center"><b>Playlist Haven Dashboard</b><br/><img src="docs/screenshots/Playlist-Haven Homepage.png" width="800"/></td>
+  </tr>
+  <tr>
+    <td><b>Playlist Manipulator</b><br/><img src="docs/screenshots/Playlist-Haven Playlist Manipulator.png" width="400"/></td>
+    <td><b>Vision-to-Playlist (AI)</b><br/><img src="docs/screenshots/Playlist-Haven Vision to AI.png" width="400"/></td>
+  </tr>
+  <tr>
+    <td><b>Appearance Counter</b><br/><img src="docs/screenshots/Playlist-Haven Appearance Counter.png" width="400"/></td>
+    <td><b>Playlist Merger & Time-Grouping</b><br/><img src="docs/screenshots/Playlist-Haven Playlist Merger.png" width="400"/></td>
+  </tr>
+</table>
+
+---
+
+
 ## 🌉 Bridging Walled Gardens: Streaming Extension Pipeline
 
 mainstream streaming services (Spotify, YouTube Music, Apple Music) are walled gardens that restrict how you manage your music, offering zero advanced sorting, fuzzy pruning, multi-tier play-count filtering, or structural manipulation. 
