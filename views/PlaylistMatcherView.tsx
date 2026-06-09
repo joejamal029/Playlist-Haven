@@ -143,29 +143,58 @@ export default function PlaylistMatcherView({ onBack }: PlaylistMatcherViewProps
   const parsePlaylistFile = async (file: File): Promise<any[]> => {
     const text = await file.text();
     const lowerName = file.name.toLowerCase();
-    const isCsv = lowerName.endsWith('.csv') || file.type.includes('csv');
+    
+    let isCsv = lowerName.endsWith('.csv') || file.type === 'text/csv' || file.type === 'application/csv' || file.type === 'application/vnd.ms-excel';
+    let isM3u = lowerName.endsWith('.m3u') || lowerName.endsWith('.m3u8') || file.type === 'audio/x-mpegurl' || file.type === 'application/vnd.apple.mpegurl';
+    const firstLine = text.split(/\r?\n/)[0] || '';
+
+    if (!isCsv && !isM3u) {
+      // Fallback: guess by content if extension/mime type is missing or unknown
+      if (firstLine.startsWith('#EXTM3U') || firstLine.startsWith('#EXTINF')) {
+        isM3u = true;
+      } else if (firstLine.includes(',') || firstLine.includes(';') || firstLine.includes('\t')) {
+        isCsv = true;
+      } else {
+        throw new Error(`Unsupported file type: ${file.name}. Please upload .csv or .m3u files.`);
+      }
+    }
+
     const tracks: any[] = [];
 
     if (isCsv) {
-      const firstLine = text.split(/\r?\n/)[0] || '';
+      // Better delimiter detection: check which one appears most in the first line
+      const commaCount = (firstLine.match(/,/g) || []).length;
+      const semiCount = (firstLine.match(/;/g) || []).length;
+      const tabCount = (firstLine.match(/\t/g) || []).length;
+      
       let delimiter = ',';
-      if (firstLine.includes('\t')) delimiter = '\t';
-      else if (firstLine.includes(';')) delimiter = ';';
+      if (tabCount > commaCount && tabCount > semiCount) {
+        delimiter = '\t';
+      } else if (semiCount > commaCount && semiCount > tabCount) {
+        delimiter = ';';
+      } else {
+        delimiter = ',';
+      }
 
       const rows = parseCSV(text, delimiter).filter(row => row.length > 0 && row.some(c => c.trim() !== ''));
       if (rows.length > 0) {
         const headers = rows[0];
         const titleIdx = headers.findIndex(h => /title|track|name/i.test(h));
         const artistIdx = headers.findIndex(h => /artist/i.test(h));
+        const albumIdx = headers.findIndex(h => /album/i.test(h));
         const pathIdx = headers.findIndex(h => /path|file_path|url|location/i.test(h));
         const durationIdx = headers.findIndex(h => /duration|time|length/i.test(h));
 
         for (let i = 1; i < rows.length; i++) {
           const row = rows[i];
+          const rowPath = pathIdx !== -1 && row[pathIdx] ? row[pathIdx] : '';
+          const normPath = rowPath ? rowPath.replace(/\\/g, '/') : '';
+
           tracks.push({
             title: titleIdx !== -1 && row[titleIdx] ? row[titleIdx] : `Track ${i}`,
             artist: artistIdx !== -1 && row[artistIdx] ? row[artistIdx] : 'Unknown',
-            rawPath: pathIdx !== -1 && row[pathIdx] ? row[pathIdx] : '',
+            album: albumIdx !== -1 && row[albumIdx] ? row[albumIdx] : '',
+            rawPath: normPath,
             duration: durationIdx !== -1 && row[durationIdx] ? row[durationIdx] : ''
           });
         }
@@ -214,8 +243,9 @@ export default function PlaylistMatcherView({ onBack }: PlaylistMatcherViewProps
           tracks.push({
             title,
             artist,
+            album: '',
             rawMeta: currentMeta,
-            rawPath: trimmed,
+            rawPath: trimmed.replace(/\\/g, '/'),
             duration
           });
           currentMeta = '';
