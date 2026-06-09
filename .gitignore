@@ -29,4 +29,5 @@ dist-ssr
 .gemini/
 brain/
 scratch/
+.agents/
 
