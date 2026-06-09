@@ -125,7 +125,7 @@ const Dashboard = ({ onViewSelect }: { onViewSelect: (view: AppView) => void }) 
             </div>
           </button>
 
-          {/* Playlist Matcher Card */}
+          {/* Playlist Reconciler Card */}
           <button 
             onClick={() => onViewSelect('matcher')}
             className="group relative overflow-hidden p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-violet-500/50 hover:shadow-2xl hover:shadow-violet-900/10 active:scale-[0.98]"
@@ -137,9 +137,9 @@ const Dashboard = ({ onViewSelect }: { onViewSelect: (view: AppView) => void }) 
               <div className="w-8 h-8 bg-violet-500/20 text-violet-400 rounded-lg flex items-center justify-center mb-3 group-hover:bg-violet-500 group-hover:text-white transition-colors">
                 <Merge size={16} />
               </div>
-              <h2 className="text-sm font-bold text-slate-200 mb-1">Playlist Matcher</h2>
+              <h2 className="text-sm font-bold text-slate-200 mb-1">Playlist Reconciler</h2>
               <p className="text-[10px] text-slate-500 leading-tight font-medium">
-                Offline sharing match. Reconcile lists via fuzzy & AI.
+                Convert online exports (Spotify/YT CSV) or shared playlists into playable local M3Us.
               </p>
             </div>
           </button>

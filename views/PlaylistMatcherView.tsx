@@ -592,9 +592,9 @@ Return ONLY the raw JSON array. No explanations, no markdown formatting blocks, 
             </button>
             <div>
               <h2 className="text-lg font-bold bg-gradient-to-r from-violet-400 to-indigo-400 bg-clip-text text-transparent">
-                Offline Playlist Matcher
+                Playlist Reconciler
               </h2>
-              <p className="text-[10px] text-slate-500 uppercase tracking-widest">Reconciliation Workbench</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-widest">Universal Matching Workbench</p>
             </div>
           </div>
           
@@ -631,18 +631,18 @@ Return ONLY the raw JSON array. No explanations, no markdown formatting blocks, 
                 <SlidersHorizontal size={18} />
               </div>
               <div>
-                <h4 className="text-xs font-bold text-violet-300 uppercase">Offline Sharing Reconciliation</h4>
+                <h4 className="text-xs font-bold text-violet-300 uppercase">Universal Playlist Reconciliation</h4>
                 <p className="text-[11px] text-slate-400 leading-relaxed mt-1">
-                  Upload a playlist file shared by your friend and your own music library M3U/CSV database. Playlist Haven will resolve title/artist differences dynamically, allowing you to stream shared playlists natively on your device.
+                  Reconcile external playlists with your local library. Upload an online playlist export (e.g., Spotify or YouTube Music CSV via TuneMyMusic/Soundiiz) or a shared playlist from a friend (M3U/CSV). Match it against your local library database to generate a playable local M3U file containing your native file paths.
                 </p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">1. Friend's Playlist File</h3>
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">1. Target Playlist File (Online Export or Shared)</h3>
                 <FileUploader
-                  label="Friend's Playlist"
+                  label="Target Playlist"
                   subLabel="Upload .m3u, .m3u8, or .csv"
                   files={friendFile ? [friendFile] : []}
                   onFilesSelected={handleFriendFileSelected}
@@ -899,13 +899,13 @@ Return ONLY the raw JSON array. No explanations, no markdown formatting blocks, 
                     <div key={index} className="flex flex-col p-3 border-b border-slate-800/50 hover:bg-slate-800/30 transition-all">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         
-                        {/* Left Column: Friend's original track */}
+                        {/* Left Column: Original target track */}
                         <div className="flex-1 min-w-0 flex items-start space-x-3">
                           <div className="w-8 h-8 bg-slate-800 rounded flex items-center justify-center flex-shrink-0 text-slate-500 mt-0.5">
                             <Music size={14} />
                           </div>
                           <div className="min-w-0">
-                            <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">Friend's Track</div>
+                            <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">Target Track</div>
                             <div className="text-sm font-bold text-slate-200 truncate">{item.friendTrack.title}</div>
                             <div className="text-xs text-slate-400 truncate">{item.friendTrack.artist}</div>
                           </div>
