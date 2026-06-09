@@ -9,10 +9,10 @@ import SmartRenamerView from './views/SmartRenamerView';
 import PlaylistAppearanceView from './views/PlaylistAppearanceView';
 import VisionToPlaylistView from './views/VisionToPlaylistView';
 import PlaylistManipulatorView from './views/PlaylistManipulatorView';
-
 import TierFilteringView from './views/TierFilteringView';
+import PlaylistMatcherView from './views/PlaylistMatcherView';
 
-type AppView = 'dashboard' | 'sieve' | 'merger' | 'splitter' | 'randomizer' | 'pruner' | 'renamer' | 'appearance' | 'vision' | 'tier' | 'manipulator';
+type AppView = 'dashboard' | 'sieve' | 'merger' | 'splitter' | 'randomizer' | 'pruner' | 'renamer' | 'appearance' | 'vision' | 'tier' | 'manipulator' | 'matcher';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<AppView>('dashboard');
@@ -39,6 +39,8 @@ export default function App() {
         return <TierFilteringView onBack={() => setCurrentView('dashboard')} />;
       case 'manipulator':
         return <PlaylistManipulatorView onBack={() => setCurrentView('dashboard')} />;
+      case 'matcher':
+        return <PlaylistMatcherView onBack={() => setCurrentView('dashboard')} />;
       default:
         return <Dashboard onViewSelect={setCurrentView} />;
     }
@@ -107,7 +109,7 @@ const Dashboard = ({ onViewSelect }: { onViewSelect: (view: AppView) => void }) 
           {/* Playlist Manipulator Card */}
           <button 
             onClick={() => onViewSelect('manipulator')}
-            className="group relative overflow-hidden p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-indigo-500/50 hover:shadow-2xl hover:shadow-indigo-900/10 active:scale-[0.98] col-span-2"
+            className="group relative overflow-hidden p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-indigo-500/50 hover:shadow-2xl hover:shadow-indigo-900/10 active:scale-[0.98]"
           >
             <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
               <SlidersHorizontal size={60} />
@@ -118,7 +120,26 @@ const Dashboard = ({ onViewSelect }: { onViewSelect: (view: AppView) => void }) 
               </div>
               <h2 className="text-sm font-bold text-slate-200 mb-1">Manipulator</h2>
               <p className="text-[10px] text-slate-500 leading-tight font-medium">
-                Power tool. Rearrange, delete, sort, and select tracks from M3U or CSV.
+                Power tool. Sort/edit M3Us or CSVs.
+              </p>
+            </div>
+          </button>
+
+          {/* Playlist Matcher Card */}
+          <button 
+            onClick={() => onViewSelect('matcher')}
+            className="group relative overflow-hidden p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-violet-500/50 hover:shadow-2xl hover:shadow-violet-900/10 active:scale-[0.98]"
+          >
+            <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Merge size={60} />
+            </div>
+            <div className="relative z-10">
+              <div className="w-8 h-8 bg-violet-500/20 text-violet-400 rounded-lg flex items-center justify-center mb-3 group-hover:bg-violet-500 group-hover:text-white transition-colors">
+                <Merge size={16} />
+              </div>
+              <h2 className="text-sm font-bold text-slate-200 mb-1">Playlist Matcher</h2>
+              <p className="text-[10px] text-slate-500 leading-tight font-medium">
+                Offline sharing match. Reconcile lists via fuzzy & AI.
               </p>
             </div>
           </button>
