@@ -530,15 +530,34 @@ Return ONLY the raw JSON array. No explanations, no markdown formatting blocks, 
     let m3uContent = '#EXTM3U\n';
     for (const m of validMatches) {
       const t = m.matchedTrack!;
+      
+      // Determine duration: library track first, fallback to target track
       let durationSeconds = -1;
-      if (t.duration) {
-        const val = parseInt(t.duration, 10);
+      const durationStr = t.duration || m.friendTrack.duration;
+      if (durationStr) {
+        const val = parseInt(durationStr, 10);
         if (!isNaN(val)) {
           durationSeconds = val > 5000 ? Math.round(val / 1000) : val;
         }
       }
-      m3uContent += `#EXTINF:${durationSeconds},${t.artist} - ${t.title}\n`;
-      m3uContent += t.path.replace(/\\/g, '/') + '\n';
+
+      // Metadata: Use target playlist's rawMeta if present, otherwise rebuild it
+      if (m.friendTrack.rawMeta) {
+        if (m.friendTrack.rawMeta.startsWith('#EXTINF:-1,') && durationSeconds !== -1) {
+          m3uContent += `#EXTINF:${durationSeconds},${m.friendTrack.artist} - ${m.friendTrack.title}\n`;
+        } else {
+          m3uContent += m.friendTrack.rawMeta + '\n';
+        }
+      } else {
+        m3uContent += `#EXTINF:${durationSeconds},${m.friendTrack.artist || t.artist} - ${m.friendTrack.title || t.title}\n`;
+      }
+
+      // Path: Use matched local library track's path (normalized)
+      if (t.path) {
+        m3uContent += t.path.replace(/\\/g, '/') + '\n';
+      } else {
+        m3uContent += `${t.artist} - ${t.title}.mp3\n`;
+      }
     }
 
     const exportFilename = friendFile ? `reconciled_${friendFile.name.replace(/\.[a-zA-Z0-9]+$/, '')}.m3u` : 'reconciled_playlist.m3u';
