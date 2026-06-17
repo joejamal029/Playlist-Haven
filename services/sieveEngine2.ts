@@ -178,6 +178,53 @@ export const generateCSVContent = (headers: string[], tracks: string[], scoreMap
   return out;
 };
 
+export const generateM3UFromCSV = (tracks: string[], metadataCache: Map<string, string[]>, csvHeaders: string[]): string => {
+  const upHdr = csvHeaders.map(h => h.trim().toUpperCase());
+  const titleIdx = upHdr.indexOf('TITLE');
+  const artistIdx = upHdr.indexOf('ARTIST');
+  const durationIdx = upHdr.indexOf('DURATION_MS') !== -1 ? upHdr.indexOf('DURATION_MS') : upHdr.indexOf('DURATION');
+
+  let content = '#EXTM3U\n';
+  for (const t of tracks) {
+    const row = metadataCache.get(t);
+    let title = '';
+    let artist = '';
+    let durationSeconds = -1;
+
+    if (row) {
+      title = titleIdx !== -1 && row[titleIdx] ? row[titleIdx].trim() : '';
+      artist = artistIdx !== -1 && row[artistIdx] ? row[artistIdx].trim() : '';
+      if (durationIdx !== -1 && row[durationIdx]) {
+        const durVal = parseInt(row[durationIdx], 10);
+        if (!isNaN(durVal)) {
+          durationSeconds = durVal > 5000 ? Math.round(durVal / 1000) : durVal;
+        }
+      }
+    }
+
+    if (!title) {
+      let filename = t.split(/[\/\\]/).pop() || t;
+      filename = filename.replace(/\.[a-zA-Z0-9]+$/, ''); // remove extension
+      filename = filename.replace(/^\d+[\s.-]+/, ''); // remove leading track numbers
+      if (filename.includes(' - ')) {
+        const fDash = filename.indexOf(' - ');
+        artist = artist || filename.substring(0, fDash).trim();
+        title = filename.substring(fDash + 3).trim();
+      } else {
+        title = filename;
+      }
+    }
+    
+    if (!artist) {
+      artist = 'Unknown Artist';
+    }
+
+    content += `#EXTINF:${durationSeconds},${artist} - ${title}\n`;
+    content += t.replace(/\\/g, '/') + '\n';
+  }
+  return content;
+};
+
 export const runSieve = async (
   mode: 'sonic' | 'ranking',
   sieveType: 'classic' | 'musicolet-csv',
@@ -262,25 +309,41 @@ export const runSieve = async (
     });
 
     const countAtThreshold = groups[filenameCountThreshold]?.length ?? 0;
-    const fileName = anchorFile
-      ? generateNextFilename(anchorFile.name, abcNum, countAtThreshold, sieveType)
-      : `${customName || 'Sieve Result'}${sieveType === 'musicolet-csv' ? '.csv' : '.m3u'}`;
-
-    let content = '';
+    
+    const files = [];
     if (sieveType === 'musicolet-csv') {
       const hdrs = csvHeaders.length > 0 ? csvHeaders : ['FILE_PATH','TITLE','ARTIST','ALBUM','ALBUM_ARTIST','COMPOSER','GENRE','YEAR','DURATION_MS','PLAY_COUNT'];
-      content = generateCSVContent(hdrs, finalList, valid, metadataCache);
+      
+      const csvFileName = anchorFile
+        ? generateNextFilename(anchorFile.name, abcNum, countAtThreshold, 'musicolet-csv')
+        : `${customName || 'Sieve Result'}.csv`;
+      const csvContent = generateCSVContent(hdrs, finalList, valid, metadataCache);
+      files.push({ fileName: csvFileName, content: csvContent, count: finalList.length, score: -1 });
+
+      const m3uFileName = anchorFile
+        ? generateNextFilename(anchorFile.name, abcNum, countAtThreshold, 'classic')
+        : `${customName || 'Sieve Result'}.m3u`;
+      const m3uContent = generateM3UFromCSV(finalList, metadataCache, hdrs);
+      files.push({ fileName: m3uFileName, content: m3uContent, count: finalList.length, score: -1 });
+
+      onLog(makeLog(`SUCCESS: Generated "${csvFileName}" and "${m3uFileName}"`, 'SUCCESS'));
     } else {
-      content = '#EXTM3U\n';
+      const fileName = anchorFile
+        ? generateNextFilename(anchorFile.name, abcNum, countAtThreshold, 'classic')
+        : `${customName || 'Sieve Result'}.m3u`;
+      
+      let content = '#EXTM3U\n';
       finalList.forEach(t => {
         const m = metadataCache.get(t);
         if (m?.[0]) content += m[0] + '\n';
         content += t + '\n';
       });
+      files.push({ fileName, content, count: finalList.length, score: -1 });
+
+      onLog(makeLog(`SUCCESS: Generated "${fileName}"`, 'SUCCESS'));
     }
 
-    onLog(makeLog(`SUCCESS: Generated "${fileName}"`, 'SUCCESS'));
-    return { files: [{ fileName, content, count: finalList.length, score: -1 }], success: true };
+    return { files, success: true };
 
   // ── Mode: Ranking Sieve ───────────────────────────────────────────
   } else {
@@ -289,23 +352,26 @@ export const runSieve = async (
 
     const files = [];
     for (const [score, tracks] of Array.from(grouped.entries()).sort((a, b) => b[0] - a[0])) {
-      const ext = sieveType === 'musicolet-csv' ? 'csv' : 'm3u';
-      let content = '';
       if (sieveType === 'musicolet-csv') {
         const hdrs = csvHeaders.length > 0 ? csvHeaders : ['FILE_PATH','TITLE','ARTIST','ALBUM','ALBUM_ARTIST','COMPOSER','GENRE','YEAR','DURATION_MS','PLAY_COUNT'];
-        content = generateCSVContent(hdrs, tracks, songScores, metadataCache);
+        
+        const csvContent = generateCSVContent(hdrs, tracks, songScores, metadataCache);
+        files.push({ fileName: `${score} plays.csv`, content: csvContent, count: tracks.length, score });
+
+        const m3uContent = generateM3UFromCSV(tracks, metadataCache, hdrs);
+        files.push({ fileName: `${score} plays.m3u`, content: m3uContent, count: tracks.length, score });
       } else {
-        content = '#EXTM3U\n';
+        let content = '#EXTM3U\n';
         tracks.sort().forEach(t => {
           const m = metadataCache.get(t);
           if (m?.[0]) content += m[0] + '\n';
           content += t + '\n';
         });
+        files.push({ fileName: `${score} plays.m3u`, content, count: tracks.length, score });
       }
-      files.push({ fileName: `${score} plays.${ext}`, content, count: tracks.length, score });
     }
 
-    onLog(makeLog(`SUCCESS: Generated ${files.length} playlist(s).`, 'SUCCESS'));
+    onLog(makeLog(`SUCCESS: Generated ${files.length} file(s).`, 'SUCCESS'));
     return { files, success: true };
   }
 };

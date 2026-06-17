@@ -710,8 +710,9 @@ export default function SonicSieveView({ onBack }: SonicSieveViewProps) {
             </div>
             <div className="grid grid-cols-1 gap-3">
               {result.files.map((file, idx) => {
+                const isCsvFile = file.fileName.toLowerCase().endsWith('.csv');
                 const tracks = expandedIndex === idx 
-                  ? (sieveType === 'musicolet-csv' ? parseCSVContent(file.content) : parseM3UContent(file.content))
+                  ? (isCsvFile ? parseCSVContent(file.content) : parseM3UContent(file.content))
                   : [];
                 return (
                 <div key={idx} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden transition-colors">
