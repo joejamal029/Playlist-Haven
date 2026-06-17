@@ -33,6 +33,7 @@ export default function PlaylistSplitterView({ onBack }: PlaylistSplitterViewPro
   const [tracks, setTracks] = useState<{ meta: string; path: string }[]>([]);
   const [originalTracks, setOriginalTracks] = useState<{ meta: string; path: string }[]>([]);
   const [shuffleCount, setShuffleCount] = useState(0);
+  const [showPreview, setShowPreview] = useState(true);
 
   const parseExtInf = (meta: string, path: string) => {
     let title = 'Unknown Title';
@@ -230,39 +231,49 @@ export default function PlaylistSplitterView({ onBack }: PlaylistSplitterViewPro
               )}
             </div>
 
-            {/* Quick visual preview of the first 3 and last 3 tracks */}
-            <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-2.5 space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar">
-              <div className="text-[9px] font-bold text-slate-600 uppercase tracking-wider mb-1">Current Order Preview ({tracks.length} tracks)</div>
-              {tracks.slice(0, 3).map((track, idx) => {
-                const { title, artist } = parseExtInf(track.meta, track.path);
-                return (
-                  <div key={`start-${idx}`} className="flex items-center space-x-2 text-[11px] text-slate-400 truncate">
-                    <span className="text-[9px] text-slate-600 font-mono w-4">{idx + 1}.</span>
-                    <span className="font-medium text-slate-300 truncate">{title}</span>
-                    <span className="text-slate-500 text-[10px] truncate">- {artist}</span>
-                  </div>
-                );
-              })}
-              
-              {tracks.length > 6 && (
-                <div className="py-0.5 pl-6 border-l border-slate-850 border-dashed text-[10px] text-slate-600 font-mono italic">
-                  ... {tracks.length - 6} tracks hidden ...
-                </div>
-              )}
-
-              {tracks.length > 3 && tracks.slice(-3).map((track, idx) => {
-                const actualIdx = tracks.length - 3 + idx;
-                if (actualIdx < 3) return null;
-                const { title, artist } = parseExtInf(track.meta, track.path);
-                return (
-                  <div key={`end-${idx}`} className="flex items-center space-x-2 text-[11px] text-slate-400 truncate">
-                    <span className="text-[9px] text-slate-600 font-mono w-4">{actualIdx + 1}.</span>
-                    <span className="font-medium text-slate-300 truncate">{title}</span>
-                    <span className="text-slate-500 text-[10px] truncate">- {artist}</span>
-                  </div>
-                );
-              })}
+            {/* Collapsible visual preview of all tracks */}
+            <div className="border-t border-slate-800/60 pt-3">
+              <button
+                type="button"
+                onClick={() => setShowPreview(!showPreview)}
+                className="w-full flex items-center justify-between text-xs font-bold text-slate-400 hover:text-slate-200 transition-colors uppercase tracking-wider text-left"
+              >
+                <span className="flex items-center space-x-1.5">
+                  <Music size={12} className="text-orange-400" />
+                  <span>Tracklist Preview ({tracks.length} tracks)</span>
+                </span>
+                <span className="flex items-center space-x-1 text-[10px] text-slate-500 font-normal">
+                  {showPreview ? (
+                    <>
+                      <span>Hide</span>
+                      <ChevronUp size={14} />
+                    </>
+                  ) : (
+                    <>
+                      <span>Show</span>
+                      <ChevronDown size={14} />
+                    </>
+                  )}
+                </span>
+              </button>
             </div>
+
+            {showPreview && (
+              <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-2.5 space-y-1.5 max-h-52 overflow-y-auto custom-scrollbar">
+                {tracks.map((track, idx) => {
+                  const { title, artist } = parseExtInf(track.meta, track.path);
+                  return (
+                    <div key={idx} className="flex items-start space-x-2 text-[11px] text-slate-400 py-0.5">
+                      <span className="text-[9px] text-slate-600 font-mono w-6 text-right shrink-0 pt-0.5">{idx + 1}.</span>
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium text-slate-300 break-words">{title}</span>
+                        <span className="text-slate-500 text-[10px] ml-1.5 break-words">- {artist}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
