@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Scissors, Download, FileAudio, Check, Divide, ChevronDown, ChevronUp, Music, Shuffle } from 'lucide-react';
+import JSZip from 'jszip';
 import FileUploader from '../components/FileUploader';
 import { readFile } from '../services/sieveEngine';
 import { downloadPlaylistFile } from '../services/downloadHelper';
@@ -163,6 +164,23 @@ export default function PlaylistSplitterView({ onBack }: PlaylistSplitterViewPro
     }
   };
 
+  const handleDownloadAllAsZip = async () => {
+    if (results.length === 0) return;
+    try {
+      const zip = new JSZip();
+      results.forEach(part => {
+        zip.file(part.fileName, part.content);
+      });
+      
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const baseName = file ? file.name.replace(/\.m3u8?$/i, "") : "Playlist";
+      await downloadPlaylistFile(zipBlob, `${baseName}_split_parts.zip`, 'application/zip');
+    } catch (err) {
+      console.error("Failed to generate ZIP file", err);
+      alert("Failed to generate ZIP file.");
+    }
+  };
+
   return (
     <div className="flex flex-col h-full animate-in fade-in duration-500">
       <div className="bg-slate-900/50 backdrop-blur-md sticky top-0 z-20 border-b border-slate-800 p-4 flex items-center space-x-3">
@@ -316,9 +334,20 @@ export default function PlaylistSplitterView({ onBack }: PlaylistSplitterViewPro
 
         {results.length > 0 && (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
-             <div className="flex items-center space-x-2 text-emerald-400">
-               <Check size={16} />
-               <h3 className="text-sm font-bold uppercase tracking-widest">Done!</h3>
+             <div className="flex items-center justify-between">
+               <div className="flex items-center space-x-2 text-emerald-400">
+                 <Check size={16} />
+                 <h3 className="text-sm font-bold uppercase tracking-widest">Done!</h3>
+               </div>
+               
+               <button
+                 type="button"
+                 onClick={handleDownloadAllAsZip}
+                 className="py-1.5 px-3 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 shadow shadow-orange-950/20 active:scale-95"
+               >
+                 <Download size={12} />
+                 <span>Download All (.ZIP)</span>
+               </button>
              </div>
              <div className="grid grid-cols-1 gap-3">
                {results.map((part, idx) => (
