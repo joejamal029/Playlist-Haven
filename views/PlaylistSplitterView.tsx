@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Scissors, Download, FileAudio, Check, Divide, ChevronDown, ChevronUp, Music } from 'lucide-react';
+import { ArrowLeft, Scissors, Download, FileAudio, Check, Divide, ChevronDown, ChevronUp, Music, Shuffle } from 'lucide-react';
 import FileUploader from '../components/FileUploader';
 import { readFile } from '../services/sieveEngine';
 import { downloadPlaylistFile } from '../services/downloadHelper';
@@ -29,6 +29,11 @@ export default function PlaylistSplitterView({ onBack }: PlaylistSplitterViewPro
   const [results, setResults] = useState<SplitResult[]>([]);
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
+  // Shuffling states
+  const [tracks, setTracks] = useState<{ meta: string; path: string }[]>([]);
+  const [originalTracks, setOriginalTracks] = useState<{ meta: string; path: string }[]>([]);
+  const [shuffleCount, setShuffleCount] = useState(0);
+
   const parseExtInf = (meta: string, path: string) => {
     let title = 'Unknown Title';
     let artist = 'Unknown Artist';
@@ -56,18 +61,16 @@ export default function PlaylistSplitterView({ onBack }: PlaylistSplitterViewPro
     return { title, artist };
   };
 
-  const handleSplit = async () => {
-    if (!file) return;
-    setIsProcessing(true);
+  const handleFileSelected = async (selectedFile: File) => {
+    setFile(selectedFile);
     setResults([]);
-
+    setShuffleCount(0);
     try {
-      const content = await readFile(file);
+      const content = await readFile(selectedFile);
       const lines = content.split(/\r?\n/);
-      const tracks: { meta: string; path: string }[] = [];
+      const parsedTracks: { meta: string; path: string }[] = [];
       let currentMeta = "";
 
-      // Parse tracks maintaining order
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed) continue;
@@ -78,17 +81,44 @@ export default function PlaylistSplitterView({ onBack }: PlaylistSplitterViewPro
         } else if (trimmed.startsWith('#')) {
           // Skip other directives
         } else {
-          tracks.push({ meta: currentMeta, path: trimmed });
+          parsedTracks.push({ meta: currentMeta, path: trimmed });
           currentMeta = "";
         }
       }
 
-      if (tracks.length === 0) {
-        alert("No tracks found in playlist!");
-        setIsProcessing(false);
-        return;
-      }
+      setTracks(parsedTracks);
+      setOriginalTracks([...parsedTracks]);
+    } catch (err) {
+      console.error("Failed to parse playlist file", err);
+      alert("Failed to parse playlist file.");
+      setFile(null);
+      setTracks([]);
+      setOriginalTracks([]);
+    }
+  };
 
+  const handleShuffle = () => {
+    if (tracks.length === 0) return;
+    const shuffled = [...tracks];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    setTracks(shuffled);
+    setShuffleCount(prev => prev + 1);
+  };
+
+  const handleResetOrder = () => {
+    setTracks([...originalTracks]);
+    setShuffleCount(0);
+  };
+
+  const handleSplit = async () => {
+    if (tracks.length === 0) return;
+    setIsProcessing(true);
+    setResults([]);
+
+    try {
       const totalTracks = tracks.length;
       const chunkSize = Math.ceil(totalTracks / numParts);
       const newResults: SplitResult[] = [];
@@ -110,13 +140,11 @@ export default function PlaylistSplitterView({ onBack }: PlaylistSplitterViewPro
           parsedChunkTracks.push({ path: track.path, title, artist });
         });
 
-        const blob = new Blob([outputContent], { type: 'audio/x-mpegurl' });
-        const url = URL.createObjectURL(blob);
-        const baseName = file.name.replace(/\.m3u8?$/i, "");
+        const baseName = file ? file.name.replace(/\.m3u8?$/i, "") : "Playlist";
         
         newResults.push({
           fileName: `${baseName} (Part ${i + 1}).m3u`,
-          url,
+          url: "",
           content: outputContent,
           count: chunk.length,
           tracks: parsedChunkTracks
@@ -165,12 +193,78 @@ export default function PlaylistSplitterView({ onBack }: PlaylistSplitterViewPro
           label="Source Playlist"
           subLabel="Select the playlist to split"
           files={file ? [file] : []}
-          onFilesSelected={(files) => { setFile(files[0]); setResults([]); }}
-          onClear={() => { setFile(null); setResults([]); }}
+          onFilesSelected={(files) => { if (files[0]) handleFileSelected(files[0]); }}
+          onClear={() => { setFile(null); setResults([]); setTracks([]); setOriginalTracks([]); setShuffleCount(0); }}
           multiple={false}
           accept=".m3u,.m3u8,.csv,text/csv,application/csv,application/vnd.ms-excel"
           colorClass="amber"
         />
+
+        {tracks.length > 0 && (
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-4 shadow-inner">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Shuffle Tracks Order</span>
+              {shuffleCount > 0 && (
+                <span className="bg-orange-500/20 text-orange-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-orange-500/30">
+                  Shuffled {shuffleCount} {shuffleCount === 1 ? 'time' : 'times'}
+                </span>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={handleShuffle}
+                className="flex-1 py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg text-xs font-bold transition-colors flex items-center justify-center space-x-1.5 border border-slate-750"
+              >
+                <Shuffle size={14} className="text-orange-400" />
+                <span>Shuffle Playlist</span>
+              </button>
+              
+              {shuffleCount > 0 && (
+                <button
+                  onClick={handleResetOrder}
+                  className="py-2 px-3 bg-slate-850 hover:bg-slate-800 text-slate-400 hover:text-slate-300 rounded-lg text-xs font-bold transition-colors border border-slate-800"
+                >
+                  Reset Order
+                </button>
+              )}
+            </div>
+
+            {/* Quick visual preview of the first 3 and last 3 tracks */}
+            <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-2.5 space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar">
+              <div className="text-[9px] font-bold text-slate-600 uppercase tracking-wider mb-1">Current Order Preview ({tracks.length} tracks)</div>
+              {tracks.slice(0, 3).map((track, idx) => {
+                const { title, artist } = parseExtInf(track.meta, track.path);
+                return (
+                  <div key={`start-${idx}`} className="flex items-center space-x-2 text-[11px] text-slate-400 truncate">
+                    <span className="text-[9px] text-slate-600 font-mono w-4">{idx + 1}.</span>
+                    <span className="font-medium text-slate-300 truncate">{title}</span>
+                    <span className="text-slate-500 text-[10px] truncate">- {artist}</span>
+                  </div>
+                );
+              })}
+              
+              {tracks.length > 6 && (
+                <div className="py-0.5 pl-6 border-l border-slate-850 border-dashed text-[10px] text-slate-600 font-mono italic">
+                  ... {tracks.length - 6} tracks hidden ...
+                </div>
+              )}
+
+              {tracks.length > 3 && tracks.slice(-3).map((track, idx) => {
+                const actualIdx = tracks.length - 3 + idx;
+                if (actualIdx < 3) return null;
+                const { title, artist } = parseExtInf(track.meta, track.path);
+                return (
+                  <div key={`end-${idx}`} className="flex items-center space-x-2 text-[11px] text-slate-400 truncate">
+                    <span className="text-[9px] text-slate-600 font-mono w-4">{actualIdx + 1}.</span>
+                    <span className="font-medium text-slate-300 truncate">{title}</span>
+                    <span className="text-slate-500 text-[10px] truncate">- {artist}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {file && (
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3 shadow-inner">
