@@ -22,7 +22,7 @@ interface Track {
 interface PlaylistData {
   id: string;
   originalFilename: string;
-  fileType: 'm3u' | 'csv' | null;
+  fileType: 'm3u' | 'csv' | 'txt' | null;
   csvHeaders: string[];
   csvDelimiter: string;
   tracks: Track[];
@@ -196,33 +196,61 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
 
   const handleFileSelected = async (files: File[]) => {
     if (files.length === 0) return;
-    
     for (const file of files) {
       const lowerName = file.name.toLowerCase();
       let isCsv = lowerName.endsWith('.csv') || file.type === 'text/csv' || file.type === 'application/csv' || file.type === 'application/vnd.ms-excel';
       let isM3u = lowerName.endsWith('.m3u') || lowerName.endsWith('.m3u8') || file.type === 'audio/x-mpegurl' || file.type === 'application/vnd.apple.mpegurl';
+      let isTxt = lowerName.endsWith('.txt') || file.type === 'text/plain';
       
       const text = await file.text();
       const firstLine = text.split(/\r?\n/)[0] || '';
 
-      if (!isCsv && !isM3u) {
+      if (!isCsv && !isM3u && !isTxt) {
         // Fallback: guess by content if extension/mime type is missing or unknown
         if (firstLine.startsWith('#EXTM3U') || firstLine.startsWith('#EXTINF')) {
           isM3u = true;
         } else if (firstLine.includes(',') || firstLine.includes(';') || firstLine.includes('\t')) {
           isCsv = true;
+        } else if (firstLine.includes(' - ')) {
+          isTxt = true;
         } else {
-          alert(`Unsupported file type: ${file.name}. Please upload .csv or .m3u files.`);
+          alert(`Unsupported file type: ${file.name}. Please upload .csv, .m3u, or .txt files.`);
           continue;
         }
       }
 
       const newTracks: Track[] = [];
-      let fileType: 'm3u' | 'csv' | null = null;
+      let fileType: 'm3u' | 'csv' | 'txt' | null = null;
       let csvHeaders: string[] = [];
       let csvDelimiter = ',';
       
-      if (isCsv) {
+      if (isTxt) {
+        fileType = 'txt';
+        const lines = text.split(/\r?\n/);
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          
+          let title = trimmed;
+          let artist = 'Unknown';
+          const hyphenIdx = trimmed.lastIndexOf(' - ');
+          
+          if (hyphenIdx !== -1) {
+            title = trimmed.substring(0, hyphenIdx).trim();
+            artist = trimmed.substring(hyphenIdx + 3).trim();
+          }
+          
+          newTracks.push({
+            id: generateId(),
+            title,
+            artist,
+            album: '',
+            duration: '',
+            m3uPath: '',
+            m3uMeta: `#EXTINF:-1,${artist} - ${title}`
+          });
+        }
+      } else if (isCsv) {
         fileType = 'csv';
         
         // Better delimiter detection: check which one appears most in the first line
@@ -861,10 +889,10 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
     setDraggedId(null);
   };
 
-  const handleExport = async (format?: 'csv' | 'm3u') => {
+  const handleExport = async (format?: 'csv' | 'm3u' | 'txt') => {
     if (!activePlaylist || activePlaylist.tracks.length === 0) return;
     
-    const exportFormat = format || (activePlaylist.fileType === 'csv' ? 'csv' : 'm3u');
+    const exportFormat = format || (activePlaylist.fileType === 'csv' ? 'csv' : activePlaylist.fileType === 'txt' ? 'txt' : 'm3u');
     
     let content = '';
     let exportFilename = `manipulated_${activePlaylist.originalFilename}`;
@@ -878,6 +906,16 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
         }
       }
       mimeType = 'text/csv;charset=utf-8;';
+    } else if (exportFormat === 'txt') {
+      for (const t of activePlaylist.tracks) {
+        content += `${t.title} - ${t.artist}\n`;
+      }
+      if (exportFilename.toLowerCase().endsWith('.m3u') || exportFilename.toLowerCase().endsWith('.m3u8') || exportFilename.toLowerCase().endsWith('.csv')) {
+        exportFilename = exportFilename.replace(/\.(m3u|m3u8|csv)$/i, '.txt');
+      } else if (!exportFilename.toLowerCase().endsWith('.txt')) {
+        exportFilename += '.txt';
+      }
+      mimeType = 'text/plain;charset=utf-8;';
     } else {
       content += '#EXTM3U\n';
       for (const t of activePlaylist.tracks) {
@@ -916,6 +954,8 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
       
       if (activePlaylist.fileType === 'csv') {
         exportFilename = exportFilename.replace(/\.csv$/i, '.m3u');
+      } else if (activePlaylist.fileType === 'txt') {
+        exportFilename = exportFilename.replace(/\.txt$/i, '.m3u');
       }
       mimeType = 'audio/x-mpegurl';
     }
@@ -959,6 +999,25 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
                     <span>Convert to M3U</span>
                   </button>
                 </>
+              ) : activePlaylist.fileType === 'txt' ? (
+                <>
+                  <button 
+                    onClick={() => handleExport('txt')}
+                    className="flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-lg text-xs font-bold transition-colors"
+                    title="Export as plain text file (Title - Artist)"
+                  >
+                    <Download size={14} />
+                    <span>Export TXT</span>
+                  </button>
+                  <button 
+                    onClick={() => handleExport('m3u')}
+                    className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors"
+                    title="Convert and export as a playable M3U playlist file"
+                  >
+                    <Download size={14} />
+                    <span>Convert to M3U</span>
+                  </button>
+                </>
               ) : (
                 <button 
                   onClick={() => handleExport('m3u')}
@@ -993,7 +1052,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
             ))}
             <label className="flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors whitespace-nowrap">
               <Plus size={14} className="mr-1" /> Add
-              <input type="file" className="hidden" accept=".m3u,.m3u8,.csv,text/csv,application/csv,application/vnd.ms-excel" multiple onChange={handleFileInput} ref={fileInputRef} />
+              <input type="file" className="hidden" accept=".m3u,.m3u8,.csv,.txt,text/csv,application/csv,application/vnd.ms-excel,text/plain" multiple onChange={handleFileInput} ref={fileInputRef} />
             </label>
           </div>
         )}
@@ -1009,18 +1068,18 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
               <div>
                 <h4 className="text-xs font-bold text-indigo-300 uppercase">Manipulate Playlists</h4>
                 <p className="text-[11px] text-slate-400 leading-tight mt-1">
-                  Upload multiple .m3u or .csv files to rearrange, delete, sort, and cross-reference tracks like a pro.
+                  Upload multiple .m3u, .csv, or .txt files to rearrange, delete, sort, and cross-reference tracks like a pro.
                 </p>
               </div>
             </div>
             <FileUploader
               label="Playlist File(s)"
-              subLabel="Upload .m3u or .csv"
+              subLabel="Upload .m3u, .csv, or .txt"
               files={[]}
               onFilesSelected={handleFileSelected}
               onClear={() => {}}
               multiple={true}
-              accept=".m3u,.m3u8,.csv,text/csv,application/csv,application/vnd.ms-excel"
+              accept=".m3u,.m3u8,.csv,.txt,text/csv,application/csv,application/vnd.ms-excel,text/plain"
               colorClass="indigo"
             />
           </div>

@@ -146,22 +146,48 @@ export default function PlaylistMatcherView({ onBack }: PlaylistMatcherViewProps
     
     let isCsv = lowerName.endsWith('.csv') || file.type === 'text/csv' || file.type === 'application/csv' || file.type === 'application/vnd.ms-excel';
     let isM3u = lowerName.endsWith('.m3u') || lowerName.endsWith('.m3u8') || file.type === 'audio/x-mpegurl' || file.type === 'application/vnd.apple.mpegurl';
+    let isTxt = lowerName.endsWith('.txt') || file.type === 'text/plain';
     const firstLine = text.split(/\r?\n/)[0] || '';
 
-    if (!isCsv && !isM3u) {
+    if (!isCsv && !isM3u && !isTxt) {
       // Fallback: guess by content if extension/mime type is missing or unknown
       if (firstLine.startsWith('#EXTM3U') || firstLine.startsWith('#EXTINF')) {
         isM3u = true;
       } else if (firstLine.includes(',') || firstLine.includes(';') || firstLine.includes('\t')) {
         isCsv = true;
+      } else if (firstLine.includes(' - ')) {
+        isTxt = true;
       } else {
-        throw new Error(`Unsupported file type: ${file.name}. Please upload .csv or .m3u files.`);
+        throw new Error(`Unsupported file type: ${file.name}. Please upload .csv, .m3u, or .txt files.`);
       }
     }
 
     const tracks: any[] = [];
 
-    if (isCsv) {
+    if (isTxt) {
+      const lines = text.split(/\r?\n/);
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+
+        let title = trimmed;
+        let artist = 'Unknown';
+        const hyphenIdx = trimmed.lastIndexOf(' - ');
+
+        if (hyphenIdx !== -1) {
+          title = trimmed.substring(0, hyphenIdx).trim();
+          artist = trimmed.substring(hyphenIdx + 3).trim();
+        }
+
+        tracks.push({
+          title,
+          artist,
+          album: '',
+          rawPath: '',
+          duration: ''
+        });
+      }
+    } else if (isCsv) {
       // Better delimiter detection: check which one appears most in the first line
       const commaCount = (firstLine.match(/,/g) || []).length;
       const semiCount = (firstLine.match(/;/g) || []).length;
@@ -662,12 +688,12 @@ Return ONLY the raw JSON array. No explanations, no markdown formatting blocks, 
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">1. Target Playlist File (Online Export or Shared)</h3>
                 <FileUploader
                   label="Target Playlist"
-                  subLabel="Upload .m3u, .m3u8, or .csv"
+                  subLabel="Upload .m3u, .m3u8, .csv, or .txt"
                   files={friendFile ? [friendFile] : []}
                   onFilesSelected={handleFriendFileSelected}
                   onClear={() => { setFriendFile(null); setFriendTracks([]); }}
                   multiple={false}
-                  accept=".m3u,.m3u8,.csv,text/csv,application/csv"
+                  accept=".m3u,.m3u8,.csv,.txt,text/csv,application/csv,text/plain"
                   colorClass="violet"
                 />
                 {friendTracks.length > 0 && (
@@ -681,12 +707,12 @@ Return ONLY the raw JSON array. No explanations, no markdown formatting blocks, 
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">2. Your Music Library File</h3>
                 <FileUploader
                   label="My Local Library Database"
-                  subLabel="Upload library .m3u, .m3u8, or .csv"
+                  subLabel="Upload library .m3u, .m3u8, .csv, or .txt"
                   files={libraryFile ? [libraryFile] : []}
                   onFilesSelected={handleLibraryFileSelected}
                   onClear={() => { setLibraryFile(null); setLibraryTracks([]); }}
                   multiple={false}
-                  accept=".m3u,.m3u8,.csv,text/csv,application/csv"
+                  accept=".m3u,.m3u8,.csv,.txt,text/csv,application/csv,text/plain"
                   colorClass="indigo"
                 />
                 {libraryTracks.length > 0 && (
