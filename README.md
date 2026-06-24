@@ -106,6 +106,12 @@ The foundational `.m3u` / `.m3u8` playlist format represents your active, human-
 *   **Preserving Android File Paths**: Successfully ingests and outputs custom, system-specific directories—including raw Android external/internal storage pathways (e.g. `Android/media/...`, `Music/SpotiFlyer/...`, `Download/...` or custom system music folders like `ultima/ultima/...`). This allows you to import manipulated playlists straight back into Musicolet's database with zero broken file paths.
 *   **Conflict Resolution & Skeleton Anchor**: Solves play-count positional conflict. When dozens of tracks possess identical play-history scores, the M3U playlist export is utilized as a "skeleton anchor" to preserve the structural sequencing of your tracks and resolve rating position ties cleanly.
 
+### 📄 Channel C: Plain Text Song Lists (The Text-Based Catalog)
+Simple `.txt` file representations containing track records formatted as `[Title] - [Artist]` line-by-line are fully supported:
+*   **Intelligent Separator Parsing**: Splits track entries using `lastIndexOf(' - ')` to correctly isolate the artist name on the right, preserving version tags, cover tags, and sub-titles containing hyphens in the song title.
+*   **Fuzzy and AI Matching**: Can be matched directly against offline files and library databases in the Reconciler (Offline Playlist Matcher) to resolve local paths.
+*   **Dual-Export Actions**: Can be manipulated and exported back to clean `.txt` song lists, or converted directly into standard playable `.m3u` playlists.
+
 ---
 
 ## 🔮 My Native Musicolet Dream & Future Roadmap
@@ -123,7 +129,7 @@ By digitizing my meticulous curation rituals, I hope to inspire Musicolet's next
 
 ## 🛠️ Comprehensive Module Specifications
 
-Playlist Haven features 10 specialized functional views, mapped directly to the **DAESO** playlist layers:
+Playlist Haven features 11 specialized functional views, mapped directly to the **DAESO** playlist layers:
 
 ### 1. 🎛️ Sonic Sieve Logic Engine (`SonicSieveView.tsx`) [Integration Layer]
 The ultimate weekly playlist generator that automates your listening rotation:
@@ -134,8 +140,9 @@ The ultimate weekly playlist generator that automates your listening rotation:
 *   **Penalty Playlists**: Ingest one or more playlists/CSVs to deduct 1 play point per track per file (ideal for "Exclusion lists" or "Last Week's" plays).
 
 ### 2. 🎚️ Playlist Manipulator (`PlaylistManipulatorView.tsx`) [Analytic & Capture Layer]
-An extensive interactive workbench to rearrange, slice, and cross-reference multiple playlists simultaneously:
+An extensive interactive workbench to rearrange, slice, and cross-reference multiple M3U, CSV, or TXT playlists simultaneously:
 *   **Fuzzy Cross-Prune**: Cross-reference multiple loaded playlists to identify and remove fuzzy duplicate matches across files using Jaro-Winkler bigram similarity with customizable matching strictness percentages.
+*   **Plain Text Support**: Upload plain text track lists (`.txt` files formatted as `Title - Artist`). Rearrange or sort them, and export them back to clean text lists or convert them directly to standard playable M3U playlists.
 *   **Play Count Filters**: Dynamically parses play statistics from CSV fields to let you select, deselect, replace, or intersect tracks using custom play-range boundaries—passing completely silently for files without play metadata.
 *   **Interactive Drag-and-Drop Grid**: Move tracks manually with smooth drag previews and responsive container auto-scrolling.
 *   **Numeric & Alphabetical Sorting**: One-click sorting by play count (Highest plays first) or alphabetical properties (Title, Artist, Album).
@@ -170,6 +177,13 @@ Filter playlist tracks into distinct high, medium, or low tiers based on custom 
 
 ### 10. 👁️ Vision-To-Playlist (`VisionToPlaylistView.tsx`) [Capture Layer]
 AI-assisted screenshot playlist converter. Upload images or screenshots of online playlists, and the visual engine will extract track titles and artists, automatically resolving them into clean, standards-compliant M3U or CSV files.
+
+### 11. 🔗 Offline Playlist Matcher & Reconciler (`PlaylistMatcherView.tsx`) [Integration & Capture Layer]
+Reconcile and align tracklist variations between a shared playlist (M3U, CSV, or TXT) and your local library database:
+*   **Fuzzy Bigram Similarity**: Automatically maps matching titles and artists using robust Jaro-Winkler string-cleaning and bigram score comparison.
+*   **AI Assist Lookup**: Send low-confidence candidate tracks in token-optimized chunks to Gemini to identify and match the correct candidate.
+*   **Real-time Searchable Resolution Overlay**: Quickly search your entire library database inline to manually assign matches for unresolved tracks.
+*   **Export Options**: Download a playable local M3U playlist with your local file paths, or export a CSV list of all missing songs.
 
 ---
 
