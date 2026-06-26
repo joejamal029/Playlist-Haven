@@ -853,14 +853,16 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
     });
   };
 
-  const computeCrossPruneMatches = (strictness: number) => {
-    if (!activePlaylist) return;
+  const computeCrossPruneMatches = (strictness: number, targetPlaylistId?: string) => {
+    const targetId = targetPlaylistId || activePlaylistId;
+    const targetPlaylist = playlists.find(p => p.id === targetId);
+    if (!targetPlaylist) return;
     
     const threshold = strictness / 100;
     const matches: CrossPruneMatch[] = [];
     
     const otherTracks = playlists
-      .filter(p => p.id !== activePlaylist.id)
+      .filter(p => p.id !== targetPlaylist.id)
       .flatMap(p => p.tracks.map(t => ({
         track: t,
         playlistName: p.originalFilename,
@@ -868,7 +870,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
         normArtist: normalizeForMatch(t.artist)
       })));
       
-    for (const targetTrack of activePlaylist.tracks) {
+    for (const targetTrack of targetPlaylist.tracks) {
       const normTargetTitle = normalizeForMatch(targetTrack.title);
       const normTargetArtist = normalizeForMatch(targetTrack.artist);
       
@@ -906,11 +908,16 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
     setCrossPruneMatches(matches.sort((a, b) => b.score - a.score));
   };
 
-  const openCrossPruneModal = () => {
+  const openCrossPruneModal = (playlistId?: string) => {
+    const targetId = playlistId || activePlaylistId;
+    if (!targetId) return;
+    if (targetId !== activePlaylistId) {
+      setActivePlaylistId(targetId);
+    }
     setIsCrossPruneOpen(true);
     setIsCalculatingMatches(true);
     setTimeout(() => {
-      computeCrossPruneMatches(crossPruneStrictness);
+      computeCrossPruneMatches(crossPruneStrictness, targetId);
       setIsCalculatingMatches(false);
     }, 50);
   };
@@ -1462,6 +1469,33 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
             <CopyMinus size={11} />
           </button>
 
+          {playlists.length > 1 && (
+            <button
+              onClick={() => openCrossPruneModal(playlist.id)}
+              className="text-slate-455 hover:text-white bg-slate-800 hover:bg-slate-750 p-1 rounded transition-colors"
+              title="Cross-Prune (Remove matches in other playlists)"
+            >
+              <Layers size={11} />
+            </button>
+          )}
+
+          <button 
+            onClick={() => handleMoveToTop(playlist.id)}
+            disabled={playlist.selectedIds.size === 0}
+            className="text-slate-450 hover:text-white bg-slate-800 hover:bg-slate-750 p-1 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Move Top"
+          >
+            <ArrowUpToLine size={11} />
+          </button>
+          <button 
+            onClick={() => handleMoveToBottom(playlist.id)}
+            disabled={playlist.selectedIds.size === 0}
+            className="text-slate-450 hover:text-white bg-slate-800 hover:bg-slate-750 p-1 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Move Bottom"
+          >
+            <ArrowDownToLine size={11} />
+          </button>
+
           <button
             onClick={() => {
               setCombineSourceId(playlist.id);
@@ -1927,6 +1961,59 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
                         <Trash2 size={14} />
                         <span>Delete ({activePlaylist.selectedIds.size})</span>
                       </button>
+
+                      {playlists.length > 1 && (
+                        <button 
+                          onClick={() => {
+                            setCombineSourceId(activePlaylistId!);
+                            const target = playlists.find(p => p.id !== activePlaylistId);
+                            if (target) setCombineTargetId(target.id);
+                            setIsCombinePanelOpen(true);
+                          }}
+                          className="flex items-center space-x-2 text-xs font-medium text-purple-300 hover:text-white bg-purple-500/15 hover:bg-purple-500/35 px-3 py-1.5 rounded-lg border border-purple-500/30 transition-colors shadow-sm cursor-pointer"
+                          title="Combine/Inject tracks from this playlist"
+                        >
+                          <ArrowLeftRight size={14} className="text-purple-400" />
+                          <span>Combine</span>
+                        </button>
+                      )}
+
+                      {activePlaylist.selectedIds.size > 0 && playlists.length > 1 && (
+                        <div className="relative shrink-0">
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenCopyToDropdownId(openCopyToDropdownId === activePlaylistId ? null : activePlaylistId);
+                            }}
+                            className="flex items-center space-x-2 text-xs font-medium bg-indigo-655 hover:bg-indigo-600 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm cursor-pointer"
+                          >
+                            <span>Copy To</span>
+                            <ArrowRight size={14} />
+                          </button>
+                          {openCopyToDropdownId === activePlaylistId && (
+                            <>
+                              <div className="fixed inset-0 z-20" onClick={() => setOpenCopyToDropdownId(null)} />
+                              <div className="absolute right-0 bottom-full mb-1.5 bg-slate-900 border border-slate-750 rounded-lg shadow-2xl z-30 min-w-[165px] p-1.5 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                                <div className="text-[9px] text-slate-500 font-bold px-2 py-1 uppercase tracking-wider border-b border-slate-800/60 pb-1.5 mb-1.5">Target Playlist:</div>
+                                {playlists
+                                  .filter(p => p.id !== activePlaylistId)
+                                  .map(p => (
+                                    <button
+                                      key={p.id}
+                                      onClick={() => {
+                                        copySelectedTracks(activePlaylistId!, p.id);
+                                        setOpenCopyToDropdownId(null);
+                                      }}
+                                      className="w-full text-left text-[11px] text-slate-350 hover:text-white hover:bg-indigo-650/30 px-2 py-1.5 rounded transition-all truncate cursor-pointer"
+                                    >
+                                      {p.originalFilename}
+                                    </button>
+                                  ))}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
 
                       <div className="ml-auto text-xs text-slate-500 font-medium">
                         {filteredTracks.length} {filteredTracks.length === activePlaylist.tracks.length ? 'tracks' : `of ${activePlaylist.tracks.length} tracks`}
