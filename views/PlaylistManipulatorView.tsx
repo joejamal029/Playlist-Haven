@@ -196,9 +196,14 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
   const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
 
-  // Split-Pane & Combining States
-  const [isSplitMode, setIsSplitMode] = useState(false);
+  // Segmented Pane Configuration (1, 2, or 4 simultaneous viewports)
+  const [paneCount, setPaneCount] = useState<1 | 2 | 4>(1);
   const [secondaryPlaylistId, setSecondaryPlaylistId] = useState<string | null>(null);
+  const [thirdPlaylistId, setThirdPlaylistId] = useState<string | null>(null);
+  const [fourthPlaylistId, setFourthPlaylistId] = useState<string | null>(null);
+
+  // Per-pane UI dropdown status
+  const [openCopyToDropdownId, setOpenCopyToDropdownId] = useState<string | null>(null);
 
   // Advanced Combine Settings
   const [isCombinePanelOpen, setIsCombinePanelOpen] = useState(false);
@@ -230,15 +235,21 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-populate secondary playlist selection
+  // Auto-populate multiple viewing panes
   useEffect(() => {
     if (playlists.length >= 2 && !secondaryPlaylistId) {
       const other = playlists.find(p => p.id !== activePlaylistId);
-      if (other) {
-        setSecondaryPlaylistId(other.id);
-      }
+      if (other) setSecondaryPlaylistId(other.id);
     }
-  }, [playlists, activePlaylistId, secondaryPlaylistId]);
+    if (playlists.length >= 3 && !thirdPlaylistId) {
+      const other = playlists.find(p => p.id !== activePlaylistId && p.id !== secondaryPlaylistId);
+      if (other) setThirdPlaylistId(other.id);
+    }
+    if (playlists.length >= 4 && !fourthPlaylistId) {
+      const other = playlists.find(p => p.id !== activePlaylistId && p.id !== secondaryPlaylistId && p.id !== thirdPlaylistId);
+      if (other) setFourthPlaylistId(other.id);
+    }
+  }, [playlists, activePlaylistId, secondaryPlaylistId, thirdPlaylistId, fourthPlaylistId]);
 
   const activePlaylist = playlists.find(p => p.id === activePlaylistId) || null;
 
@@ -574,6 +585,12 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
       }
       if (secondaryPlaylistId === id) {
         setSecondaryPlaylistId(filtered.length > 1 ? filtered.find(p => p.id !== activePlaylistId)?.id || null : null);
+      }
+      if (thirdPlaylistId === id) {
+        setThirdPlaylistId(filtered.length > 2 ? filtered.find(p => p.id !== activePlaylistId && p.id !== secondaryPlaylistId)?.id || null : null);
+      }
+      if (fourthPlaylistId === id) {
+        setFourthPlaylistId(filtered.length > 3 ? filtered.find(p => p.id !== activePlaylistId && p.id !== secondaryPlaylistId && p.id !== thirdPlaylistId)?.id || null : null);
       }
       return filtered;
     });
@@ -1196,12 +1213,34 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
     alert(`Successfully injected ${tracksToAdd.length} track(s) from "${sourcePlaylist.originalFilename}" into "${targetPlaylist.originalFilename}".`);
   };
 
-  const renderPlaylistPane = (playlistId: string | null, side: 'left' | 'right') => {
-    if (!playlistId) {
+  const renderPlaylistPane = (playlistId: string | null, side: 'left' | 'right' | 'pane3' | 'pane4') => {
+    if (!playlistId || !playlists.find(p => p.id === playlistId)) {
       return (
-        <div className="bg-slate-900/30 border border-slate-800/80 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center text-center text-slate-500 h-64">
-          <p className="text-xs font-semibold">No playlist loaded on the {side} pane.</p>
-          <p className="text-[10px] text-slate-600 mt-1">Upload a playlist or select one from the tab list above.</p>
+        <div className="bg-slate-900/30 border border-slate-800 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center text-center text-slate-500 min-h-[300px] shadow-xl animate-in fade-in duration-300">
+          <p className="text-xs font-semibold text-slate-400">Empty Viewing Pane</p>
+          <p className="text-[10px] text-slate-500 mt-1 max-w-[200px]">Load another playlist here or select an open one below.</p>
+          {playlists.length > 0 && (
+            <select
+              value=""
+              onChange={(e) => {
+                const nextId = e.target.value;
+                if (side === 'left') setActivePlaylistId(nextId);
+                else if (side === 'right') setSecondaryPlaylistId(nextId);
+                else if (side === 'pane3') setThirdPlaylistId(nextId);
+                else if (side === 'pane4') setFourthPlaylistId(nextId);
+              }}
+              className="mt-3 bg-slate-800 border border-slate-700 text-slate-350 text-[11px] rounded-lg px-2.5 py-1.5 outline-none w-36 truncate font-bold cursor-pointer hover:border-slate-600 transition-colors"
+            >
+              <option value="" disabled>Select Open...</option>
+              {playlists.map(p => (
+                <option key={p.id} value={p.id}>{p.originalFilename}</option>
+              ))}
+            </select>
+          )}
+          <label className="mt-2.5 flex items-center justify-center bg-indigo-650/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-305 px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors whitespace-nowrap">
+            <Plus size={12} className="mr-1" /> Load File
+            <input type="file" className="hidden" accept=".m3u,.m3u8,.csv,.txt,text/csv,application/csv,application/vnd.ms-excel,text/plain" multiple onChange={handleFileInput} ref={fileInputRef} />
+          </label>
         </div>
       );
     }
@@ -1213,7 +1252,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
     const pHasPlayCount = playlist.tracks.some(t => t.playCount !== undefined);
 
     return (
-      <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-4 flex flex-col gap-4 shadow-xl">
+      <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-4 flex flex-col gap-4 shadow-xl animate-in fade-in duration-300">
         {/* Pane Header */}
         <div className="flex items-center justify-between gap-3 border-b border-slate-800/60 pb-3">
           <div className="flex items-center space-x-2 flex-1 min-w-0">
@@ -1221,13 +1260,12 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
               value={playlist.id}
               onChange={(e) => {
                 const nextId = e.target.value;
-                if (side === 'left') {
-                  setActivePlaylistId(nextId);
-                } else {
-                  setSecondaryPlaylistId(nextId);
-                }
+                if (side === 'left') setActivePlaylistId(nextId);
+                else if (side === 'right') setSecondaryPlaylistId(nextId);
+                else if (side === 'pane3') setThirdPlaylistId(nextId);
+                else if (side === 'pane4') setFourthPlaylistId(nextId);
               }}
-              className="bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold rounded-lg px-2.5 py-1.5 outline-none focus:border-indigo-500 w-full truncate"
+              className="bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold rounded-lg px-2.5 py-1.5 outline-none focus:border-indigo-500 w-full truncate cursor-pointer"
             >
               {playlists.map(p => (
                 <option key={p.id} value={p.id}>
@@ -1312,8 +1350,8 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
           </select>
         </div>
 
-        {/* Selection Tools & Deduplicate */}
-        <div className="flex flex-wrap items-center gap-1.5 border-t border-slate-800/40 pt-2 text-[10px]">
+        {/* Selection Tools, Copy To Context, & Deduplicate */}
+        <div className="flex flex-wrap items-center gap-1.5 border-t border-slate-800/40 pt-2 text-[10px] relative">
           <button 
             onClick={() => handleSelectAll(playlist.id, filtered)}
             className="text-slate-350 hover:text-white bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded transition-colors font-semibold"
@@ -1362,6 +1400,44 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
             Plays
           </button>
 
+          {/* Copy Selected To Menu Popup */}
+          {playlist.selectedIds.size > 0 && playlists.length > 1 && (
+            <div className="relative shrink-0">
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenCopyToDropdownId(openCopyToDropdownId === playlist.id ? null : playlist.id);
+                }}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white px-2 py-1 rounded text-[10px] font-bold flex items-center space-x-1 transition-all"
+              >
+                <span>Copy To</span>
+                <ArrowRight size={10} />
+              </button>
+              {openCopyToDropdownId === playlist.id && (
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setOpenCopyToDropdownId(null)} />
+                  <div className="absolute right-0 bottom-full mb-1.5 bg-slate-900 border border-slate-750 rounded-lg shadow-2xl z-30 min-w-[165px] p-1.5 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                    <div className="text-[9px] text-slate-500 font-bold px-2 py-1 uppercase tracking-wider border-b border-slate-800/60 pb-1.5 mb-1.5">Target Playlist:</div>
+                    {playlists
+                      .filter(p => p.id !== playlist.id)
+                      .map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => {
+                            copySelectedTracks(playlist.id, p.id);
+                            setOpenCopyToDropdownId(null);
+                          }}
+                          className="w-full text-left text-[11px] text-slate-350 hover:text-white hover:bg-indigo-650/30 px-2 py-1.5 rounded transition-all truncate"
+                        >
+                          {p.originalFilename}
+                        </button>
+                      ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           <div className="w-px h-3 bg-slate-800 mx-0.5"></div>
 
           <button 
@@ -1386,21 +1462,34 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
             <CopyMinus size={11} />
           </button>
 
+          <button
+            onClick={() => {
+              setCombineSourceId(playlist.id);
+              const target = playlists.find(p => p.id !== playlist.id);
+              if (target) setCombineTargetId(target.id);
+              setIsCombinePanelOpen(true);
+            }}
+            className="text-purple-350 hover:text-white bg-purple-500/10 hover:bg-purple-500/20 px-2 py-1 rounded border border-purple-500/20 transition-colors font-semibold"
+            title="Combine/Inject tracks from this playlist"
+          >
+            Combine
+          </button>
+
           <div className="w-px h-3 bg-slate-800 mx-0.5"></div>
 
           <button 
             onClick={() => handleDeleteSelected(playlist.id)}
             disabled={playlist.selectedIds.size === 0}
-            className="text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 disabled:opacity-40 disabled:cursor-not-allowed px-2.5 py-1 rounded transition-colors font-bold shrink-0"
+            className="text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 disabled:opacity-40 disabled:cursor-not-allowed px-2 py-1 rounded transition-colors font-bold shrink-0"
           >
             Delete ({playlist.selectedIds.size})
           </button>
         </div>
 
         {/* Tracks List */}
-        <div className="bg-slate-955/40 border border-slate-850 rounded-xl overflow-hidden">
+        <div className="bg-slate-950/40 border border-slate-850 rounded-xl overflow-hidden">
           <div 
-            className="max-h-[50vh] overflow-y-auto custom-scrollbar"
+            className="max-h-[45vh] overflow-y-auto custom-scrollbar"
             onDragOver={handleDragOverContainer}
           >
             {filtered.map((track, index) => {
@@ -1496,6 +1585,11 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
             )}
           </div>
         </div>
+
+        {/* Counter Summary */}
+        <div className="text-[10px] text-slate-500 font-medium text-right mt-0.5">
+          {filtered.length} {filtered.length === playlist.tracks.length ? 'tracks' : `of ${playlist.tracks.length} tracks`}
+        </div>
       </div>
     );
   };
@@ -1516,17 +1610,21 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
             </div>
           </div>
           {playlists.length > 0 && (
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => setIsSplitMode(!isSplitMode)}
-                className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border ${isSplitMode ? 'bg-indigo-600 hover:bg-indigo-500 border-indigo-500 text-white shadow-lg shadow-indigo-950/20' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-305'}`}
-                title="Toggle Split View (view two playlists side-by-side)"
-              >
-                <Columns size={14} />
-                <span>{isSplitMode ? 'Single Pane' : 'Split View'}</span>
-              </button>
+            <div className="flex items-center space-x-3">
+              {/* Segmented Layout Controller */}
+              <div className="flex items-center bg-slate-800/80 p-0.5 rounded-lg border border-slate-700/60 shadow">
+                {[1, 2, 4].map(count => (
+                  <button
+                    key={count}
+                    onClick={() => setPaneCount(count as 1 | 2 | 4)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${paneCount === count ? 'bg-indigo-600 text-white shadow shadow-indigo-950/30' : 'text-slate-400 hover:text-slate-205'}`}
+                  >
+                    {count} {count === 1 ? 'Pane' : 'Panes'}
+                  </button>
+                ))}
+              </div>
 
-              {!isSplitMode && activePlaylist && activePlaylist.tracks.length > 0 && (
+              {paneCount === 1 && activePlaylist && activePlaylist.tracks.length > 0 && (
                 <div className="flex items-center space-x-2">
                   {activePlaylist.fileType === 'csv' ? (
                     <>
@@ -1582,7 +1680,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
         </div>
 
         {/* Tabs for Playlists (Only visible in Single View to save space) */}
-        {!isSplitMode && playlists.length > 0 && (
+        {paneCount === 1 && playlists.length > 0 && (
           <div className="flex items-center space-x-2 overflow-x-auto custom-scrollbar pb-1">
             {playlists.map(p => (
               <button
@@ -1635,370 +1733,337 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Transfer / Combine Banner in Split View */}
-            {isSplitMode && (
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-md">
+            {/* Header banner option to upload additional files in multi-pane modes */}
+            {paneCount > 1 && (
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-md">
                 <div className="flex items-center space-x-2 text-xs font-bold text-indigo-400 uppercase tracking-wider">
-                  <span>Split Pane Toolkit</span>
+                  <span>Multi-Pane Dashboard</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={() => {
-                      if (activePlaylistId && secondaryPlaylistId) {
-                        copySelectedTracks(activePlaylistId, secondaryPlaylistId);
-                      }
-                    }}
-                    disabled={!activePlaylistId || !secondaryPlaylistId || !playlists.find(p => p.id === activePlaylistId)?.selectedIds.size}
-                    className="flex items-center space-x-2 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 disabled:opacity-40 disabled:cursor-not-allowed px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                  >
-                    <span>Copy Selected (Left → Right)</span>
-                    <ArrowRight size={14} />
-                  </button>
-                  
-                  <button
-                    onClick={() => {
-                      if (activePlaylistId && secondaryPlaylistId) {
-                        copySelectedTracks(secondaryPlaylistId, activePlaylistId);
-                      }
-                    }}
-                    disabled={!activePlaylistId || !secondaryPlaylistId || !playlists.find(p => p.id === secondaryPlaylistId)?.selectedIds.size}
-                    className="flex items-center space-x-2 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 disabled:opacity-40 disabled:cursor-not-allowed px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                  >
-                    <ArrowLeft size={14} />
-                    <span>Copy Selected (Right → Left)</span>
-                  </button>
-
-                  <div className="w-px h-5 bg-slate-800 mx-1 hidden sm:block"></div>
-
-                  <button
-                    onClick={() => {
-                      if (activePlaylistId) setCombineSourceId(activePlaylistId);
-                      if (secondaryPlaylistId) setCombineTargetId(secondaryPlaylistId);
-                      setIsCombinePanelOpen(true);
-                    }}
-                    className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-md shadow-purple-950/20"
-                  >
-                    <Layers size={14} />
-                    <span>Combine / Inject...</span>
-                  </button>
-                  
-                  <label className="flex items-center justify-center bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors whitespace-nowrap">
-                    <Plus size={14} className="mr-1" /> Add Playlist
+                  <label className="flex items-center justify-center bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white px-3.5 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors whitespace-nowrap shadow-sm">
+                    <Plus size={14} className="mr-1" /> Load More Files
                     <input type="file" className="hidden" accept=".m3u,.m3u8,.csv,.txt,text/csv,application/csv,application/vnd.ms-excel,text/plain" multiple onChange={handleFileInput} ref={fileInputRef} />
                   </label>
                 </div>
               </div>
             )}
 
-            {isSplitMode ? (
+            {paneCount === 1 ? (
+              activePlaylist ? (
+                <div className="space-y-4">
+                  {/* Toolbar */}
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex flex-col gap-3 sticky top-0 z-10 shadow-lg shadow-slate-950/50">
+                    {/* Top Row: Search & Global Actions */}
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex items-center space-x-2 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 flex-1 min-w-[150px]">
+                        <Search size={14} className="text-slate-500" />
+                        <input 
+                          type="text" 
+                          placeholder="Search tracks..." 
+                          value={activePlaylist.searchQuery}
+                          onChange={(e) => updateActivePlaylist(p => ({ ...p, searchQuery: e.target.value }))}
+                          className="bg-transparent border-none outline-none text-xs text-slate-200 w-full placeholder:text-slate-500"
+                        />
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <SortAsc size={14} className="text-slate-500" />
+                        <select 
+                          onChange={(e) => handleSort(activePlaylistId!, e.target.value as keyof Track)}
+                          className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-2 py-1.5 outline-none focus:border-indigo-500 cursor-pointer"
+                          defaultValue=""
+                        >
+                          <option value="" disabled>Sort by...</option>
+                          <option value="title">Title</option>
+                          <option value="artist">Artist</option>
+                          <option value="album">Album</option>
+                          {hasPlayCount && <option value="playCount">Play Count (Highest First)</option>}
+                        </select>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <Filter size={14} className="text-slate-500" />
+                        <select 
+                          value={activePlaylist.artistFilter}
+                          onChange={(e) => handleSelectByArtist(activePlaylistId!, e.target.value)}
+                          className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-2 py-1.5 outline-none focus:border-indigo-500 max-w-[150px] cursor-pointer"
+                        >
+                          <option value="">Select Artist...</option>
+                          {uniqueArtists.map(a => (
+                            <option key={a} value={a}>{a}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <button 
+                        onClick={() => handleReverse(activePlaylistId!)}
+                        className="flex items-center space-x-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
+                      >
+                        <ArrowUpDown size={14} />
+                        <span>Reverse</span>
+                      </button>
+
+                      <button 
+                        onClick={() => handleRandomize(activePlaylistId!)}
+                        className="flex items-center space-x-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
+                      >
+                        <Dices size={14} />
+                        <span>Randomize</span>
+                      </button>
+
+                      <button 
+                        onClick={() => handleRemoveDuplicates(activePlaylistId!)}
+                        className="flex items-center space-x-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
+                      >
+                        <CopyMinus size={14} />
+                        <span>Deduplicate</span>
+                      </button>
+
+                      {playlists.length > 1 && (
+                        <button 
+                          onClick={openCrossPruneModal}
+                          className="flex items-center space-x-2 text-xs font-medium text-indigo-305 hover:text-white bg-indigo-500/20 hover:bg-indigo-500/40 px-3 py-1.5 rounded-lg transition-colors border border-indigo-500/30"
+                          title="Remove songs that are present in any of the other open playlists"
+                        >
+                          <Layers size={14} />
+                          <span>Cross-Prune</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Bottom Row: Selection Actions */}
+                    <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-800/50">
+                      <button 
+                        onClick={() => handleSelectAll(activePlaylistId!, filteredTracks)}
+                        className="flex items-center space-x-2 text-xs font-medium text-slate-305 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
+                      >
+                        <CheckSquare size={14} className="text-indigo-400" />
+                        <span>Select All</span>
+                      </button>
+
+                      <button 
+                        onClick={() => handleDeselectAll(activePlaylistId!, filteredTracks)}
+                        className="flex items-center space-x-2 text-xs font-medium text-slate-305 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
+                      >
+                        <Square size={14} />
+                        <span>Deselect All</span>
+                      </button>
+
+                      <button 
+                        onClick={() => handleInvertSelection(activePlaylistId!, filteredTracks)}
+                        className="flex items-center space-x-2 text-xs font-medium text-slate-305 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
+                      >
+                        <RefreshCcw size={14} />
+                        <span>Invert</span>
+                      </button>
+
+                      <button 
+                        onClick={() => handleBasicSelectRange(activePlaylistId!, filteredTracks)}
+                        title="Expands the selection between the first and last selected tracks."
+                        className="flex items-center space-x-2 text-xs font-medium text-emerald-300 hover:text-white bg-emerald-500/15 hover:bg-emerald-500/35 px-3 py-1.5 rounded-lg border border-emerald-500/30 transition-colors shadow-sm"
+                      >
+                        <SlidersHorizontal size={14} className="text-emerald-400" />
+                        <span>Select Range</span>
+                      </button>
+
+                      <button 
+                        onClick={() => {
+                          if (filteredTracks.length > 0) {
+                            setAdvRangeStartId(filteredTracks[0].id);
+                            setAdvRangeEndId(filteredTracks[filteredTracks.length - 1].id);
+                            setAdvRangePlaylistId(activePlaylistId);
+                          } else {
+                            alert("No tracks visible to select an advanced range.");
+                          }
+                        }}
+                        className="flex items-center space-x-2 text-xs font-medium text-violet-300 hover:text-white bg-violet-500/15 hover:bg-violet-500/35 px-3 py-1.5 rounded-lg border border-violet-500/30 transition-colors shadow-sm"
+                      >
+                        <Sparkles size={14} className="text-violet-400" />
+                        <span>Advanced Range...</span>
+                      </button>
+
+                      <button 
+                        onClick={() => {
+                          if (!hasPlayCount) {
+                            alert("This playlist does not contain play count details.");
+                            return;
+                          }
+                          setPlayCountFilterPlaylistId(activePlaylistId);
+                        }}
+                        className={`flex items-center space-x-2 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors shadow-sm
+                          ${hasPlayCount 
+                            ? 'text-cyan-300 hover:text-white bg-cyan-500/15 hover:bg-cyan-500/35 border-cyan-500/30 shadow-cyan-900/10' 
+                            : 'text-slate-500 bg-slate-800/30 border-slate-800 cursor-not-allowed opacity-50'}`}
+                      >
+                        <BarChart3 size={14} className={hasPlayCount ? "text-cyan-400" : "text-slate-500"} />
+                        <span>Select by Plays...</span>
+                      </button>
+
+                      <div className="w-px h-4 bg-slate-700 mx-1"></div>
+
+                      <button 
+                        onClick={() => handleMoveToTop(activePlaylistId!)}
+                        disabled={activePlaylist.selectedIds.size === 0}
+                        className="flex items-center space-x-2 text-xs font-medium text-slate-350 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <ArrowUpToLine size={14} />
+                        <span>Move Top</span>
+                      </button>
+
+                      <button 
+                        onClick={() => handleMoveToBottom(activePlaylistId!)}
+                        disabled={activePlaylist.selectedIds.size === 0}
+                        className="flex items-center space-x-2 text-xs font-medium text-slate-350 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <ArrowDownToLine size={14} />
+                        <span>Move Bottom</span>
+                      </button>
+
+                      <button 
+                        onClick={() => handleDeleteSelected(activePlaylistId!)}
+                        disabled={activePlaylist.selectedIds.size === 0}
+                        className="flex items-center space-x-2 text-xs font-medium text-rose-400 hover:text-rose-305 bg-rose-500/10 hover:bg-rose-500/20 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Trash2 size={14} />
+                        <span>Delete ({activePlaylist.selectedIds.size})</span>
+                      </button>
+
+                      <div className="ml-auto text-xs text-slate-500 font-medium">
+                        {filteredTracks.length} {filteredTracks.length === activePlaylist.tracks.length ? 'tracks' : `of ${activePlaylist.tracks.length} tracks`}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Track List */}
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden animate-in slide-in-from-bottom duration-300">
+                    <div 
+                      className="max-h-[60vh] overflow-y-auto custom-scrollbar"
+                      onDragOver={handleDragOverContainer}
+                    >
+                      {filteredTracks.map((track, index) => {
+                        const isSelected = activePlaylist.selectedIds.has(track.id);
+                        const isTempRange = rangeSelectorPlaylistId === activePlaylistId && temporaryRangeIds.has(track.id);
+                        const isAdvRange = advRangePlaylistId === activePlaylistId && advancedRangeIds.has(track.id);
+                        const isDragged = draggedId === track.id || (draggedId && activePlaylist.selectedIds.has(draggedId) && isSelected);
+                        
+                        let rowBackgroundClass = '';
+                        if (isTempRange) {
+                          rowBackgroundClass = 'bg-emerald-500/15 border-y border-emerald-500/30 text-emerald-100 ring-2 ring-emerald-500/10';
+                        } else if (isAdvRange) {
+                          rowBackgroundClass = isSelected 
+                            ? 'bg-gradient-to-r from-indigo-500/10 to-violet-500/20 border-y border-violet-500/40 text-violet-100 ring-2 ring-violet-500/15'
+                            : 'bg-violet-500/15 border-y border-violet-500/30 text-violet-100 ring-2 ring-violet-500/10';
+                        } else if (isSelected) {
+                          rowBackgroundClass = 'bg-indigo-500/10';
+                        }
+                        
+                        return (
+                          <div 
+                            key={track.id}
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleDrop(e, track.id, activePlaylistId!)}
+                            onClick={(e) => {
+                              if ((e.target as HTMLElement).closest('.drag-handle')) return;
+                              toggleSelection(activePlaylistId!, track.id, e.shiftKey);
+                            }}
+                            className={`group flex items-center p-3 border-b border-slate-800/50 hover:bg-slate-800/50 transition-all cursor-pointer ${rowBackgroundClass} ${isDragged ? 'opacity-50' : ''}`}
+                          >
+                            <div 
+                              className="drag-handle p-2 text-slate-600 hover:text-slate-300 cursor-grab active:cursor-grabbing mr-1"
+                              draggable
+                              onDragStart={(e) => {
+                                handleDragStart(e, track.id);
+                                const row = e.currentTarget.closest('.group');
+                                if (row) {
+                                  e.dataTransfer.setDragImage(row, 20, 20);
+                                }
+                              }}
+                            >
+                              <GripVertical size={16} />
+                            </div>
+                            
+                            <div className="mr-3 text-slate-500">
+                              {isTempRange ? (
+                                <CheckSquare size={16} className="text-emerald-400" />
+                              ) : isAdvRange ? (
+                                isSelected ? <CheckSquare size={16} className="text-violet-400" /> : <Square size={16} className="text-violet-400 border-violet-500/50" />
+                              ) : (
+                                isSelected ? <CheckSquare size={16} className="text-indigo-400" /> : <Square size={16} />
+                              )}
+                            </div>
+                            
+                            <div className="flex-1 min-w-0 flex items-center space-x-3">
+                              <div className="w-8 h-8 bg-slate-800 rounded flex items-center justify-center flex-shrink-0 text-slate-500">
+                                <Music size={14} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center space-x-2">
+                                  <div className="text-sm font-medium text-slate-200 truncate">{track.title}</div>
+                                  {isTempRange && (
+                                    <span className="text-[8px] bg-emerald-500/30 text-emerald-300 font-bold px-1.5 py-0.5 rounded-full border border-emerald-500/40 uppercase tracking-widest shrink-0 animate-pulse">
+                                      Target Range
+                                    </span>
+                                  )}
+                                  {isAdvRange && (
+                                    <span className="text-[8px] bg-violet-500/30 text-violet-305 font-bold px-1.5 py-0.5 rounded-full border border-violet-500/40 uppercase tracking-widest shrink-0 animate-pulse">
+                                      {isSelected ? 'Overlap Only' : 'Add / Subtract'}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-slate-500 truncate flex items-center space-x-2">
+                                  <span>{track.artist}</span>
+                                  {track.album && (
+                                    <>
+                                      <span>•</span>
+                                      <span>{track.album}</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-3 flex-shrink-0 font-mono">
+                                {track.playCount !== undefined && (
+                                  <span className="bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 font-bold px-1.5 py-0.5 rounded text-[10px]">
+                                    {track.playCount} plays
+                                  </span>
+                                )}
+                                {track.duration && (
+                                  <div className="text-xs text-slate-500">
+                                    {formatDuration(track.duration)}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {filteredTracks.length === 0 && (
+                        <div className="p-8 text-center text-slate-500 text-sm">
+                          No tracks found matching your criteria.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : null
+            ) : paneCount === 2 ? (
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-stretch">
                 {renderPlaylistPane(activePlaylistId, 'left')}
                 {renderPlaylistPane(secondaryPlaylistId, 'right')}
               </div>
-            ) : activePlaylist ? (
-              <div className="space-y-4">
-                {/* Toolbar */}
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex flex-col gap-3 sticky top-0 z-10 shadow-lg shadow-slate-950/50">
-                  {/* Top Row: Search & Global Actions */}
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex items-center space-x-2 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 flex-1 min-w-[150px]">
-                      <Search size={14} className="text-slate-500" />
-                      <input 
-                        type="text" 
-                        placeholder="Search tracks..." 
-                        value={activePlaylist.searchQuery}
-                        onChange={(e) => updateActivePlaylist(p => ({ ...p, searchQuery: e.target.value }))}
-                        className="bg-transparent border-none outline-none text-xs text-slate-200 w-full placeholder:text-slate-500"
-                      />
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      <SortAsc size={14} className="text-slate-500" />
-                      <select 
-                        onChange={(e) => handleSort(activePlaylistId!, e.target.value as keyof Track)}
-                        className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-2 py-1.5 outline-none focus:border-indigo-500"
-                        defaultValue=""
-                      >
-                        <option value="" disabled>Sort by...</option>
-                        <option value="title">Title</option>
-                        <option value="artist">Artist</option>
-                        <option value="album">Album</option>
-                        {hasPlayCount && <option value="playCount">Play Count (Highest First)</option>}
-                      </select>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      <Filter size={14} className="text-slate-500" />
-                      <select 
-                        value={activePlaylist.artistFilter}
-                        onChange={(e) => handleSelectByArtist(activePlaylistId!, e.target.value)}
-                        className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-2 py-1.5 outline-none focus:border-indigo-500 max-w-[150px]"
-                      >
-                        <option value="">Select Artist...</option>
-                        {uniqueArtists.map(a => (
-                          <option key={a} value={a}>{a}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <button 
-                      onClick={() => handleReverse(activePlaylistId!)}
-                      className="flex items-center space-x-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
-                    >
-                      <ArrowUpDown size={14} />
-                      <span>Reverse</span>
-                    </button>
-
-                    <button 
-                      onClick={() => handleRandomize(activePlaylistId!)}
-                      className="flex items-center space-x-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
-                    >
-                      <Dices size={14} />
-                      <span>Randomize</span>
-                    </button>
-
-                    <button 
-                      onClick={() => handleRemoveDuplicates(activePlaylistId!)}
-                      className="flex items-center space-x-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
-                    >
-                      <CopyMinus size={14} />
-                      <span>Deduplicate</span>
-                    </button>
-
-                    {playlists.length > 1 && (
-                      <button 
-                        onClick={openCrossPruneModal}
-                        className="flex items-center space-x-2 text-xs font-medium text-indigo-300 hover:text-white bg-indigo-500/20 hover:bg-indigo-500/40 px-3 py-1.5 rounded-lg transition-colors border border-indigo-500/30"
-                        title="Remove songs that are present in any of the other open playlists"
-                      >
-                        <Layers size={14} />
-                        <span>Cross-Prune</span>
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Bottom Row: Selection Actions */}
-                  <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-800/50">
-                    <button 
-                      onClick={() => handleSelectAll(activePlaylistId!, filteredTracks)}
-                      className="flex items-center space-x-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
-                    >
-                      <CheckSquare size={14} className="text-indigo-400" />
-                      <span>Select All</span>
-                    </button>
-
-                    <button 
-                      onClick={() => handleDeselectAll(activePlaylistId!, filteredTracks)}
-                      className="flex items-center space-x-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
-                    >
-                      <Square size={14} />
-                      <span>Deselect All</span>
-                    </button>
-
-                    <button 
-                      onClick={() => handleInvertSelection(activePlaylistId!, filteredTracks)}
-                      className="flex items-center space-x-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
-                    >
-                      <RefreshCcw size={14} />
-                      <span>Invert</span>
-                    </button>
-
-                    <button 
-                      onClick={() => handleBasicSelectRange(activePlaylistId!, filteredTracks)}
-                      title="Expands the selection between the first and last selected tracks. If none selected, opens basic range selector."
-                      className="flex items-center space-x-2 text-xs font-medium text-emerald-300 hover:text-white bg-emerald-500/15 hover:bg-emerald-500/35 px-3 py-1.5 rounded-lg border border-emerald-500/30 transition-colors shadow-sm"
-                    >
-                      <SlidersHorizontal size={14} className="text-emerald-400" />
-                      <span>Select Range</span>
-                    </button>
-
-                    <button 
-                      onClick={() => {
-                        if (filteredTracks.length > 0) {
-                          setAdvRangeStartId(filteredTracks[0].id);
-                          setAdvRangeEndId(filteredTracks[filteredTracks.length - 1].id);
-                          setAdvRangePlaylistId(activePlaylistId);
-                        } else {
-                          alert("No tracks visible to select an advanced range.");
-                        }
-                      }}
-                      title="Advanced Range selections: union, subtract, or intersect ranges."
-                      className="flex items-center space-x-2 text-xs font-medium text-violet-300 hover:text-white bg-violet-500/15 hover:bg-violet-500/35 px-3 py-1.5 rounded-lg border border-violet-500/30 transition-colors shadow-sm"
-                    >
-                      <Sparkles size={14} className="text-violet-400" />
-                      <span>Advanced Range...</span>
-                    </button>
-
-                    <button 
-                      onClick={() => {
-                        if (!hasPlayCount) {
-                          alert("This playlist does not contain play count details.");
-                          return;
-                        }
-                        setPlayCountFilterPlaylistId(activePlaylistId);
-                      }}
-                      title="Select or deselect tracks based on their play count range"
-                      className={`flex items-center space-x-2 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors shadow-sm
-                        ${hasPlayCount 
-                          ? 'text-cyan-300 hover:text-white bg-cyan-500/15 hover:bg-cyan-500/35 border-cyan-500/30 shadow-cyan-900/10' 
-                          : 'text-slate-500 bg-slate-800/30 border-slate-800 cursor-not-allowed opacity-50'}`}
-                    >
-                      <BarChart3 size={14} className={hasPlayCount ? "text-cyan-400" : "text-slate-500"} />
-                      <span>Select by Plays...</span>
-                    </button>
-
-                    <div className="w-px h-4 bg-slate-700 mx-1"></div>
-
-                    <button 
-                      onClick={() => handleMoveToTop(activePlaylistId!)}
-                      disabled={activePlaylist.selectedIds.size === 0}
-                      className="flex items-center space-x-2 text-xs font-medium text-slate-350 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <ArrowUpToLine size={14} />
-                      <span>Move Top</span>
-                    </button>
-
-                    <button 
-                      onClick={() => handleMoveToBottom(activePlaylistId!)}
-                      disabled={activePlaylist.selectedIds.size === 0}
-                      className="flex items-center space-x-2 text-xs font-medium text-slate-355 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <ArrowDownToLine size={14} />
-                      <span>Move Bottom</span>
-                    </button>
-
-                    <button 
-                      onClick={() => handleDeleteSelected(activePlaylistId!)}
-                      disabled={activePlaylist.selectedIds.size === 0}
-                      className="flex items-center space-x-2 text-xs font-medium text-rose-450 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Trash2 size={14} />
-                      <span>Delete ({activePlaylist.selectedIds.size})</span>
-                    </button>
-
-                    <div className="ml-auto text-xs text-slate-500 font-medium">
-                      {filteredTracks.length} {filteredTracks.length === activePlaylist.tracks.length ? 'tracks' : `of ${activePlaylist.tracks.length} tracks`}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Track List */}
-                <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden animate-in slide-in-from-bottom duration-300">
-                  <div 
-                    className="max-h-[60vh] overflow-y-auto custom-scrollbar"
-                    onDragOver={handleDragOverContainer}
-                  >
-                    {filteredTracks.map((track, index) => {
-                      const isSelected = activePlaylist.selectedIds.has(track.id);
-                      const isTempRange = rangeSelectorPlaylistId === activePlaylistId && temporaryRangeIds.has(track.id);
-                      const isAdvRange = advRangePlaylistId === activePlaylistId && advancedRangeIds.has(track.id);
-                      const isDragged = draggedId === track.id || (draggedId && activePlaylist.selectedIds.has(draggedId) && isSelected);
-                      
-                      let rowBackgroundClass = '';
-                      if (isTempRange) {
-                        rowBackgroundClass = 'bg-emerald-500/15 border-y border-emerald-500/30 text-emerald-100 ring-2 ring-emerald-500/10';
-                      } else if (isAdvRange) {
-                        rowBackgroundClass = isSelected 
-                          ? 'bg-gradient-to-r from-indigo-500/10 to-violet-500/20 border-y border-violet-500/40 text-violet-100 ring-2 ring-violet-500/15'
-                          : 'bg-violet-500/15 border-y border-violet-500/30 text-violet-100 ring-2 ring-violet-500/10';
-                      } else if (isSelected) {
-                        rowBackgroundClass = 'bg-indigo-500/10';
-                      }
-                      
-                      return (
-                        <div 
-                          key={track.id}
-                          onDragOver={handleDragOver}
-                          onDrop={(e) => handleDrop(e, track.id, activePlaylistId!)}
-                          onClick={(e) => {
-                            if ((e.target as HTMLElement).closest('.drag-handle')) return;
-                            toggleSelection(activePlaylistId!, track.id, e.shiftKey);
-                          }}
-                          className={`group flex items-center p-3 border-b border-slate-800/50 hover:bg-slate-800/50 transition-all cursor-pointer ${rowBackgroundClass} ${isDragged ? 'opacity-50' : ''}`}
-                        >
-                          <div 
-                            className="drag-handle p-2 text-slate-600 hover:text-slate-300 cursor-grab active:cursor-grabbing mr-1"
-                            draggable
-                            onDragStart={(e) => {
-                              handleDragStart(e, track.id);
-                              const row = e.currentTarget.closest('.group');
-                              if (row) {
-                                e.dataTransfer.setDragImage(row, 20, 20);
-                              }
-                            }}
-                          >
-                            <GripVertical size={16} />
-                          </div>
-                          
-                          <div className="mr-3 text-slate-500">
-                            {isTempRange ? (
-                              <CheckSquare size={16} className="text-emerald-400" />
-                            ) : isAdvRange ? (
-                              isSelected ? <CheckSquare size={16} className="text-violet-400" /> : <Square size={16} className="text-violet-400 border-violet-500/50" />
-                            ) : (
-                              isSelected ? <CheckSquare size={16} className="text-indigo-400" /> : <Square size={16} />
-                            )}
-                          </div>
-                          
-                          <div className="flex-1 min-w-0 flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-slate-800 rounded flex items-center justify-center flex-shrink-0 text-slate-500">
-                              <Music size={14} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center space-x-2">
-                                <div className="text-sm font-medium text-slate-200 truncate">{track.title}</div>
-                                {isTempRange && (
-                                  <span className="text-[8px] bg-emerald-500/30 text-emerald-300 font-bold px-1.5 py-0.5 rounded-full border border-emerald-500/40 uppercase tracking-widest shrink-0">
-                                    Target Range
-                                  </span>
-                                )}
-                                {isAdvRange && (
-                                  <span className="text-[8px] bg-violet-500/30 text-violet-300 font-bold px-1.5 py-0.5 rounded-full border border-violet-500/40 uppercase tracking-widest shrink-0">
-                                    {isSelected ? 'Overlap Only' : 'Add / Subtract'}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-xs text-slate-500 truncate flex items-center space-x-2">
-                                <span>{track.artist}</span>
-                                {track.album && (
-                                  <>
-                                    <span>•</span>
-                                    <span>{track.album}</span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex items-center space-x-3 flex-shrink-0 font-mono">
-                              {track.playCount !== undefined && (
-                                <span className="bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 font-bold px-1.5 py-0.5 rounded text-[10px]">
-                                  {track.playCount} plays
-                                </span>
-                              )}
-                              {track.duration && (
-                                <div className="text-xs text-slate-500">
-                                  {formatDuration(track.duration)}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {filteredTracks.length === 0 && (
-                      <div className="p-8 text-center text-slate-500 text-sm">
-                        No tracks found matching your criteria.
-                      </div>
-                    )}
-                  </div>
-                </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+                {renderPlaylistPane(activePlaylistId, 'left')}
+                {renderPlaylistPane(secondaryPlaylistId, 'right')}
+                {renderPlaylistPane(thirdPlaylistId, 'pane3')}
+                {renderPlaylistPane(fourthPlaylistId, 'pane4')}
               </div>
-            ) : null}
+            )}
           </div>
         )}
       </div>
 
       {isCrossPruneOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-slate-955/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-3xl max-h-[80vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             {/* Header */}
             <div className="p-4 border-b border-slate-800 flex items-center justify-between">
@@ -2112,7 +2177,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
           <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             
             {/* Header */}
-            <div className="p-4 border-b border-slate-800 bg-slate-950/40 flex items-center justify-between">
+            <div className="p-4 border-b border-slate-800 bg-slate-955/40 flex items-center justify-between">
               <div className="flex items-center space-x-2.5 text-emerald-400">
                 <SlidersHorizontal size={18} />
                 <div>
@@ -2178,7 +2243,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
             </div>
             
             {/* Actions Footer */}
-            <div className="p-4 border-t border-slate-800 flex flex-col gap-2 bg-slate-950/40">
+            <div className="p-4 border-t border-slate-800 flex flex-col gap-2 bg-slate-955/40">
               <div className="flex gap-2">
                 <button 
                   onClick={() => applyRangeAction('add')}
@@ -2201,7 +2266,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
               <div className="flex gap-2 pt-1">
                 <button 
                   onClick={() => applyRangeAction('replace')}
-                  className="flex-1 py-2 bg-slate-850 hover:bg-slate-750 text-slate-300 hover:text-white rounded-lg text-xs font-bold transition-colors text-center border border-slate-700"
+                  className="flex-1 py-2 bg-slate-800 hover:bg-slate-705 text-slate-300 hover:text-white rounded-lg text-xs font-bold transition-colors text-center border border-slate-700"
                 >
                   Select Only This Range
                 </button>
@@ -2232,7 +2297,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
                 <Sparkles size={18} className="animate-pulse" />
                 <div>
                   <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wide">Advanced Range Selector</h3>
-                  <p className="text-[10px] text-slate-405 select-none">Add, deselect, or intersect custom track spans</p>
+                  <p className="text-[10px] text-slate-400">Add, deselect, or intersect custom track spans</p>
                 </div>
               </div>
               <button 
@@ -2300,7 +2365,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
                 </div>
               </div>
 
-              <div className="bg-slate-950/40 border border-slate-805 rounded-xl p-3 flex items-center justify-between text-xs">
+              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-3 flex items-center justify-between text-xs">
                 <span className="text-slate-400 font-medium">Total Selection Size:</span>
                 <span className="font-mono font-bold text-slate-200 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
                   {advRangePlaylist.selectedIds.size} Tracks Selected
@@ -2354,7 +2419,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
                     setAdvRangeStartId('');
                     setAdvRangeEndId('');
                   }}
-                  className="px-6 py-2 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-305 rounded-lg text-xs font-bold transition-colors"
+                  className="px-6 py-2 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-300 rounded-lg text-xs font-bold transition-colors"
                 >
                   Cancel
                 </button>
@@ -2369,7 +2434,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
           <div className="bg-slate-900 border border-slate-700/50 rounded-2xl w-full max-w-lg flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             
             {/* Header */}
-            <div className="p-4 border-b border-slate-805 bg-slate-950/40 flex items-center justify-between">
+            <div className="p-4 border-b border-slate-800 bg-slate-955/40 flex items-center justify-between">
               <div className="flex items-center space-x-2.5 text-cyan-400">
                 <BarChart3 size={18} />
                 <div>
@@ -2403,7 +2468,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-slate-500 font-bold block mb-1.5 uppercase tracking-wider">Maximum Plays</label>
+                  <label className="text-[10px] text-slate-505 font-bold block mb-1.5 uppercase tracking-wider">Maximum Plays</label>
                   <input 
                     type="number"
                     min="0"
@@ -2451,14 +2516,14 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
               <div className="flex gap-2 pt-1">
                 <button 
                   onClick={() => applyPlayCountAction('replace')}
-                  className="flex-1 py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white rounded-lg text-xs font-bold transition-colors text-center border border-slate-700"
+                  className="flex-1 py-2 bg-slate-800 hover:bg-slate-705 text-slate-300 hover:text-white rounded-lg text-xs font-bold transition-colors text-center border border-slate-700"
                 >
                   Select Only Matching
                 </button>
                 
                 <button 
                   onClick={() => applyPlayCountAction('intersect')}
-                  className="flex-1 py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white rounded-lg text-xs font-bold transition-colors text-center border border-slate-700"
+                  className="flex-1 py-2 bg-slate-800 hover:bg-slate-705 text-slate-305 hover:text-white rounded-lg text-xs font-bold transition-colors text-center border border-slate-700"
                 >
                   Intersect Selection
                 </button>
@@ -2467,7 +2532,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
                   onClick={() => {
                     setPlayCountFilterPlaylistId(null);
                   }}
-                  className="w-24 py-2 bg-slate-900 hover:bg-slate-800 text-slate-500 hover:text-slate-400 rounded-lg text-xs font-bold transition-colors text-center"
+                  className="w-24 py-2 bg-slate-900 hover:bg-slate-800 text-slate-505 hover:text-slate-400 rounded-lg text-xs font-bold transition-colors text-center"
                 >
                   Cancel
                 </button>
@@ -2501,7 +2566,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
             <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar animate-in slide-in-from-bottom duration-250">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[10px] text-slate-500 font-bold block mb-1.5 uppercase tracking-wider">Source Playlist (From)</label>
+                  <label className="text-[10px] text-slate-505 font-bold block mb-1.5 uppercase tracking-wider">Source Playlist (From)</label>
                   <select 
                     value={combineSourceId} 
                     onChange={(e) => {
@@ -2509,7 +2574,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
                       setCombineArtistVal('');
                       setCombineAlbumVal('');
                     }} 
-                    className="w-full bg-slate-955 border border-slate-700 focus:border-purple-500 outline-none rounded-lg p-2.5 text-xs text-slate-200 transition-colors"
+                    className="w-full bg-slate-955 border border-slate-700 focus:border-purple-500 outline-none rounded-lg p-2.5 text-xs text-slate-200 transition-colors cursor-pointer"
                   >
                     <option value="" disabled>Select source...</option>
                     {playlists.map(p => (
@@ -2519,11 +2584,11 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-slate-500 font-bold block mb-1.5 uppercase tracking-wider">Target Playlist (Into)</label>
+                  <label className="text-[10px] text-slate-505 font-bold block mb-1.5 uppercase tracking-wider">Target Playlist (Into)</label>
                   <select 
                     value={combineTargetId} 
                     onChange={(e) => setCombineTargetId(e.target.value)} 
-                    className="w-full bg-slate-955 border border-slate-700 focus:border-purple-500 outline-none rounded-lg p-2.5 text-xs text-slate-200 transition-colors"
+                    className="w-full bg-slate-955 border border-slate-700 focus:border-purple-500 outline-none rounded-lg p-2.5 text-xs text-slate-200 transition-colors cursor-pointer"
                   >
                     <option value="" disabled>Select target...</option>
                     {playlists.map(p => (
@@ -2534,7 +2599,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
               </div>
 
               <div>
-                <label className="text-[10px] text-slate-500 font-bold block mb-1.5 uppercase tracking-wider">Injection Selection Criteria</label>
+                <label className="text-[10px] text-slate-505 font-bold block mb-1.5 uppercase tracking-wider">Injection Selection Criteria</label>
                 <div className="grid grid-cols-2 gap-2">
                   {[
                     { id: 'all', label: 'All Tracks' },
@@ -2561,7 +2626,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
                   <select
                     value={combineArtistVal}
                     onChange={(e) => setCombineArtistVal(e.target.value)}
-                    className="w-full bg-slate-955 border border-slate-700 focus:border-purple-500 outline-none rounded-lg p-2.5 text-xs text-slate-200 transition-colors"
+                    className="w-full bg-slate-955 border border-slate-700 focus:border-purple-500 outline-none rounded-lg p-2.5 text-xs text-slate-200 transition-colors cursor-pointer"
                   >
                     <option value="">Choose Artist...</option>
                     {combineSourceUniqueArtists.map(art => (
@@ -2577,7 +2642,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
                   <select
                     value={combineAlbumVal}
                     onChange={(e) => setCombineAlbumVal(e.target.value)}
-                    className="w-full bg-slate-955 border border-slate-700 focus:border-purple-500 outline-none rounded-lg p-2.5 text-xs text-slate-200 transition-colors"
+                    className="w-full bg-slate-955 border border-slate-700 focus:border-purple-500 outline-none rounded-lg p-2.5 text-xs text-slate-200 transition-colors cursor-pointer"
                   >
                     <option value="">Choose Album...</option>
                     {combineSourceUniqueAlbums.map(alb => (
@@ -2635,10 +2700,10 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
             </div>
             
             {/* Actions Footer */}
-            <div className="p-4 border-t border-slate-800 flex justify-end space-x-3 bg-slate-950/40">
+            <div className="p-4 border-t border-slate-800 flex justify-end space-x-3 bg-slate-955/40">
               <button 
                 onClick={() => setIsCombinePanelOpen(false)}
-                className="px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:bg-slate-850 hover:text-slate-350 transition-colors"
+                className="px-4 py-2 rounded-lg text-xs font-bold text-slate-450 hover:bg-slate-850 hover:text-slate-350 transition-colors"
               >
                 Cancel
               </button>
