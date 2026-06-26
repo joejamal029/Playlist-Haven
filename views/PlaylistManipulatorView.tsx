@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useRef } from 'react';
-import { ArrowLeft, SlidersHorizontal, Download, Trash2, GripVertical, CheckSquare, Square, SortAsc, Filter, Music, RefreshCcw, Search, ArrowUpToLine, ArrowDownToLine, CopyMinus, ArrowUpDown, Dices, Plus, X, Layers, Sparkles, BarChart3 } from 'lucide-react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { ArrowLeft, SlidersHorizontal, Download, Trash2, GripVertical, CheckSquare, Square, SortAsc, Filter, Music, RefreshCcw, Search, ArrowUpToLine, ArrowDownToLine, CopyMinus, ArrowUpDown, Dices, Plus, X, Layers, Sparkles, BarChart3, Columns, ArrowRight, ArrowLeftRight } from 'lucide-react';
 import FileUploader from '../components/FileUploader';
 import { downloadPlaylistFile } from '../services/downloadHelper';
 
@@ -155,32 +155,90 @@ interface CrossPruneMatch {
   selected: boolean;
 }
 
+// Helpers for cross-playlist format alignment
+function getOrBuildCsvRow(track: Track, headers: string[]): string[] {
+  if (track.csvRow && track.csvRow.length === headers.length) {
+    return track.csvRow;
+  }
+  const row = new Array(headers.length).fill('');
+  
+  const titleIdx = headers.findIndex(h => /title|track|name/i.test(h));
+  const artistIdx = headers.findIndex(h => /artist/i.test(h));
+  const albumIdx = headers.findIndex(h => /album/i.test(h));
+  const durationIdx = headers.findIndex(h => /duration|time|length/i.test(h));
+  const playCountIdx = headers.findIndex(h => /play_count|plays?/i.test(h));
+  const pathIdx = headers.findIndex(h => /path|file_path|url|location/i.test(h));
+  
+  if (titleIdx !== -1) row[titleIdx] = track.title || '';
+  if (artistIdx !== -1) row[artistIdx] = track.artist || '';
+  if (albumIdx !== -1) row[albumIdx] = track.album || '';
+  if (durationIdx !== -1) row[durationIdx] = track.duration || '';
+  if (playCountIdx !== -1) row[playCountIdx] = track.playCount !== undefined ? String(track.playCount) : '';
+  if (pathIdx !== -1) row[pathIdx] = track.m3uPath || '';
+  
+  return row;
+}
+
+function getOrBuildM3uMetadata(track: Track): { m3uMeta: string; m3uPath: string } {
+  const seconds = track.duration ? (() => {
+    const val = parseInt(track.duration, 10);
+    if (isNaN(val)) return -1;
+    return val > 5000 ? Math.round(val / 1000) : val;
+  })() : -1;
+
+  const m3uMeta = track.m3uMeta || `#EXTINF:${seconds},${track.artist} - ${track.title}`;
+  const m3uPath = track.m3uPath || `${track.artist} - ${track.title}.mp3`;
+  return { m3uMeta, m3uPath };
+}
+
 export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorViewProps) {
   const [playlists, setPlaylists] = useState<PlaylistData[]>([]);
   const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
-  
+
+  // Split-Pane & Combining States
+  const [isSplitMode, setIsSplitMode] = useState(false);
+  const [secondaryPlaylistId, setSecondaryPlaylistId] = useState<string | null>(null);
+
+  // Advanced Combine Settings
+  const [isCombinePanelOpen, setIsCombinePanelOpen] = useState(false);
+  const [combineSourceId, setCombineSourceId] = useState<string>('');
+  const [combineTargetId, setCombineTargetId] = useState<string>('');
+  const [combineCriteria, setCombineCriteria] = useState<'all' | 'selected' | 'artist' | 'album'>('all');
+  const [combineArtistVal, setCombineArtistVal] = useState<string>('');
+  const [combineAlbumVal, setCombineAlbumVal] = useState<string>('');
+  const [combineAvoidDuplicates, setCombineAvoidDuplicates] = useState(true);
+  const [combineDuplicateStrictness, setCombineDuplicateStrictness] = useState(80);
+
+  // Modal target playlist mappings
+  const [rangeSelectorPlaylistId, setRangeSelectorPlaylistId] = useState<string | null>(null);
+  const [rangeStartId, setRangeStartId] = useState<string>('');
+  const [rangeEndId, setRangeEndId] = useState<string>('');
+
+  const [advRangePlaylistId, setAdvRangePlaylistId] = useState<string | null>(null);
+  const [advRangeStartId, setAdvRangeStartId] = useState<string>('');
+  const [advRangeEndId, setAdvRangeEndId] = useState<string>('');
+
+  const [playCountFilterPlaylistId, setPlayCountFilterPlaylistId] = useState<string | null>(null);
+  const [playCountMin, setPlayCountMin] = useState<string>('2');
+  const [playCountMax, setPlayCountMax] = useState<string>('');
+
   const [isCrossPruneOpen, setIsCrossPruneOpen] = useState(false);
   const [isCalculatingMatches, setIsCalculatingMatches] = useState(false);
   const [crossPruneStrictness, setCrossPruneStrictness] = useState(80);
   const [crossPruneMatches, setCrossPruneMatches] = useState<CrossPruneMatch[]>([]);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  // Precise Range Selector State
-  const [isRangeSelectorOpen, setIsRangeSelectorOpen] = useState(false);
-  const [rangeStartId, setRangeStartId] = useState<string>('');
-  const [rangeEndId, setRangeEndId] = useState<string>('');
 
-  // Advanced Range Selector State
-  const [isAdvancedRangeOpen, setIsAdvancedRangeOpen] = useState(false);
-  const [advRangeStartId, setAdvRangeStartId] = useState<string>('');
-  const [advRangeEndId, setAdvRangeEndId] = useState<string>('');
-
-  // Play Count Filter State
-  const [isPlayCountFilterOpen, setIsPlayCountFilterOpen] = useState(false);
-  const [playCountMin, setPlayCountMin] = useState<string>('2');
-  const [playCountMax, setPlayCountMax] = useState<string>('');
+  // Auto-populate secondary playlist selection
+  useEffect(() => {
+    if (playlists.length >= 2 && !secondaryPlaylistId) {
+      const other = playlists.find(p => p.id !== activePlaylistId);
+      if (other) {
+        setSecondaryPlaylistId(other.id);
+      }
+    }
+  }, [playlists, activePlaylistId, secondaryPlaylistId]);
 
   const activePlaylist = playlists.find(p => p.id === activePlaylistId) || null;
 
@@ -188,11 +246,117 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
     return activePlaylist ? activePlaylist.tracks.some(t => t.playCount !== undefined) : false;
   }, [activePlaylist]);
 
-  const updateActivePlaylist = (updater: (prev: PlaylistData) => PlaylistData) => {
-    if (!activePlaylistId) return;
-    setPlaylists(prev => prev.map(p => p.id === activePlaylistId ? updater(p) : p));
+  const updatePlaylist = (playlistId: string, updater: (prev: PlaylistData) => PlaylistData) => {
+    setPlaylists(prev => prev.map(p => p.id === playlistId ? updater(p) : p));
   };
 
+  const updateActivePlaylist = (updater: (prev: PlaylistData) => PlaylistData) => {
+    if (activePlaylistId) {
+      updatePlaylist(activePlaylistId, updater);
+    }
+  };
+
+  const getFilteredTracks = (playlist: PlaylistData | null) => {
+    if (!playlist) return [];
+    return playlist.tracks.filter(t => {
+      const matchesSearch = !playlist.searchQuery || (() => {
+        const q = playlist.searchQuery.toLowerCase();
+        return (
+          (t.title && String(t.title).toLowerCase().includes(q)) ||
+          (t.artist && String(t.artist).toLowerCase().includes(q)) ||
+          (t.album && String(t.album).toLowerCase().includes(q))
+        );
+      })();
+      const matchesArtist = !playlist.artistFilter || t.artist === playlist.artistFilter;
+      return matchesSearch && matchesArtist;
+    });
+  };
+
+  const uniqueArtists = useMemo(() => {
+    if (!activePlaylist) return [];
+    const artists = new Set(activePlaylist.tracks.map(t => t.artist).filter(a => a && a !== 'Unknown'));
+    return Array.from(artists).sort();
+  }, [activePlaylist?.tracks]);
+
+  const filteredTracks = useMemo(() => {
+    return getFilteredTracks(activePlaylist);
+  }, [activePlaylist?.tracks, activePlaylist?.searchQuery, activePlaylist?.artistFilter]);
+
+  // Range selector computations
+  const rangeSelectorPlaylist = playlists.find(p => p.id === rangeSelectorPlaylistId) || null;
+  const rangeSelectorFilteredTracks = useMemo(() => {
+    return getFilteredTracks(rangeSelectorPlaylist);
+  }, [rangeSelectorPlaylist?.tracks, rangeSelectorPlaylist?.searchQuery, rangeSelectorPlaylist?.artistFilter]);
+
+  const temporaryRangeIds = useMemo(() => {
+    if (!rangeStartId || !rangeEndId || !rangeSelectorPlaylist) return new Set<string>();
+    const startIdx = rangeSelectorFilteredTracks.findIndex(t => t.id === rangeStartId);
+    const endIdx = rangeSelectorFilteredTracks.findIndex(t => t.id === rangeEndId);
+    if (startIdx === -1 || endIdx === -1) return new Set<string>();
+    
+    const ids = new Set<string>();
+    const start = Math.min(startIdx, endIdx);
+    const end = Math.max(startIdx, endIdx);
+    for (let i = start; i <= end; i++) {
+      ids.add(rangeSelectorFilteredTracks[i].id);
+    }
+    return ids;
+  }, [rangeSelectorFilteredTracks, rangeStartId, rangeEndId, rangeSelectorPlaylistId]);
+
+  // Advanced range selector computations
+  const advRangePlaylist = playlists.find(p => p.id === advRangePlaylistId) || null;
+  const advRangeFilteredTracks = useMemo(() => {
+    return getFilteredTracks(advRangePlaylist);
+  }, [advRangePlaylist?.tracks, advRangePlaylist?.searchQuery, advRangePlaylist?.artistFilter]);
+
+  const advancedRangeIds = useMemo(() => {
+    if (!advRangeStartId || !advRangeEndId || !advRangePlaylist) return new Set<string>();
+    const startIdx = advRangeFilteredTracks.findIndex(t => t.id === advRangeStartId);
+    const endIdx = advRangeFilteredTracks.findIndex(t => t.id === advRangeEndId);
+    if (startIdx === -1 || endIdx === -1) return new Set<string>();
+    
+    const ids = new Set<string>();
+    const start = Math.min(startIdx, endIdx);
+    const end = Math.max(startIdx, endIdx);
+    for (let i = start; i <= end; i++) {
+      ids.add(advRangeFilteredTracks[i].id);
+    }
+    return ids;
+  }, [advRangeFilteredTracks, advRangeStartId, advRangeEndId, advRangePlaylistId]);
+
+  // Play count filter computations
+  const playCountFilterPlaylist = playlists.find(p => p.id === playCountFilterPlaylistId) || null;
+  const playCountFilteredTracks = useMemo(() => {
+    return getFilteredTracks(playCountFilterPlaylist);
+  }, [playCountFilterPlaylist?.tracks, playCountFilterPlaylist?.searchQuery, playCountFilterPlaylist?.artistFilter]);
+
+  // Combine Settings Memos
+  const combineCandidateCount = useMemo(() => {
+    const source = playlists.find(p => p.id === combineSourceId);
+    if (!source) return 0;
+    if (combineCriteria === 'selected') {
+      return source.tracks.filter(t => source.selectedIds.has(t.id)).length;
+    }
+    if (combineCriteria === 'artist') {
+      return source.tracks.filter(t => t.artist === combineArtistVal).length;
+    }
+    if (combineCriteria === 'album') {
+      return source.tracks.filter(t => t.album === combineAlbumVal).length;
+    }
+    return source.tracks.length;
+  }, [playlists, combineSourceId, combineCriteria, combineArtistVal, combineAlbumVal]);
+
+  const combineSourceUniqueArtists = useMemo(() => {
+    const source = playlists.find(p => p.id === combineSourceId);
+    if (!source) return [];
+    return Array.from(new Set(source.tracks.map(t => t.artist).filter(a => a && a !== 'Unknown'))).sort();
+  }, [playlists, combineSourceId]);
+
+  const combineSourceUniqueAlbums = useMemo(() => {
+    const source = playlists.find(p => p.id === combineSourceId);
+    if (!source) return [];
+    return Array.from(new Set(source.tracks.map(t => t.album).filter(a => a))).sort();
+  }, [playlists, combineSourceId]);
 
   const handleFileSelected = async (files: File[]) => {
     if (files.length === 0) return;
@@ -271,7 +435,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
         if (rows.length > 0) {
           csvHeaders = rows[0];
           
-           const titleIdx = csvHeaders.findIndex(h => /title|track|name/i.test(h));
+          const titleIdx = csvHeaders.findIndex(h => /title|track|name/i.test(h));
           const artistIdx = csvHeaders.findIndex(h => /artist/i.test(h));
           const albumIdx = csvHeaders.findIndex(h => /album/i.test(h));
           const durationIdx = csvHeaders.findIndex(h => /duration|time|length/i.test(h));
@@ -397,7 +561,6 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
     if (e.target.files && e.target.files.length > 0) {
       handleFileSelected(Array.from(e.target.files));
     }
-    // Reset input so the same file can be selected again
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -409,50 +572,16 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
       if (activePlaylistId === id) {
         setActivePlaylistId(filtered.length > 0 ? filtered[filtered.length - 1].id : null);
       }
+      if (secondaryPlaylistId === id) {
+        setSecondaryPlaylistId(filtered.length > 1 ? filtered.find(p => p.id !== activePlaylistId)?.id || null : null);
+      }
       return filtered;
     });
   };
 
-  const uniqueArtists = useMemo(() => {
-    if (!activePlaylist) return [];
-    const artists = new Set(activePlaylist.tracks.map(t => t.artist).filter(a => a && a !== 'Unknown'));
-    return Array.from(artists).sort();
-  }, [activePlaylist?.tracks]);
-
-  const filteredTracks = useMemo(() => {
-    if (!activePlaylist) return [];
-    return activePlaylist.tracks.filter(t => {
-      const matchesSearch = !activePlaylist.searchQuery || (() => {
-        const q = activePlaylist.searchQuery.toLowerCase();
-        return (
-          (t.title && String(t.title).toLowerCase().includes(q)) ||
-          (t.artist && String(t.artist).toLowerCase().includes(q)) ||
-          (t.album && String(t.album).toLowerCase().includes(q))
-        );
-      })();
-      const matchesArtist = !activePlaylist.artistFilter || t.artist === activePlaylist.artistFilter;
-      return matchesSearch && matchesArtist;
-    });
-  }, [activePlaylist?.tracks, activePlaylist?.searchQuery, activePlaylist?.artistFilter]);
-
-  const temporaryRangeIds = useMemo(() => {
-    if (!rangeStartId || !rangeEndId || !activePlaylist) return new Set<string>();
-    const startIdx = filteredTracks.findIndex(t => t.id === rangeStartId);
-    const endIdx = filteredTracks.findIndex(t => t.id === rangeEndId);
-    if (startIdx === -1 || endIdx === -1) return new Set<string>();
-    
-    const ids = new Set<string>();
-    const start = Math.min(startIdx, endIdx);
-    const end = Math.max(startIdx, endIdx);
-    for (let i = start; i <= end; i++) {
-      ids.add(filteredTracks[i].id);
-    }
-    return ids;
-  }, [filteredTracks, rangeStartId, rangeEndId, activePlaylistId]);
-
   const applyRangeAction = (action: 'add' | 'subtract' | 'replace') => {
-    if (temporaryRangeIds.size === 0) return;
-    updateActivePlaylist(p => {
+    if (temporaryRangeIds.size === 0 || !rangeSelectorPlaylistId) return;
+    updatePlaylist(rangeSelectorPlaylistId, p => {
       let newSelection = new Set(p.selectedIds);
       if (action === 'replace') {
         newSelection = new Set(temporaryRangeIds);
@@ -463,29 +592,14 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
       }
       return { ...p, selectedIds: newSelection, lastSelectedId: rangeEndId || p.lastSelectedId };
     });
-    setIsRangeSelectorOpen(false);
+    setRangeSelectorPlaylistId(null);
     setRangeStartId('');
     setRangeEndId('');
   };
 
-  const advancedRangeIds = useMemo(() => {
-    if (!advRangeStartId || !advRangeEndId || !activePlaylist) return new Set<string>();
-    const startIdx = filteredTracks.findIndex(t => t.id === advRangeStartId);
-    const endIdx = filteredTracks.findIndex(t => t.id === advRangeEndId);
-    if (startIdx === -1 || endIdx === -1) return new Set<string>();
-    
-    const ids = new Set<string>();
-    const start = Math.min(startIdx, endIdx);
-    const end = Math.max(startIdx, endIdx);
-    for (let i = start; i <= end; i++) {
-      ids.add(filteredTracks[i].id);
-    }
-    return ids;
-  }, [filteredTracks, advRangeStartId, advRangeEndId, activePlaylistId]);
-
   const applyAdvancedRangeAction = (action: 'add' | 'subtract' | 'replace' | 'intersect') => {
-    if (advancedRangeIds.size === 0) return;
-    updateActivePlaylist(p => {
+    if (advancedRangeIds.size === 0 || !advRangePlaylistId) return;
+    updatePlaylist(advRangePlaylistId, p => {
       let newSelection = new Set(p.selectedIds);
       if (action === 'replace') {
         newSelection = new Set(advancedRangeIds);
@@ -504,24 +618,24 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
       }
       return { ...p, selectedIds: newSelection, lastSelectedId: advRangeEndId || p.lastSelectedId };
     });
-    setIsAdvancedRangeOpen(false);
+    setAdvRangePlaylistId(null);
     setAdvRangeStartId('');
     setAdvRangeEndId('');
   };
 
   const applyPlayCountAction = (action: 'add' | 'subtract' | 'replace' | 'intersect') => {
-    if (!activePlaylist) return;
+    if (!playCountFilterPlaylistId || !playCountFilterPlaylist) return;
     const min = playCountMin === '' ? 0 : parseInt(playCountMin, 10);
     const max = playCountMax === '' ? Infinity : parseInt(playCountMax, 10);
 
     const matchingIds = new Set<string>();
-    filteredTracks.forEach(t => {
+    playCountFilteredTracks.forEach(t => {
       if (t.playCount !== undefined && t.playCount >= min && t.playCount <= max) {
         matchingIds.add(t.id);
       }
     });
 
-    updateActivePlaylist(p => {
+    updatePlaylist(playCountFilterPlaylistId, p => {
       let newSelection = new Set(p.selectedIds);
       if (action === 'replace') {
         newSelection = new Set(matchingIds);
@@ -540,46 +654,44 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
       }
       return { ...p, selectedIds: newSelection };
     });
-    setIsPlayCountFilterOpen(false);
+    setPlayCountFilterPlaylistId(null);
   };
 
-  const handleBasicSelectRange = () => {
-    if (!activePlaylist) return;
+  const handleBasicSelectRange = (playlistId: string, filtered: Track[]) => {
+    const playlist = playlists.find(p => p.id === playlistId);
+    if (!playlist) return;
     
-    // Find all currently selected track IDs that are visible (in filteredTracks)
-    const selectedVisibleIndices = filteredTracks
+    const selectedVisibleIndices = filtered
       .map((t, idx) => ({ id: t.id, idx }))
-      .filter(item => activePlaylist.selectedIds.has(item.id))
+      .filter(item => playlist.selectedIds.has(item.id))
       .map(item => item.idx);
 
     if (selectedVisibleIndices.length > 0) {
       const minIdx = Math.min(...selectedVisibleIndices);
       const maxIdx = Math.max(...selectedVisibleIndices);
       
-      updateActivePlaylist(p => {
+      updatePlaylist(playlistId, p => {
         const newSelection = new Set(p.selectedIds);
         for (let i = minIdx; i <= maxIdx; i++) {
-          newSelection.add(filteredTracks[i].id);
+          newSelection.add(filtered[i].id);
         }
         return { ...p, selectedIds: newSelection };
       });
     } else {
-      // If no tracks are selected, open the basic range selector modal as a fallback!
-      if (filteredTracks.length > 0) {
-        setRangeStartId(filteredTracks[0].id);
-        setRangeEndId(filteredTracks[filteredTracks.length - 1].id);
-        setIsRangeSelectorOpen(true);
+      if (filtered.length > 0) {
+        setRangeStartId(filtered[0].id);
+        setRangeEndId(filtered[filtered.length - 1].id);
+        setRangeSelectorPlaylistId(playlistId);
       } else {
         alert("No tracks visible to select a range.");
       }
     }
   };
 
-  const toggleSelection = (id: string, shiftKey: boolean) => {
-    updateActivePlaylist(p => {
+  const toggleSelection = (playlistId: string, id: string, shiftKey: boolean) => {
+    updatePlaylist(playlistId, p => {
       const newSelection = new Set(p.selectedIds);
       
-      // Filter tracks using the exact same active logic (both Search and Artist)
       const visibleTracks = p.tracks.filter(t => {
         const matchesSearch = !p.searchQuery || (() => {
           const q = p.searchQuery.toLowerCase();
@@ -617,26 +729,26 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
     });
   };
 
-  const handleSelectAll = () => {
-    updateActivePlaylist(p => {
+  const handleSelectAll = (playlistId: string, filtered: Track[]) => {
+    updatePlaylist(playlistId, p => {
       const newSelection = new Set(p.selectedIds);
-      filteredTracks.forEach(t => newSelection.add(t.id));
+      filtered.forEach(t => newSelection.add(t.id));
       return { ...p, selectedIds: newSelection };
     });
   };
 
-  const handleDeselectAll = () => {
-    updateActivePlaylist(p => {
+  const handleDeselectAll = (playlistId: string, filtered: Track[]) => {
+    updatePlaylist(playlistId, p => {
       const newSelection = new Set(p.selectedIds);
-      filteredTracks.forEach(t => newSelection.delete(t.id));
+      filtered.forEach(t => newSelection.delete(t.id));
       return { ...p, selectedIds: newSelection };
     });
   };
 
-  const handleInvertSelection = () => {
-    updateActivePlaylist(p => {
+  const handleInvertSelection = (playlistId: string, filtered: Track[]) => {
+    updatePlaylist(playlistId, p => {
       const newSelection = new Set(p.selectedIds);
-      filteredTracks.forEach(t => {
+      filtered.forEach(t => {
         if (newSelection.has(t.id)) {
           newSelection.delete(t.id);
         } else {
@@ -647,8 +759,8 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
     });
   };
 
-  const handleDeleteSelected = () => {
-    updateActivePlaylist(p => ({
+  const handleDeleteSelected = (playlistId: string) => {
+    updatePlaylist(playlistId, p => ({
       ...p,
       tracks: p.tracks.filter(t => !p.selectedIds.has(t.id)),
       selectedIds: new Set(),
@@ -656,8 +768,8 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
     }));
   };
 
-  const handleSort = (metric: keyof Track) => {
-    updateActivePlaylist(p => {
+  const handleSort = (playlistId: string, metric: keyof Track) => {
+    updatePlaylist(playlistId, p => {
       const sorted = [...p.tracks].sort((a, b) => {
         if (metric === 'playCount') {
           const valA = a.playCount ?? -1;
@@ -672,8 +784,8 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
     });
   };
 
-  const handleSelectByArtist = (artist: string) => {
-    updateActivePlaylist(p => {
+  const handleSelectByArtist = (playlistId: string, artist: string) => {
+    updatePlaylist(playlistId, p => {
       if (!artist) return { ...p, artistFilter: artist };
       
       const newSelection = new Set(p.selectedIds);
@@ -684,8 +796,8 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
     });
   };
 
-  const handleMoveToTop = () => {
-    updateActivePlaylist(p => {
+  const handleMoveToTop = (playlistId: string) => {
+    updatePlaylist(playlistId, p => {
       if (p.selectedIds.size === 0) return p;
       const selected = p.tracks.filter(t => p.selectedIds.has(t.id));
       const unselected = p.tracks.filter(t => !p.selectedIds.has(t.id));
@@ -693,8 +805,8 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
     });
   };
 
-  const handleMoveToBottom = () => {
-    updateActivePlaylist(p => {
+  const handleMoveToBottom = (playlistId: string) => {
+    updatePlaylist(playlistId, p => {
       if (p.selectedIds.size === 0) return p;
       const selected = p.tracks.filter(t => p.selectedIds.has(t.id));
       const unselected = p.tracks.filter(t => !p.selectedIds.has(t.id));
@@ -702,8 +814,8 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
     });
   };
 
-  const handleRemoveDuplicates = () => {
-    updateActivePlaylist(p => {
+  const handleRemoveDuplicates = (playlistId: string) => {
+    updatePlaylist(playlistId, p => {
       const seen = new Set();
       const unique = p.tracks.filter(t => {
         const title = t.title ? String(t.title).toLowerCase().trim() : '';
@@ -805,15 +917,15 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
     setIsCrossPruneOpen(false);
   };
 
-  const handleReverse = () => {
-    updateActivePlaylist(p => ({
+  const handleReverse = (playlistId: string) => {
+    updatePlaylist(playlistId, p => ({
       ...p,
       tracks: [...p.tracks].reverse()
     }));
   };
 
-  const handleRandomize = () => {
-    updateActivePlaylist(p => {
+  const handleRandomize = (playlistId: string) => {
+    updatePlaylist(playlistId, p => {
       const shuffled = [...p.tracks];
       for (let i = shuffled.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -852,11 +964,11 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
     }
   };
 
-  const handleDrop = (e: React.DragEvent, targetId: string) => {
+  const handleDrop = (e: React.DragEvent, targetId: string, playlistId: string) => {
     e.preventDefault();
-    if (!draggedId || draggedId === targetId || !activePlaylist) return;
+    if (!draggedId || draggedId === targetId) return;
     
-    updateActivePlaylist(p => {
+    updatePlaylist(playlistId, p => {
       const isDraggingSelected = p.selectedIds.has(draggedId);
       const idsToMove = isDraggingSelected ? p.selectedIds : new Set([draggedId]);
       
@@ -889,25 +1001,30 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
     setDraggedId(null);
   };
 
-  const handleExport = async (format?: 'csv' | 'm3u' | 'txt') => {
-    if (!activePlaylist || activePlaylist.tracks.length === 0) return;
+  const handleExport = async (playlistId: string, format?: 'csv' | 'm3u' | 'txt') => {
+    const targetPlaylist = playlists.find(p => p.id === playlistId);
+    if (!targetPlaylist || targetPlaylist.tracks.length === 0) return;
     
-    const exportFormat = format || (activePlaylist.fileType === 'csv' ? 'csv' : activePlaylist.fileType === 'txt' ? 'txt' : 'm3u');
+    const exportFormat = format || (targetPlaylist.fileType === 'csv' ? 'csv' : targetPlaylist.fileType === 'txt' ? 'txt' : 'm3u');
     
     let content = '';
-    let exportFilename = `manipulated_${activePlaylist.originalFilename}`;
+    let exportFilename = `manipulated_${targetPlaylist.originalFilename}`;
     let mimeType = 'audio/x-mpegurl';
     
     if (exportFormat === 'csv') {
-      content += activePlaylist.csvHeaders.map(escapeCSV).join(activePlaylist.csvDelimiter) + '\n';
-      for (const t of activePlaylist.tracks) {
-        if (t.csvRow) {
-          content += t.csvRow.map(escapeCSV).join(activePlaylist.csvDelimiter) + '\n';
-        }
+      const headers = targetPlaylist.csvHeaders.length > 0 
+        ? targetPlaylist.csvHeaders 
+        : ['Title', 'Artist', 'Album', 'Duration', 'Play Count', 'Path'];
+      const delimiter = targetPlaylist.csvDelimiter || ',';
+
+      content += headers.map(escapeCSV).join(delimiter) + '\n';
+      for (const t of targetPlaylist.tracks) {
+        const row = getOrBuildCsvRow(t, headers);
+        content += row.map(escapeCSV).join(delimiter) + '\n';
       }
       mimeType = 'text/csv;charset=utf-8;';
     } else if (exportFormat === 'txt') {
-      for (const t of activePlaylist.tracks) {
+      for (const t of targetPlaylist.tracks) {
         content += `${t.title} - ${t.artist}\n`;
       }
       if (exportFilename.toLowerCase().endsWith('.m3u') || exportFilename.toLowerCase().endsWith('.m3u8') || exportFilename.toLowerCase().endsWith('.csv')) {
@@ -918,49 +1035,469 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
       mimeType = 'text/plain;charset=utf-8;';
     } else {
       content += '#EXTM3U\n';
-      for (const t of activePlaylist.tracks) {
-        if (t.m3uMeta) {
-          if (t.m3uMeta.startsWith('#EXTINF:-1,') && t.duration) {
-            const durVal = parseInt(t.duration, 10);
-            if (!isNaN(durVal)) {
-              const seconds = durVal > 5000 ? Math.round(durVal / 1000) : durVal;
-              content += `#EXTINF:${seconds},${t.artist} - ${t.title}\n`;
-              if (t.m3uPath) {
-                content += t.m3uPath.replace(/\\/g, '/') + '\n';
-              } else {
-                content += `${t.artist} - ${t.title}.mp3\n`;
-              }
-              continue;
-            }
+      for (const t of targetPlaylist.tracks) {
+        const { m3uMeta, m3uPath } = getOrBuildM3uMetadata(t);
+        if (m3uMeta.startsWith('#EXTINF:-1,') && t.duration) {
+          const durVal = parseInt(t.duration, 10);
+          if (!isNaN(durVal)) {
+            const seconds = durVal > 5000 ? Math.round(durVal / 1000) : durVal;
+            content += `#EXTINF:${seconds},${t.artist} - ${t.title}\n`;
+            content += m3uPath.replace(/\\/g, '/') + '\n';
+            continue;
           }
-          content += t.m3uMeta + '\n';
-        } else {
-          let seconds = -1;
-          if (t.duration) {
-            const durVal = parseInt(t.duration, 10);
-            if (!isNaN(durVal)) {
-              seconds = durVal > 5000 ? Math.round(durVal / 1000) : durVal;
-            }
-          }
-          content += `#EXTINF:${seconds},${t.artist} - ${t.title}\n`;
         }
-        
-        if (t.m3uPath) {
-          content += t.m3uPath.replace(/\\/g, '/') + '\n';
-        } else {
-          content += `${t.artist} - ${t.title}.mp3\n`;
-        }
+        content += m3uMeta + '\n';
+        content += m3uPath.replace(/\\/g, '/') + '\n';
       }
       
-      if (activePlaylist.fileType === 'csv') {
+      if (targetPlaylist.fileType === 'csv') {
         exportFilename = exportFilename.replace(/\.csv$/i, '.m3u');
-      } else if (activePlaylist.fileType === 'txt') {
+      } else if (targetPlaylist.fileType === 'txt') {
         exportFilename = exportFilename.replace(/\.txt$/i, '.m3u');
       }
       mimeType = 'audio/x-mpegurl';
     }
     
     await downloadPlaylistFile(content, exportFilename, mimeType);
+  };
+
+  const copySelectedTracks = (fromId: string, toId: string) => {
+    const fromPlaylist = playlists.find(p => p.id === fromId);
+    const toPlaylist = playlists.find(p => p.id === toId);
+    if (!fromPlaylist || !toPlaylist) return;
+
+    const selectedTracks = fromPlaylist.tracks.filter(t => fromPlaylist.selectedIds.has(t.id));
+    if (selectedTracks.length === 0) {
+      alert("No tracks selected to copy.");
+      return;
+    }
+
+    const copiedTracks = selectedTracks.map(t => {
+      const newTrack: Track = {
+        id: generateId(),
+        title: t.title,
+        artist: t.artist,
+        album: t.album,
+        duration: t.duration,
+        playCount: t.playCount,
+      };
+
+      if (toPlaylist.fileType === 'csv') {
+        newTrack.csvRow = getOrBuildCsvRow(t, toPlaylist.csvHeaders);
+      }
+      
+      const { m3uMeta, m3uPath } = getOrBuildM3uMetadata(t);
+      newTrack.m3uMeta = m3uMeta;
+      newTrack.m3uPath = m3uPath;
+
+      return newTrack;
+    });
+
+    updatePlaylist(toId, p => ({
+      ...p,
+      tracks: [...p.tracks, ...copiedTracks]
+    }));
+
+    // Clear selections in the source pane
+    updatePlaylist(fromId, p => ({
+      ...p,
+      selectedIds: new Set()
+    }));
+  };
+
+  const handleCombinePlaylists = (
+    sourceId: string,
+    targetId: string,
+    criteria: 'all' | 'selected' | 'artist' | 'album',
+    artistVal: string,
+    albumVal: string,
+    avoidDuplicates: boolean,
+    duplicateStrictness: number
+  ) => {
+    const sourcePlaylist = playlists.find(p => p.id === sourceId);
+    const targetPlaylist = playlists.find(p => p.id === targetId);
+    if (!sourcePlaylist || !targetPlaylist) return;
+
+    let candidateTracks = sourcePlaylist.tracks;
+    if (criteria === 'selected') {
+      candidateTracks = sourcePlaylist.tracks.filter(t => sourcePlaylist.selectedIds.has(t.id));
+    } else if (criteria === 'artist') {
+      candidateTracks = sourcePlaylist.tracks.filter(t => t.artist === artistVal);
+    } else if (criteria === 'album') {
+      candidateTracks = sourcePlaylist.tracks.filter(t => t.album === albumVal);
+    }
+
+    if (candidateTracks.length === 0) {
+      alert("No matching source tracks found to combine.");
+      return;
+    }
+
+    let tracksToAdd: Track[] = [];
+    const threshold = duplicateStrictness / 100;
+    
+    const targetNorms = targetPlaylist.tracks.map(t => ({
+      title: normalizeForMatch(t.title),
+      artist: normalizeForMatch(t.artist)
+    }));
+
+    for (const track of candidateTracks) {
+      if (avoidDuplicates) {
+        const normTitle = normalizeForMatch(track.title);
+        const normArtist = normalizeForMatch(track.artist);
+
+        const isDuplicate = targetNorms.some(targetNorm => {
+          const titleScore = stringSimilarity(normTitle, targetNorm.title);
+          const artistScore = stringSimilarity(normArtist, targetNorm.artist);
+
+          let combinedScore = 0;
+          if (!normArtist || !targetNorm.artist || normArtist === 'unknown' || targetNorm.artist === 'unknown') {
+            combinedScore = titleScore;
+          } else {
+            combinedScore = (titleScore * 0.7) + (artistScore * 0.3);
+          }
+          return combinedScore >= threshold;
+        });
+
+        if (isDuplicate) {
+          continue;
+        }
+      }
+
+      const newTrack: Track = {
+        id: generateId(),
+        title: track.title,
+        artist: track.artist,
+        album: track.album,
+        duration: track.duration,
+        playCount: track.playCount,
+      };
+
+      if (targetPlaylist.fileType === 'csv') {
+        newTrack.csvRow = getOrBuildCsvRow(track, targetPlaylist.csvHeaders);
+      }
+      
+      const { m3uMeta, m3uPath } = getOrBuildM3uMetadata(track);
+      newTrack.m3uMeta = m3uMeta;
+      newTrack.m3uPath = m3uPath;
+
+      tracksToAdd.push(newTrack);
+    }
+
+    if (tracksToAdd.length === 0) {
+      alert("All candidate tracks were skipped as duplicates.");
+      return;
+    }
+
+    updatePlaylist(targetId, p => ({
+      ...p,
+      tracks: [...p.tracks, ...tracksToAdd]
+    }));
+
+    alert(`Successfully injected ${tracksToAdd.length} track(s) from "${sourcePlaylist.originalFilename}" into "${targetPlaylist.originalFilename}".`);
+  };
+
+  const renderPlaylistPane = (playlistId: string | null, side: 'left' | 'right') => {
+    if (!playlistId) {
+      return (
+        <div className="bg-slate-900/30 border border-slate-800/80 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center text-center text-slate-500 h-64">
+          <p className="text-xs font-semibold">No playlist loaded on the {side} pane.</p>
+          <p className="text-[10px] text-slate-600 mt-1">Upload a playlist or select one from the tab list above.</p>
+        </div>
+      );
+    }
+    const playlist = playlists.find(p => p.id === playlistId);
+    if (!playlist) return null;
+
+    const filtered = getFilteredTracks(playlist);
+    const pUniqueArtists = Array.from(new Set(playlist.tracks.map(t => t.artist).filter(a => a && a !== 'Unknown'))).sort();
+    const pHasPlayCount = playlist.tracks.some(t => t.playCount !== undefined);
+
+    return (
+      <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-4 flex flex-col gap-4 shadow-xl">
+        {/* Pane Header */}
+        <div className="flex items-center justify-between gap-3 border-b border-slate-800/60 pb-3">
+          <div className="flex items-center space-x-2 flex-1 min-w-0">
+            <select
+              value={playlist.id}
+              onChange={(e) => {
+                const nextId = e.target.value;
+                if (side === 'left') {
+                  setActivePlaylistId(nextId);
+                } else {
+                  setSecondaryPlaylistId(nextId);
+                }
+              }}
+              className="bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold rounded-lg px-2.5 py-1.5 outline-none focus:border-indigo-500 w-full truncate"
+            >
+              {playlists.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.originalFilename} ({p.tracks.length})
+                </option>
+              ))}
+            </select>
+            <span className="text-[10px] bg-slate-850 px-1.5 py-0.5 rounded font-mono text-indigo-400 uppercase shrink-0">
+              {playlist.fileType || 'm3u'}
+            </span>
+          </div>
+
+          <div className="flex items-center space-x-1.5 shrink-0">
+            {playlist.fileType === 'csv' ? (
+              <button 
+                onClick={() => handleExport(playlist.id, 'm3u')}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white p-1.5 rounded-lg text-xs font-bold transition-colors"
+                title="Convert to M3U"
+              >
+                <Download size={13} />
+              </button>
+            ) : playlist.fileType === 'txt' ? (
+              <button 
+                onClick={() => handleExport(playlist.id, 'm3u')}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white p-1.5 rounded-lg text-xs font-bold transition-colors"
+                title="Convert to M3U"
+              >
+                <Download size={13} />
+              </button>
+            ) : null}
+            <button 
+              onClick={() => handleExport(playlist.id)}
+              className="bg-slate-800 hover:bg-slate-700 text-slate-350 p-1.5 rounded-lg text-xs font-bold transition-colors"
+              title={`Export as ${playlist.fileType || 'm3u'}`}
+            >
+              <Download size={13} />
+            </button>
+            <button
+              onClick={() => closePlaylist(playlist.id)}
+              className="bg-slate-800 hover:bg-rose-500/20 hover:text-rose-400 text-slate-400 p-1.5 rounded-lg text-xs transition-colors border border-transparent hover:border-rose-500/30"
+              title="Close Playlist"
+            >
+              <X size={13} />
+            </button>
+          </div>
+        </div>
+
+        {/* Search, Sort, Filter */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 flex-1 min-w-[120px]">
+            <Search size={12} className="text-slate-500" />
+            <input 
+              type="text" 
+              placeholder="Search tracks..." 
+              value={playlist.searchQuery}
+              onChange={(e) => updatePlaylist(playlist.id, p => ({ ...p, searchQuery: e.target.value }))}
+              className="bg-transparent border-none outline-none text-xs text-slate-200 w-full placeholder:text-slate-500"
+            />
+          </div>
+
+          <select 
+            onChange={(e) => handleSort(playlist.id, e.target.value as keyof Track)}
+            className="bg-slate-800 border border-slate-700 text-slate-300 text-[11px] rounded-lg px-2 py-1.5 outline-none focus:border-indigo-500 max-w-[100px]"
+            defaultValue=""
+          >
+            <option value="" disabled>Sort...</option>
+            <option value="title">Title</option>
+            <option value="artist">Artist</option>
+            <option value="album">Album</option>
+            {pHasPlayCount && <option value="playCount">Plays</option>}
+          </select>
+
+          <select 
+            value={playlist.artistFilter}
+            onChange={(e) => handleSelectByArtist(playlist.id, e.target.value)}
+            className="bg-slate-800 border border-slate-700 text-slate-300 text-[11px] rounded-lg px-2 py-1.5 outline-none focus:border-indigo-500 max-w-[100px]"
+          >
+            <option value="">Artist...</option>
+            {pUniqueArtists.map(a => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Selection Tools & Deduplicate */}
+        <div className="flex flex-wrap items-center gap-1.5 border-t border-slate-800/40 pt-2 text-[10px]">
+          <button 
+            onClick={() => handleSelectAll(playlist.id, filtered)}
+            className="text-slate-350 hover:text-white bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded transition-colors font-semibold"
+          >
+            All
+          </button>
+          <button 
+            onClick={() => handleDeselectAll(playlist.id, filtered)}
+            className="text-slate-355 hover:text-white bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded transition-colors font-semibold"
+          >
+            None
+          </button>
+          <button 
+            onClick={() => handleInvertSelection(playlist.id, filtered)}
+            className="text-slate-355 hover:text-white bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded transition-colors font-semibold"
+          >
+            Invert
+          </button>
+          <button 
+            onClick={() => handleBasicSelectRange(playlist.id, filtered)}
+            className="text-emerald-350 hover:text-white bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded border border-emerald-500/20 transition-colors font-semibold"
+          >
+            Range
+          </button>
+          <button 
+            onClick={() => {
+              setAdvRangeStartId(filtered.length > 0 ? filtered[0].id : '');
+              setAdvRangeEndId(filtered.length > 0 ? filtered[filtered.length - 1].id : '');
+              setAdvRangePlaylistId(playlist.id);
+            }}
+            className="text-violet-350 hover:text-white bg-violet-500/10 hover:bg-violet-500/20 px-2 py-1 rounded border border-violet-500/20 transition-colors font-semibold"
+          >
+            Adv Range
+          </button>
+          <button 
+            onClick={() => {
+              if (!pHasPlayCount) {
+                alert("This playlist does not contain play count details.");
+                return;
+              }
+              setPlayCountFilterPlaylistId(playlist.id);
+            }}
+            disabled={!pHasPlayCount}
+            className={`px-2 py-1 rounded border transition-colors font-semibold ${pHasPlayCount ? 'text-cyan-350 hover:text-white bg-cyan-500/10 hover:bg-cyan-500/20 border-cyan-500/20' : 'text-slate-655 bg-slate-800/10 border-transparent opacity-40 cursor-not-allowed'}`}
+          >
+            Plays
+          </button>
+
+          <div className="w-px h-3 bg-slate-800 mx-0.5"></div>
+
+          <button 
+            onClick={() => handleReverse(playlist.id)}
+            className="text-slate-450 hover:text-white bg-slate-800 hover:bg-slate-750 p-1 rounded transition-colors"
+            title="Reverse"
+          >
+            <ArrowUpDown size={11} />
+          </button>
+          <button 
+            onClick={() => handleRandomize(playlist.id)}
+            className="text-slate-455 hover:text-white bg-slate-800 hover:bg-slate-750 p-1 rounded transition-colors"
+            title="Randomize"
+          >
+            <Dices size={11} />
+          </button>
+          <button 
+            onClick={() => handleRemoveDuplicates(playlist.id)}
+            className="text-slate-455 hover:text-white bg-slate-800 hover:bg-slate-750 p-1 rounded transition-colors"
+            title="Deduplicate"
+          >
+            <CopyMinus size={11} />
+          </button>
+
+          <div className="w-px h-3 bg-slate-800 mx-0.5"></div>
+
+          <button 
+            onClick={() => handleDeleteSelected(playlist.id)}
+            disabled={playlist.selectedIds.size === 0}
+            className="text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 disabled:opacity-40 disabled:cursor-not-allowed px-2.5 py-1 rounded transition-colors font-bold shrink-0"
+          >
+            Delete ({playlist.selectedIds.size})
+          </button>
+        </div>
+
+        {/* Tracks List */}
+        <div className="bg-slate-955/40 border border-slate-850 rounded-xl overflow-hidden">
+          <div 
+            className="max-h-[50vh] overflow-y-auto custom-scrollbar"
+            onDragOver={handleDragOverContainer}
+          >
+            {filtered.map((track, index) => {
+              const isSelected = playlist.selectedIds.has(track.id);
+              const isTempRange = rangeSelectorPlaylistId === playlist.id && temporaryRangeIds.has(track.id);
+              const isAdvRange = advRangePlaylistId === playlist.id && advancedRangeIds.has(track.id);
+              const isDragged = draggedId === track.id || (draggedId && playlist.selectedIds.has(draggedId) && isSelected);
+              
+              let rowBackgroundClass = '';
+              if (isTempRange) {
+                rowBackgroundClass = 'bg-emerald-500/15 border-y border-emerald-500/30 text-emerald-100 ring-2 ring-emerald-500/10';
+              } else if (isAdvRange) {
+                rowBackgroundClass = isSelected 
+                  ? 'bg-gradient-to-r from-indigo-500/10 to-violet-500/20 border-y border-violet-500/40 text-violet-100 ring-2 ring-violet-500/15'
+                  : 'bg-violet-500/15 border-y border-violet-500/30 text-violet-100 ring-2 ring-violet-500/10';
+              } else if (isSelected) {
+                rowBackgroundClass = 'bg-indigo-500/10';
+              }
+
+              return (
+                <div 
+                  key={track.id}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, track.id, playlist.id)}
+                  onClick={(e) => {
+                    if ((e.target as HTMLElement).closest('.drag-handle')) return;
+                    toggleSelection(playlist.id, track.id, e.shiftKey);
+                  }}
+                  className={`group flex items-center p-2.5 border-b border-slate-850 hover:bg-slate-800/30 transition-all cursor-pointer ${rowBackgroundClass} ${isDragged ? 'opacity-50' : ''}`}
+                >
+                  <div 
+                    className="drag-handle p-1.5 text-slate-600 hover:text-slate-400 cursor-grab active:cursor-grabbing mr-1"
+                    draggable
+                    onDragStart={(e) => {
+                      setDraggedId(track.id);
+                      e.dataTransfer.effectAllowed = 'move';
+                      e.dataTransfer.setData('text/plain', track.id);
+                      const row = e.currentTarget.closest('.group');
+                      if (row) {
+                        e.dataTransfer.setDragImage(row, 20, 20);
+                      }
+                    }}
+                  >
+                    <GripVertical size={14} />
+                  </div>
+
+                  <div className="mr-2.5 text-slate-500">
+                    {isTempRange ? (
+                      <CheckSquare size={14} className="text-emerald-400" />
+                    ) : isAdvRange ? (
+                      isSelected ? <CheckSquare size={14} className="text-violet-400" /> : <Square size={14} className="text-violet-400" />
+                    ) : (
+                      isSelected ? <CheckSquare size={14} className="text-indigo-400" /> : <Square size={14} />
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-w-0 flex items-center space-x-2.5">
+                    <div className="w-7 h-7 bg-slate-800/60 rounded flex items-center justify-center flex-shrink-0 text-slate-500">
+                      <Music size={12} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-semibold text-slate-200 truncate">{track.title}</div>
+                      <div className="text-[10px] text-slate-500 truncate flex items-center space-x-1.5">
+                        <span>{track.artist}</span>
+                        {track.album && (
+                          <>
+                            <span>•</span>
+                            <span className="truncate max-w-[80px]">{track.album}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2 flex-shrink-0 font-mono text-[9px]">
+                      {track.playCount !== undefined && (
+                        <span className="bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 font-bold px-1 py-0.5 rounded">
+                          {track.playCount}
+                        </span>
+                      )}
+                      {track.duration && (
+                        <div className="text-slate-500">
+                          {formatDuration(track.duration)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {filtered.length === 0 && (
+              <div className="p-6 text-center text-slate-500 text-xs">
+                No tracks found.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -978,61 +1515,74 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
               <p className="text-[10px] text-slate-500 uppercase tracking-widest">Power Tool</p>
             </div>
           </div>
-          {activePlaylist && activePlaylist.tracks.length > 0 && (
+          {playlists.length > 0 && (
             <div className="flex items-center space-x-2">
-              {activePlaylist.fileType === 'csv' ? (
-                <>
-                  <button 
-                    onClick={() => handleExport('csv')}
-                    className="flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-lg text-xs font-bold transition-colors"
-                    title="Export as CSV (preserves original column metadata)"
-                  >
-                    <Download size={14} />
-                    <span>Export CSV</span>
-                  </button>
-                  <button 
-                    onClick={() => handleExport('m3u')}
-                    className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors"
-                    title="Convert and export as a playable M3U playlist file for Musicolet"
-                  >
-                    <Download size={14} />
-                    <span>Convert to M3U</span>
-                  </button>
-                </>
-              ) : activePlaylist.fileType === 'txt' ? (
-                <>
-                  <button 
-                    onClick={() => handleExport('txt')}
-                    className="flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-lg text-xs font-bold transition-colors"
-                    title="Export as plain text file (Title - Artist)"
-                  >
-                    <Download size={14} />
-                    <span>Export TXT</span>
-                  </button>
-                  <button 
-                    onClick={() => handleExport('m3u')}
-                    className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors"
-                    title="Convert and export as a playable M3U playlist file"
-                  >
-                    <Download size={14} />
-                    <span>Convert to M3U</span>
-                  </button>
-                </>
-              ) : (
-                <button 
-                  onClick={() => handleExport('m3u')}
-                  className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors"
-                >
-                  <Download size={14} />
-                  <span>Export M3U</span>
-                </button>
+              <button
+                onClick={() => setIsSplitMode(!isSplitMode)}
+                className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border ${isSplitMode ? 'bg-indigo-600 hover:bg-indigo-500 border-indigo-500 text-white shadow-lg shadow-indigo-950/20' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-305'}`}
+                title="Toggle Split View (view two playlists side-by-side)"
+              >
+                <Columns size={14} />
+                <span>{isSplitMode ? 'Single Pane' : 'Split View'}</span>
+              </button>
+
+              {!isSplitMode && activePlaylist && activePlaylist.tracks.length > 0 && (
+                <div className="flex items-center space-x-2">
+                  {activePlaylist.fileType === 'csv' ? (
+                    <>
+                      <button 
+                        onClick={() => handleExport(activePlaylist.id, 'csv')}
+                        className="flex items-center space-x-2 bg-slate-800 hover:bg-slate-707 text-slate-300 px-3 py-2 rounded-lg text-xs font-bold transition-colors"
+                        title="Export as CSV"
+                      >
+                        <Download size={14} />
+                        <span>Export CSV</span>
+                      </button>
+                      <button 
+                        onClick={() => handleExport(activePlaylist.id, 'm3u')}
+                        className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors"
+                        title="Convert and export as M3U"
+                      >
+                        <Download size={14} />
+                        <span>Convert to M3U</span>
+                      </button>
+                    </>
+                  ) : activePlaylist.fileType === 'txt' ? (
+                    <>
+                      <button 
+                        onClick={() => handleExport(activePlaylist.id, 'txt')}
+                        className="flex items-center space-x-2 bg-slate-800 hover:bg-slate-707 text-slate-350 px-3 py-2 rounded-lg text-xs font-bold transition-colors"
+                        title="Export as TXT"
+                      >
+                        <Download size={14} />
+                        <span>Export TXT</span>
+                      </button>
+                      <button 
+                        onClick={() => handleExport(activePlaylist.id, 'm3u')}
+                        className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors"
+                        title="Convert and export as M3U"
+                      >
+                        <Download size={14} />
+                        <span>Convert to M3U</span>
+                      </button>
+                    </>
+                  ) : (
+                    <button 
+                      onClick={() => handleExport(activePlaylist.id, 'm3u')}
+                      className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors"
+                    >
+                      <Download size={14} />
+                      <span>Export M3U</span>
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           )}
         </div>
 
-        {/* Tabs for Playlists */}
-        {playlists.length > 0 && (
+        {/* Tabs for Playlists (Only visible in Single View to save space) */}
+        {!isSplitMode && playlists.length > 0 && (
           <div className="flex items-center space-x-2 overflow-x-auto custom-scrollbar pb-1">
             {playlists.map(p => (
               <button
@@ -1083,316 +1633,373 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
               colorClass="indigo"
             />
           </div>
-        ) : activePlaylist ? (
+        ) : (
           <div className="space-y-4">
-            {/* Toolbar */}
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex flex-col gap-3 sticky top-0 z-10 shadow-lg shadow-slate-950/50">
-              {/* Top Row: Search & Global Actions */}
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center space-x-2 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 flex-1 min-w-[150px]">
-                  <Search size={14} className="text-slate-500" />
-                  <input 
-                    type="text" 
-                    placeholder="Search tracks..." 
-                    value={activePlaylist.searchQuery}
-                    onChange={(e) => updateActivePlaylist(p => ({ ...p, searchQuery: e.target.value }))}
-                    className="bg-transparent border-none outline-none text-xs text-slate-200 w-full placeholder:text-slate-500"
-                  />
+            {/* Transfer / Combine Banner in Split View */}
+            {isSplitMode && (
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-md">
+                <div className="flex items-center space-x-2 text-xs font-bold text-indigo-400 uppercase tracking-wider">
+                  <span>Split Pane Toolkit</span>
                 </div>
-
-                <div className="flex items-center space-x-2">
-                  <SortAsc size={14} className="text-slate-500" />
-                  <select 
-                    onChange={(e) => handleSort(e.target.value as keyof Track)}
-                    className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-2 py-1.5 outline-none focus:border-indigo-500"
-                    defaultValue=""
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => {
+                      if (activePlaylistId && secondaryPlaylistId) {
+                        copySelectedTracks(activePlaylistId, secondaryPlaylistId);
+                      }
+                    }}
+                    disabled={!activePlaylistId || !secondaryPlaylistId || !playlists.find(p => p.id === activePlaylistId)?.selectedIds.size}
+                    className="flex items-center space-x-2 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 disabled:opacity-40 disabled:cursor-not-allowed px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
                   >
-                    <option value="" disabled>Sort by...</option>
-                    <option value="title">Title</option>
-                    <option value="artist">Artist</option>
-                    <option value="album">Album</option>
-                    {hasPlayCount && <option value="playCount">Play Count (Highest First)</option>}
-                  </select>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Filter size={14} className="text-slate-500" />
-                  <select 
-                    value={activePlaylist.artistFilter}
-                    onChange={(e) => handleSelectByArtist(e.target.value)}
-                    className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-2 py-1.5 outline-none focus:border-indigo-500 max-w-[150px]"
+                    <span>Copy Selected (Left → Right)</span>
+                    <ArrowRight size={14} />
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      if (activePlaylistId && secondaryPlaylistId) {
+                        copySelectedTracks(secondaryPlaylistId, activePlaylistId);
+                      }
+                    }}
+                    disabled={!activePlaylistId || !secondaryPlaylistId || !playlists.find(p => p.id === secondaryPlaylistId)?.selectedIds.size}
+                    className="flex items-center space-x-2 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 disabled:opacity-40 disabled:cursor-not-allowed px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
                   >
-                    <option value="">Select Artist...</option>
-                    {uniqueArtists.map(a => (
-                      <option key={a} value={a}>{a}</option>
-                    ))}
-                  </select>
-                </div>
+                    <ArrowLeft size={14} />
+                    <span>Copy Selected (Right → Left)</span>
+                  </button>
 
-                <button 
-                  onClick={handleReverse}
-                  className="flex items-center space-x-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  <ArrowUpDown size={14} />
-                  <span>Reverse</span>
-                </button>
+                  <div className="w-px h-5 bg-slate-800 mx-1 hidden sm:block"></div>
 
-                <button 
-                  onClick={handleRandomize}
-                  className="flex items-center space-x-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  <Dices size={14} />
-                  <span>Randomize</span>
-                </button>
-
-                <button 
-                  onClick={handleRemoveDuplicates}
-                  className="flex items-center space-x-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  <CopyMinus size={14} />
-                  <span>Deduplicate</span>
-                </button>
-
-                {playlists.length > 1 && (
-                  <button 
-                    onClick={openCrossPruneModal}
-                    className="flex items-center space-x-2 text-xs font-medium text-indigo-300 hover:text-white bg-indigo-500/20 hover:bg-indigo-500/40 px-3 py-1.5 rounded-lg transition-colors border border-indigo-500/30"
-                    title="Remove songs that are present in any of the other open playlists"
+                  <button
+                    onClick={() => {
+                      if (activePlaylistId) setCombineSourceId(activePlaylistId);
+                      if (secondaryPlaylistId) setCombineTargetId(secondaryPlaylistId);
+                      setIsCombinePanelOpen(true);
+                    }}
+                    className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-md shadow-purple-950/20"
                   >
                     <Layers size={14} />
-                    <span>Cross-Prune</span>
+                    <span>Combine / Inject...</span>
                   </button>
-                )}
-              </div>
-
-              {/* Bottom Row: Selection Actions */}
-              <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-800/50">
-                <button 
-                  onClick={handleSelectAll}
-                  className="flex items-center space-x-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  <CheckSquare size={14} className="text-indigo-400" />
-                  <span>Select All</span>
-                </button>
-
-                <button 
-                  onClick={handleDeselectAll}
-                  className="flex items-center space-x-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  <Square size={14} />
-                  <span>Deselect All</span>
-                </button>
-
-                <button 
-                  onClick={handleInvertSelection}
-                  className="flex items-center space-x-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  <RefreshCcw size={14} />
-                  <span>Invert</span>
-                </button>
-
-                <button 
-                  onClick={handleBasicSelectRange}
-                  title="Expands the selection between the first and last selected tracks. If none selected, opens basic range selector."
-                  className="flex items-center space-x-2 text-xs font-medium text-emerald-300 hover:text-white bg-emerald-500/15 hover:bg-emerald-500/35 px-3 py-1.5 rounded-lg border border-emerald-500/30 transition-colors shadow-sm"
-                >
-                  <SlidersHorizontal size={14} className="text-emerald-400" />
-                  <span>Select Range</span>
-                </button>
-
-                <button 
-                  onClick={() => {
-                    if (filteredTracks.length > 0) {
-                      setAdvRangeStartId(filteredTracks[0].id);
-                      setAdvRangeEndId(filteredTracks[filteredTracks.length - 1].id);
-                      setIsAdvancedRangeOpen(true);
-                    } else {
-                      alert("No tracks visible to select an advanced range.");
-                    }
-                  }}
-                  title="Advanced Range selections: union, subtract, or intersect ranges."
-                  className="flex items-center space-x-2 text-xs font-medium text-violet-300 hover:text-white bg-violet-500/15 hover:bg-violet-500/35 px-3 py-1.5 rounded-lg border border-violet-500/30 transition-colors shadow-sm"
-                >
-                  <Sparkles size={14} className="text-violet-400" />
-                  <span>Advanced Range...</span>
-                </button>
-
-                <button 
-                  onClick={() => {
-                    if (!hasPlayCount) {
-                      alert("This playlist does not contain a 'Play Count' or 'Plays' column. Ensure you upload a Musicolet Songs CSV export containing play count details.");
-                      return;
-                    }
-                    setIsPlayCountFilterOpen(true);
-                  }}
-                  title="Select or deselect tracks based on their play count range"
-                  className={`flex items-center space-x-2 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors shadow-sm
-                    ${hasPlayCount 
-                      ? 'text-cyan-300 hover:text-white bg-cyan-500/15 hover:bg-cyan-500/35 border-cyan-500/30 shadow-cyan-900/10' 
-                      : 'text-slate-500 bg-slate-800/30 border-slate-800 cursor-not-allowed opacity-50'}`}
-                >
-                  <BarChart3 size={14} className={hasPlayCount ? "text-cyan-400" : "text-slate-500"} />
-                  <span>Select by Plays...</span>
-                </button>
-
-                <div className="w-px h-4 bg-slate-700 mx-1"></div>
-
-                <button 
-                  onClick={handleMoveToTop}
-                  disabled={activePlaylist.selectedIds.size === 0}
-                  className="flex items-center space-x-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <ArrowUpToLine size={14} />
-                  <span>Move Top</span>
-                </button>
-
-                <button 
-                  onClick={handleMoveToBottom}
-                  disabled={activePlaylist.selectedIds.size === 0}
-                  className="flex items-center space-x-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <ArrowDownToLine size={14} />
-                  <span>Move Bottom</span>
-                </button>
-
-                <button 
-                  onClick={handleDeleteSelected}
-                  disabled={activePlaylist.selectedIds.size === 0}
-                  className="flex items-center space-x-2 text-xs font-medium text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Trash2 size={14} />
-                  <span>Delete ({activePlaylist.selectedIds.size})</span>
-                </button>
-
-                <div className="ml-auto text-xs text-slate-500 font-medium">
-                  {filteredTracks.length} {filteredTracks.length === activePlaylist.tracks.length ? 'tracks' : `of ${activePlaylist.tracks.length} tracks`}
+                  
+                  <label className="flex items-center justify-center bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors whitespace-nowrap">
+                    <Plus size={14} className="mr-1" /> Add Playlist
+                    <input type="file" className="hidden" accept=".m3u,.m3u8,.csv,.txt,text/csv,application/csv,application/vnd.ms-excel,text/plain" multiple onChange={handleFileInput} ref={fileInputRef} />
+                  </label>
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* Track List */}
-            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-              <div 
-                className="max-h-[60vh] overflow-y-auto custom-scrollbar"
-                onDragOver={handleDragOverContainer}
-              >
-                {filteredTracks.map((track, index) => {
-                  const isSelected = activePlaylist.selectedIds.has(track.id);
-                  const isTempRange = temporaryRangeIds.has(track.id);
-                  const isAdvRange = advancedRangeIds.has(track.id);
-                  const isDragged = draggedId === track.id || (draggedId && activePlaylist.selectedIds.has(draggedId) && isSelected);
-                  
-                  let rowBackgroundClass = '';
-                  if (isTempRange) {
-                    rowBackgroundClass = 'bg-emerald-500/15 border-y border-emerald-500/30 text-emerald-100 ring-2 ring-emerald-500/10';
-                  } else if (isAdvRange) {
-                    if (isSelected) {
-                      rowBackgroundClass = 'bg-gradient-to-r from-indigo-500/10 to-violet-500/20 border-y border-violet-500/40 text-violet-100 ring-2 ring-violet-500/15';
-                    } else {
-                      rowBackgroundClass = 'bg-violet-500/15 border-y border-violet-500/30 text-violet-100 ring-2 ring-violet-500/10';
-                    }
-                  } else if (isSelected) {
-                    rowBackgroundClass = 'bg-indigo-500/10';
-                  }
-                  
-                  return (
-                    <div 
-                      key={track.id}
-                      onDragOver={handleDragOver}
-                      onDrop={(e) => handleDrop(e, track.id)}
-                      onClick={(e) => {
-                        // Prevent toggling if clicking on drag handle
-                        if ((e.target as HTMLElement).closest('.drag-handle')) return;
-                        toggleSelection(track.id, e.shiftKey);
-                      }}
-                      className={`group flex items-center p-3 border-b border-slate-800/50 hover:bg-slate-800/50 transition-all cursor-pointer ${rowBackgroundClass} ${isDragged ? 'opacity-50' : ''}`}
-                    >
-                      <div 
-                        className="drag-handle p-2 text-slate-600 hover:text-slate-300 cursor-grab active:cursor-grabbing mr-1"
-                        draggable
-                        onDragStart={(e) => {
-                          handleDragStart(e, track.id);
-                          const row = e.currentTarget.closest('.group');
-                          if (row) {
-                            e.dataTransfer.setDragImage(row, 20, 20);
-                          }
-                        }}
-                      >
-                        <GripVertical size={16} />
-                      </div>
-                      
-                      <div className="mr-3 text-slate-500">
-                        {isTempRange ? (
-                          <CheckSquare size={16} className="text-emerald-400" />
-                        ) : isAdvRange ? (
-                          isSelected ? (
-                            <CheckSquare size={16} className="text-violet-400 animate-pulse" />
-                          ) : (
-                            <Square size={16} className="text-violet-400 animate-pulse border-violet-500/50" />
-                          )
-                        ) : (
-                          isSelected ? <CheckSquare size={16} className="text-indigo-400" /> : <Square size={16} />
-                        )}
-                      </div>
-                      
-                      <div className="flex-1 min-w-0 flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-slate-800 rounded flex items-center justify-center flex-shrink-0 text-slate-500">
-                          <Music size={14} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center space-x-2">
-                            <div className="text-sm font-medium text-slate-200 truncate">{track.title}</div>
-                            {isTempRange && (
-                              <span className="text-[8px] bg-emerald-500/30 text-emerald-300 font-bold px-1.5 py-0.5 rounded-full border border-emerald-500/40 uppercase tracking-widest animate-pulse shrink-0">
-                                Target Range
-                              </span>
-                            )}
-                            {isAdvRange && (
-                              <span className="text-[8px] bg-violet-500/30 text-violet-300 font-bold px-1.5 py-0.5 rounded-full border border-violet-500/40 uppercase tracking-widest animate-pulse shrink-0">
-                                {isSelected ? 'Target Deselect / Intersect' : 'Target Add / Selection'}
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-xs text-slate-500 truncate flex items-center space-x-2">
-                            <span>{track.artist}</span>
-                            {track.album && (
-                              <>
-                                <span>•</span>
-                                <span>{track.album}</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-3 flex-shrink-0 font-mono">
-                          {track.playCount !== undefined && (
-                            <span className="bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 font-bold px-1.5 py-0.5 rounded text-[10px]">
-                              {track.playCount} plays
-                            </span>
-                          )}
-                          {track.duration && (
-                            <div className="text-xs text-slate-500">
-                              {formatDuration(track.duration)}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                {filteredTracks.length === 0 && (
-                  <div className="p-8 text-center text-slate-500 text-sm">
-                    No tracks found matching your criteria.
-                  </div>
-                )}
+            {isSplitMode ? (
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-stretch">
+                {renderPlaylistPane(activePlaylistId, 'left')}
+                {renderPlaylistPane(secondaryPlaylistId, 'right')}
               </div>
-            </div>
+            ) : activePlaylist ? (
+              <div className="space-y-4">
+                {/* Toolbar */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex flex-col gap-3 sticky top-0 z-10 shadow-lg shadow-slate-950/50">
+                  {/* Top Row: Search & Global Actions */}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center space-x-2 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 flex-1 min-w-[150px]">
+                      <Search size={14} className="text-slate-500" />
+                      <input 
+                        type="text" 
+                        placeholder="Search tracks..." 
+                        value={activePlaylist.searchQuery}
+                        onChange={(e) => updateActivePlaylist(p => ({ ...p, searchQuery: e.target.value }))}
+                        className="bg-transparent border-none outline-none text-xs text-slate-200 w-full placeholder:text-slate-500"
+                      />
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <SortAsc size={14} className="text-slate-500" />
+                      <select 
+                        onChange={(e) => handleSort(activePlaylistId!, e.target.value as keyof Track)}
+                        className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-2 py-1.5 outline-none focus:border-indigo-500"
+                        defaultValue=""
+                      >
+                        <option value="" disabled>Sort by...</option>
+                        <option value="title">Title</option>
+                        <option value="artist">Artist</option>
+                        <option value="album">Album</option>
+                        {hasPlayCount && <option value="playCount">Play Count (Highest First)</option>}
+                      </select>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <Filter size={14} className="text-slate-500" />
+                      <select 
+                        value={activePlaylist.artistFilter}
+                        onChange={(e) => handleSelectByArtist(activePlaylistId!, e.target.value)}
+                        className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-2 py-1.5 outline-none focus:border-indigo-500 max-w-[150px]"
+                      >
+                        <option value="">Select Artist...</option>
+                        {uniqueArtists.map(a => (
+                          <option key={a} value={a}>{a}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <button 
+                      onClick={() => handleReverse(activePlaylistId!)}
+                      className="flex items-center space-x-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      <ArrowUpDown size={14} />
+                      <span>Reverse</span>
+                    </button>
+
+                    <button 
+                      onClick={() => handleRandomize(activePlaylistId!)}
+                      className="flex items-center space-x-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      <Dices size={14} />
+                      <span>Randomize</span>
+                    </button>
+
+                    <button 
+                      onClick={() => handleRemoveDuplicates(activePlaylistId!)}
+                      className="flex items-center space-x-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      <CopyMinus size={14} />
+                      <span>Deduplicate</span>
+                    </button>
+
+                    {playlists.length > 1 && (
+                      <button 
+                        onClick={openCrossPruneModal}
+                        className="flex items-center space-x-2 text-xs font-medium text-indigo-300 hover:text-white bg-indigo-500/20 hover:bg-indigo-500/40 px-3 py-1.5 rounded-lg transition-colors border border-indigo-500/30"
+                        title="Remove songs that are present in any of the other open playlists"
+                      >
+                        <Layers size={14} />
+                        <span>Cross-Prune</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Bottom Row: Selection Actions */}
+                  <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-800/50">
+                    <button 
+                      onClick={() => handleSelectAll(activePlaylistId!, filteredTracks)}
+                      className="flex items-center space-x-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      <CheckSquare size={14} className="text-indigo-400" />
+                      <span>Select All</span>
+                    </button>
+
+                    <button 
+                      onClick={() => handleDeselectAll(activePlaylistId!, filteredTracks)}
+                      className="flex items-center space-x-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      <Square size={14} />
+                      <span>Deselect All</span>
+                    </button>
+
+                    <button 
+                      onClick={() => handleInvertSelection(activePlaylistId!, filteredTracks)}
+                      className="flex items-center space-x-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      <RefreshCcw size={14} />
+                      <span>Invert</span>
+                    </button>
+
+                    <button 
+                      onClick={() => handleBasicSelectRange(activePlaylistId!, filteredTracks)}
+                      title="Expands the selection between the first and last selected tracks. If none selected, opens basic range selector."
+                      className="flex items-center space-x-2 text-xs font-medium text-emerald-300 hover:text-white bg-emerald-500/15 hover:bg-emerald-500/35 px-3 py-1.5 rounded-lg border border-emerald-500/30 transition-colors shadow-sm"
+                    >
+                      <SlidersHorizontal size={14} className="text-emerald-400" />
+                      <span>Select Range</span>
+                    </button>
+
+                    <button 
+                      onClick={() => {
+                        if (filteredTracks.length > 0) {
+                          setAdvRangeStartId(filteredTracks[0].id);
+                          setAdvRangeEndId(filteredTracks[filteredTracks.length - 1].id);
+                          setAdvRangePlaylistId(activePlaylistId);
+                        } else {
+                          alert("No tracks visible to select an advanced range.");
+                        }
+                      }}
+                      title="Advanced Range selections: union, subtract, or intersect ranges."
+                      className="flex items-center space-x-2 text-xs font-medium text-violet-300 hover:text-white bg-violet-500/15 hover:bg-violet-500/35 px-3 py-1.5 rounded-lg border border-violet-500/30 transition-colors shadow-sm"
+                    >
+                      <Sparkles size={14} className="text-violet-400" />
+                      <span>Advanced Range...</span>
+                    </button>
+
+                    <button 
+                      onClick={() => {
+                        if (!hasPlayCount) {
+                          alert("This playlist does not contain play count details.");
+                          return;
+                        }
+                        setPlayCountFilterPlaylistId(activePlaylistId);
+                      }}
+                      title="Select or deselect tracks based on their play count range"
+                      className={`flex items-center space-x-2 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors shadow-sm
+                        ${hasPlayCount 
+                          ? 'text-cyan-300 hover:text-white bg-cyan-500/15 hover:bg-cyan-500/35 border-cyan-500/30 shadow-cyan-900/10' 
+                          : 'text-slate-500 bg-slate-800/30 border-slate-800 cursor-not-allowed opacity-50'}`}
+                    >
+                      <BarChart3 size={14} className={hasPlayCount ? "text-cyan-400" : "text-slate-500"} />
+                      <span>Select by Plays...</span>
+                    </button>
+
+                    <div className="w-px h-4 bg-slate-700 mx-1"></div>
+
+                    <button 
+                      onClick={() => handleMoveToTop(activePlaylistId!)}
+                      disabled={activePlaylist.selectedIds.size === 0}
+                      className="flex items-center space-x-2 text-xs font-medium text-slate-350 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ArrowUpToLine size={14} />
+                      <span>Move Top</span>
+                    </button>
+
+                    <button 
+                      onClick={() => handleMoveToBottom(activePlaylistId!)}
+                      disabled={activePlaylist.selectedIds.size === 0}
+                      className="flex items-center space-x-2 text-xs font-medium text-slate-355 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ArrowDownToLine size={14} />
+                      <span>Move Bottom</span>
+                    </button>
+
+                    <button 
+                      onClick={() => handleDeleteSelected(activePlaylistId!)}
+                      disabled={activePlaylist.selectedIds.size === 0}
+                      className="flex items-center space-x-2 text-xs font-medium text-rose-450 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Trash2 size={14} />
+                      <span>Delete ({activePlaylist.selectedIds.size})</span>
+                    </button>
+
+                    <div className="ml-auto text-xs text-slate-500 font-medium">
+                      {filteredTracks.length} {filteredTracks.length === activePlaylist.tracks.length ? 'tracks' : `of ${activePlaylist.tracks.length} tracks`}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Track List */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden animate-in slide-in-from-bottom duration-300">
+                  <div 
+                    className="max-h-[60vh] overflow-y-auto custom-scrollbar"
+                    onDragOver={handleDragOverContainer}
+                  >
+                    {filteredTracks.map((track, index) => {
+                      const isSelected = activePlaylist.selectedIds.has(track.id);
+                      const isTempRange = rangeSelectorPlaylistId === activePlaylistId && temporaryRangeIds.has(track.id);
+                      const isAdvRange = advRangePlaylistId === activePlaylistId && advancedRangeIds.has(track.id);
+                      const isDragged = draggedId === track.id || (draggedId && activePlaylist.selectedIds.has(draggedId) && isSelected);
+                      
+                      let rowBackgroundClass = '';
+                      if (isTempRange) {
+                        rowBackgroundClass = 'bg-emerald-500/15 border-y border-emerald-500/30 text-emerald-100 ring-2 ring-emerald-500/10';
+                      } else if (isAdvRange) {
+                        rowBackgroundClass = isSelected 
+                          ? 'bg-gradient-to-r from-indigo-500/10 to-violet-500/20 border-y border-violet-500/40 text-violet-100 ring-2 ring-violet-500/15'
+                          : 'bg-violet-500/15 border-y border-violet-500/30 text-violet-100 ring-2 ring-violet-500/10';
+                      } else if (isSelected) {
+                        rowBackgroundClass = 'bg-indigo-500/10';
+                      }
+                      
+                      return (
+                        <div 
+                          key={track.id}
+                          onDragOver={handleDragOver}
+                          onDrop={(e) => handleDrop(e, track.id, activePlaylistId!)}
+                          onClick={(e) => {
+                            if ((e.target as HTMLElement).closest('.drag-handle')) return;
+                            toggleSelection(activePlaylistId!, track.id, e.shiftKey);
+                          }}
+                          className={`group flex items-center p-3 border-b border-slate-800/50 hover:bg-slate-800/50 transition-all cursor-pointer ${rowBackgroundClass} ${isDragged ? 'opacity-50' : ''}`}
+                        >
+                          <div 
+                            className="drag-handle p-2 text-slate-600 hover:text-slate-300 cursor-grab active:cursor-grabbing mr-1"
+                            draggable
+                            onDragStart={(e) => {
+                              handleDragStart(e, track.id);
+                              const row = e.currentTarget.closest('.group');
+                              if (row) {
+                                e.dataTransfer.setDragImage(row, 20, 20);
+                              }
+                            }}
+                          >
+                            <GripVertical size={16} />
+                          </div>
+                          
+                          <div className="mr-3 text-slate-500">
+                            {isTempRange ? (
+                              <CheckSquare size={16} className="text-emerald-400" />
+                            ) : isAdvRange ? (
+                              isSelected ? <CheckSquare size={16} className="text-violet-400" /> : <Square size={16} className="text-violet-400 border-violet-500/50" />
+                            ) : (
+                              isSelected ? <CheckSquare size={16} className="text-indigo-400" /> : <Square size={16} />
+                            )}
+                          </div>
+                          
+                          <div className="flex-1 min-w-0 flex items-center space-x-3">
+                            <div className="w-8 h-8 bg-slate-800 rounded flex items-center justify-center flex-shrink-0 text-slate-500">
+                              <Music size={14} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center space-x-2">
+                                <div className="text-sm font-medium text-slate-200 truncate">{track.title}</div>
+                                {isTempRange && (
+                                  <span className="text-[8px] bg-emerald-500/30 text-emerald-300 font-bold px-1.5 py-0.5 rounded-full border border-emerald-500/40 uppercase tracking-widest shrink-0">
+                                    Target Range
+                                  </span>
+                                )}
+                                {isAdvRange && (
+                                  <span className="text-[8px] bg-violet-500/30 text-violet-300 font-bold px-1.5 py-0.5 rounded-full border border-violet-500/40 uppercase tracking-widest shrink-0">
+                                    {isSelected ? 'Overlap Only' : 'Add / Subtract'}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-slate-500 truncate flex items-center space-x-2">
+                                <span>{track.artist}</span>
+                                {track.album && (
+                                  <>
+                                    <span>•</span>
+                                    <span>{track.album}</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-3 flex-shrink-0 font-mono">
+                              {track.playCount !== undefined && (
+                                <span className="bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 font-bold px-1.5 py-0.5 rounded text-[10px]">
+                                  {track.playCount} plays
+                                </span>
+                              )}
+                              {track.duration && (
+                                <div className="text-xs text-slate-500">
+                                  {formatDuration(track.duration)}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {filteredTracks.length === 0 && (
+                      <div className="p-8 text-center text-slate-500 text-sm">
+                        No tracks found matching your criteria.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
-        ) : null}
+        )}
       </div>
 
       {isCrossPruneOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-3xl max-h-[80vh] flex flex-col shadow-2xl">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-3xl max-h-[80vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             {/* Header */}
             <div className="p-4 border-b border-slate-800 flex items-center justify-between">
               <div>
@@ -1468,7 +2075,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
                       <div className="min-w-0 border-l border-slate-700 pl-4">
                         <div className="text-[10px] font-bold text-emerald-400 uppercase mb-1 flex justify-between">
                           <span className="truncate mr-2">Matched With ({match.sourcePlaylistName})</span>
-                          <span className="text-indigo-300 flex-shrink-0">{Math.round(match.score * 100)}% Match</span>
+                          <span className="text-indigo-305 flex-shrink-0">{Math.round(match.score * 100)}% Match</span>
                         </div>
                         <div className="text-slate-200 truncate font-medium">{match.sourceTrack.title}</div>
                         <div className="text-slate-500 truncate text-xs">{match.sourceTrack.artist}</div>
@@ -1483,7 +2090,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
             <div className="p-4 border-t border-slate-800 flex justify-end space-x-3 bg-slate-900 rounded-b-2xl">
               <button 
                 onClick={() => setIsCrossPruneOpen(false)}
-                className="px-4 py-2 rounded-lg text-sm font-bold text-slate-300 hover:bg-slate-800 transition-colors"
+                className="px-4 py-2 rounded-lg text-sm font-bold text-slate-350 hover:bg-slate-800 transition-colors"
               >
                 Cancel
               </button>
@@ -1500,8 +2107,8 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
         </div>
       )}
 
-      {isRangeSelectorOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+      {rangeSelectorPlaylistId && rangeSelectorPlaylist && (
+        <div className="fixed inset-0 z-50 bg-slate-955/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             
             {/* Header */}
@@ -1515,7 +2122,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
               </div>
               <button 
                 onClick={() => {
-                  setIsRangeSelectorOpen(false);
+                  setRangeSelectorPlaylistId(null);
                   setRangeStartId('');
                   setRangeEndId('');
                 }} 
@@ -1535,7 +2142,8 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
                     onChange={(e) => setRangeStartId(e.target.value)} 
                     className="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 outline-none rounded-lg p-2.5 text-xs text-slate-200 transition-colors"
                   >
-                    {filteredTracks.map((t, idx) => (
+                    <option value="" disabled>Select start...</option>
+                    {rangeSelectorFilteredTracks.map((t, idx) => (
                       <option key={t.id} value={t.id}>
                         [{idx + 1}] {t.title} - {t.artist}
                       </option>
@@ -1550,7 +2158,8 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
                     onChange={(e) => setRangeEndId(e.target.value)} 
                     className="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 outline-none rounded-lg p-2.5 text-xs text-slate-200 transition-colors"
                   >
-                    {filteredTracks.map((t, idx) => (
+                    <option value="" disabled>Select end...</option>
+                    {rangeSelectorFilteredTracks.map((t, idx) => (
                       <option key={t.id} value={t.id}>
                         [{idx + 1}] {t.title} - {t.artist}
                       </option>
@@ -1562,7 +2171,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
               {/* Status Indicator */}
               <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-xl p-3.5 flex items-center justify-between text-xs">
                 <span className="text-slate-400 font-medium">Temporary Range Size:</span>
-                <span className="font-mono font-bold bg-emerald-500/20 text-emerald-300 px-3 py-1 rounded border border-emerald-500/20">
+                <span className="font-mono font-bold bg-emerald-500/20 text-emerald-305 px-3 py-1 rounded border border-emerald-500/20 font-mono">
                   {temporaryRangeIds.size} Tracks
                 </span>
               </div>
@@ -1581,7 +2190,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
 
                 <button 
                   onClick={() => applyRangeAction('subtract')}
-                  disabled={activePlaylist.selectedIds.size === 0}
+                  disabled={rangeSelectorPlaylist.selectedIds.size === 0}
                   className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center space-x-1.5 shadow"
                 >
                   <X size={14} />
@@ -1592,14 +2201,14 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
               <div className="flex gap-2 pt-1">
                 <button 
                   onClick={() => applyRangeAction('replace')}
-                  className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-bold transition-colors text-center border border-slate-700"
+                  className="flex-1 py-2 bg-slate-850 hover:bg-slate-750 text-slate-300 hover:text-white rounded-lg text-xs font-bold transition-colors text-center border border-slate-700"
                 >
                   Select Only This Range
                 </button>
 
                 <button 
                   onClick={() => {
-                    setIsRangeSelectorOpen(false);
+                    setRangeSelectorPlaylistId(null);
                     setRangeStartId('');
                     setRangeEndId('');
                   }}
@@ -1613,22 +2222,22 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
         </div>
       )}
 
-      {isAdvancedRangeOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+      {advRangePlaylistId && advRangePlaylist && (
+        <div className="fixed inset-0 z-50 bg-slate-955/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700/50 rounded-2xl w-full max-w-lg flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             
             {/* Header */}
-            <div className="p-4 border-b border-slate-800 bg-gradient-to-r from-violet-950/30 to-indigo-950/30 flex items-center justify-between">
+            <div className="p-4 border-b border-slate-800 bg-gradient-to-r from-violet-955/30 to-indigo-955/30 flex items-center justify-between">
               <div className="flex items-center space-x-2.5 text-violet-400">
                 <Sparkles size={18} className="animate-pulse" />
                 <div>
                   <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wide">Advanced Range Selector</h3>
-                  <p className="text-[10px] text-slate-400">Add, deselect, or intersect custom track spans</p>
+                  <p className="text-[10px] text-slate-405 select-none">Add, deselect, or intersect custom track spans</p>
                 </div>
               </div>
               <button 
                 onClick={() => {
-                  setIsAdvancedRangeOpen(false);
+                  setAdvRangePlaylistId(null);
                   setAdvRangeStartId('');
                   setAdvRangeEndId('');
                 }} 
@@ -1648,7 +2257,8 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
                     onChange={(e) => setAdvRangeStartId(e.target.value)} 
                     className="w-full bg-slate-950 border border-slate-700 focus:border-violet-500 outline-none rounded-lg p-2.5 text-xs text-slate-200 transition-colors"
                   >
-                    {filteredTracks.map((t, idx) => (
+                    <option value="" disabled>Select start...</option>
+                    {advRangeFilteredTracks.map((t, idx) => (
                       <option key={t.id} value={t.id}>
                         [{idx + 1}] {t.title} - {t.artist}
                       </option>
@@ -1661,9 +2271,10 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
                   <select 
                     value={advRangeEndId} 
                     onChange={(e) => setAdvRangeEndId(e.target.value)} 
-                    className="w-full bg-slate-950 border border-slate-700 focus:border-violet-500 outline-none rounded-lg p-2.5 text-xs text-slate-200 transition-colors"
+                    className="w-full bg-slate-955 border border-slate-700 focus:border-violet-500 outline-none rounded-lg p-2.5 text-xs text-slate-200 transition-colors"
                   >
-                    {filteredTracks.map((t, idx) => (
+                    <option value="" disabled>Select end...</option>
+                    {advRangeFilteredTracks.map((t, idx) => (
                       <option key={t.id} value={t.id}>
                         [{idx + 1}] {t.title} - {t.artist}
                       </option>
@@ -1682,17 +2293,17 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
                 </div>
 
                 <div className="bg-indigo-500/5 border border-indigo-500/10 rounded-xl p-3 flex flex-col justify-between text-xs">
-                  <span className="text-slate-400 font-medium">Already Selected in Spanned Range:</span>
-                  <span className="font-mono font-bold text-indigo-300 text-sm mt-1">
-                    {activePlaylist ? Array.from(advancedRangeIds).filter(id => activePlaylist.selectedIds.has(id)).length : 0} Tracks
+                  <span className="text-slate-400 font-medium">Already Selected in Range:</span>
+                  <span className="font-mono font-bold text-indigo-305 text-sm mt-1">
+                    {Array.from(advancedRangeIds).filter(id => advRangePlaylist.selectedIds.has(id)).length} Tracks
                   </span>
                 </div>
               </div>
 
-              <div className="bg-slate-950/40 border border-slate-800 rounded-xl p-3 flex items-center justify-between text-xs">
+              <div className="bg-slate-950/40 border border-slate-805 rounded-xl p-3 flex items-center justify-between text-xs">
                 <span className="text-slate-400 font-medium">Total Selection Size:</span>
                 <span className="font-mono font-bold text-slate-200 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
-                  {activePlaylist ? activePlaylist.selectedIds.size : 0} Tracks Selected
+                  {advRangePlaylist.selectedIds.size} Tracks Selected
                 </span>
               </div>
             </div>
@@ -1710,7 +2321,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
 
                 <button 
                   onClick={() => applyAdvancedRangeAction('subtract')}
-                  disabled={!activePlaylist || activePlaylist.selectedIds.size === 0}
+                  disabled={advRangePlaylist.selectedIds.size === 0}
                   className="py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center space-x-1.5 shadow"
                 >
                   <X size={14} />
@@ -1721,7 +2332,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
               <div className="grid grid-cols-2 gap-2">
                 <button 
                   onClick={() => applyAdvancedRangeAction('intersect')}
-                  disabled={!activePlaylist || activePlaylist.selectedIds.size === 0}
+                  disabled={advRangePlaylist.selectedIds.size === 0}
                   className="py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-lg text-xs font-bold transition-colors text-center border border-violet-500/30 disabled:opacity-40 disabled:cursor-not-allowed"
                   title="Deselects everything except the tracks that overlap with this range"
                 >
@@ -1730,7 +2341,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
 
                 <button 
                   onClick={() => applyAdvancedRangeAction('replace')}
-                  className="py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-bold transition-colors text-center border border-slate-700"
+                  className="py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white rounded-lg text-xs font-bold transition-colors text-center border border-slate-700"
                 >
                   Select Only This Range
                 </button>
@@ -1739,11 +2350,11 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
               <div className="flex justify-end pt-1">
                 <button 
                   onClick={() => {
-                    setIsAdvancedRangeOpen(false);
+                    setAdvRangePlaylistId(null);
                     setAdvRangeStartId('');
                     setAdvRangeEndId('');
                   }}
-                  className="px-6 py-2 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-300 rounded-lg text-xs font-bold transition-colors"
+                  className="px-6 py-2 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-305 rounded-lg text-xs font-bold transition-colors"
                 >
                   Cancel
                 </button>
@@ -1753,12 +2364,12 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
         </div>
       )}
 
-      {isPlayCountFilterOpen && activePlaylist && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+      {playCountFilterPlaylistId && playCountFilterPlaylist && (
+        <div className="fixed inset-0 z-50 bg-slate-955/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700/50 rounded-2xl w-full max-w-lg flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             
             {/* Header */}
-            <div className="p-4 border-b border-slate-800 bg-slate-950/40 flex items-center justify-between">
+            <div className="p-4 border-b border-slate-805 bg-slate-950/40 flex items-center justify-between">
               <div className="flex items-center space-x-2.5 text-cyan-400">
                 <BarChart3 size={18} />
                 <div>
@@ -1768,7 +2379,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
               </div>
               <button 
                 onClick={() => {
-                  setIsPlayCountFilterOpen(false);
+                  setPlayCountFilterPlaylistId(null);
                 }} 
                 className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 transition-colors"
               >
@@ -1787,7 +2398,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
                     value={playCountMin}
                     onChange={(e) => setPlayCountMin(e.target.value)}
                     placeholder="0"
-                    className="w-full bg-slate-950 border border-slate-700 focus:border-cyan-500 outline-none rounded-lg p-2.5 text-xs text-slate-200 transition-colors font-mono"
+                    className="w-full bg-slate-955 border border-slate-700 focus:border-cyan-500 outline-none rounded-lg p-2.5 text-xs text-slate-200 transition-colors font-mono"
                   />
                 </div>
 
@@ -1799,7 +2410,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
                     value={playCountMax}
                     onChange={(e) => setPlayCountMax(e.target.value)}
                     placeholder="No limit"
-                    className="w-full bg-slate-950 border border-slate-700 focus:border-cyan-500 outline-none rounded-lg p-2.5 text-xs text-slate-200 transition-colors font-mono"
+                    className="w-full bg-slate-955 border border-slate-700 focus:border-cyan-500 outline-none rounded-lg p-2.5 text-xs text-slate-200 transition-colors font-mono"
                   />
                 </div>
               </div>
@@ -1807,18 +2418,18 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
               {/* Selection Summary */}
               <div className="bg-cyan-500/5 border border-cyan-500/10 rounded-xl p-3.5 flex items-center justify-between text-xs">
                 <span className="text-slate-400 font-medium">Matching Tracks in Active View:</span>
-                <span className="font-mono font-bold bg-cyan-500/20 text-cyan-300 px-3 py-1 rounded border border-cyan-500/20 font-mono">
+                <span className="font-mono font-bold bg-cyan-500/20 text-cyan-305 px-3 py-1 rounded border border-cyan-500/20 font-mono">
                   {(() => {
                     const min = playCountMin === '' ? 0 : parseInt(playCountMin, 10);
                     const max = playCountMax === '' ? Infinity : parseInt(playCountMax, 10);
-                    return filteredTracks.filter(t => t.playCount !== undefined && t.playCount >= min && t.playCount <= max).length;
+                    return playCountFilteredTracks.filter(t => t.playCount !== undefined && t.playCount >= min && t.playCount <= max).length;
                   })()} Tracks
                 </span>
               </div>
             </div>
             
             {/* Actions Footer */}
-            <div className="p-4 border-t border-slate-800 flex flex-col gap-2 bg-slate-950/40">
+            <div className="p-4 border-t border-slate-800 flex flex-col gap-2 bg-slate-955/40">
               <div className="flex gap-2">
                 <button 
                   onClick={() => applyPlayCountAction('add')}
@@ -1840,27 +2451,232 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
               <div className="flex gap-2 pt-1">
                 <button 
                   onClick={() => applyPlayCountAction('replace')}
-                  className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-bold transition-colors text-center border border-slate-700"
+                  className="flex-1 py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white rounded-lg text-xs font-bold transition-colors text-center border border-slate-700"
                 >
                   Select Only Matching
                 </button>
                 
                 <button 
                   onClick={() => applyPlayCountAction('intersect')}
-                  className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-bold transition-colors text-center border border-slate-700"
+                  className="flex-1 py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white rounded-lg text-xs font-bold transition-colors text-center border border-slate-700"
                 >
                   Intersect Selection
                 </button>
 
                 <button 
                   onClick={() => {
-                    setIsPlayCountFilterOpen(false);
+                    setPlayCountFilterPlaylistId(null);
                   }}
                   className="w-24 py-2 bg-slate-900 hover:bg-slate-800 text-slate-500 hover:text-slate-400 rounded-lg text-xs font-bold transition-colors text-center"
                 >
                   Cancel
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isCombinePanelOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-4 border-b border-slate-800 bg-slate-955/40 flex items-center justify-between">
+              <div className="flex items-center space-x-2.5 text-purple-400">
+                <Layers size={18} />
+                <div>
+                  <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wide">Combine / Inject Tracks</h3>
+                  <p className="text-[10px] text-slate-500">Inject tracks from one playlist into another with criteria</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsCombinePanelOpen(false)} 
+                className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            
+            {/* Form Content */}
+            <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar animate-in slide-in-from-bottom duration-250">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] text-slate-500 font-bold block mb-1.5 uppercase tracking-wider">Source Playlist (From)</label>
+                  <select 
+                    value={combineSourceId} 
+                    onChange={(e) => {
+                      setCombineSourceId(e.target.value);
+                      setCombineArtistVal('');
+                      setCombineAlbumVal('');
+                    }} 
+                    className="w-full bg-slate-955 border border-slate-700 focus:border-purple-500 outline-none rounded-lg p-2.5 text-xs text-slate-200 transition-colors"
+                  >
+                    <option value="" disabled>Select source...</option>
+                    {playlists.map(p => (
+                      <option key={p.id} value={p.id}>{p.originalFilename} ({p.tracks.length} tracks)</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-slate-500 font-bold block mb-1.5 uppercase tracking-wider">Target Playlist (Into)</label>
+                  <select 
+                    value={combineTargetId} 
+                    onChange={(e) => setCombineTargetId(e.target.value)} 
+                    className="w-full bg-slate-955 border border-slate-700 focus:border-purple-500 outline-none rounded-lg p-2.5 text-xs text-slate-200 transition-colors"
+                  >
+                    <option value="" disabled>Select target...</option>
+                    {playlists.map(p => (
+                      <option key={p.id} value={p.id}>{p.originalFilename} ({p.tracks.length} tracks)</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] text-slate-500 font-bold block mb-1.5 uppercase tracking-wider">Injection Selection Criteria</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'all', label: 'All Tracks' },
+                    { id: 'selected', label: 'Selected Tracks Only' },
+                    { id: 'artist', label: 'Filter by Artist' },
+                    { id: 'album', label: 'Filter by Album' }
+                  ].map(opt => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setCombineCriteria(opt.id as any)}
+                      className={`p-2.5 rounded-lg text-xs font-bold text-center border transition-all ${combineCriteria === opt.id ? 'bg-purple-650 border-purple-500 text-white shadow shadow-purple-900/40' : 'bg-slate-955 border-slate-805 hover:border-slate-700 text-slate-400'}`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Conditional options */}
+              {combineCriteria === 'artist' && (
+                <div className="animate-in fade-in duration-200">
+                  <label className="text-[10px] text-slate-500 font-bold block mb-1.5 uppercase tracking-wider">Select Artist</label>
+                  <select
+                    value={combineArtistVal}
+                    onChange={(e) => setCombineArtistVal(e.target.value)}
+                    className="w-full bg-slate-955 border border-slate-700 focus:border-purple-500 outline-none rounded-lg p-2.5 text-xs text-slate-200 transition-colors"
+                  >
+                    <option value="">Choose Artist...</option>
+                    {combineSourceUniqueArtists.map(art => (
+                      <option key={art} value={art}>{art}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {combineCriteria === 'album' && (
+                <div className="animate-in fade-in duration-200">
+                  <label className="text-[10px] text-slate-500 font-bold block mb-1.5 uppercase tracking-wider">Select Album</label>
+                  <select
+                    value={combineAlbumVal}
+                    onChange={(e) => setCombineAlbumVal(e.target.value)}
+                    className="w-full bg-slate-955 border border-slate-700 focus:border-purple-500 outline-none rounded-lg p-2.5 text-xs text-slate-200 transition-colors"
+                  >
+                    <option value="">Choose Album...</option>
+                    {combineSourceUniqueAlbums.map(alb => (
+                      <option key={alb} value={alb}>{alb}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Duplicate Prevention Section */}
+              <div className="bg-slate-955/40 border border-slate-800 rounded-xl p-4 space-y-3">
+                <label className="flex items-center space-x-3 cursor-pointer select-none">
+                  <button
+                    type="button"
+                    onClick={() => setCombineAvoidDuplicates(!combineAvoidDuplicates)}
+                    className="text-slate-400 hover:text-purple-400"
+                  >
+                    {combineAvoidDuplicates ? <CheckSquare size={18} className="text-purple-400" /> : <Square size={18} />}
+                  </button>
+                  <div>
+                    <span className="text-xs font-bold text-slate-300">Avoid Duplicate Tracks</span>
+                    <p className="text-[10px] text-slate-500">Skips tracks already in target using fuzzy matching</p>
+                  </div>
+                </label>
+
+                {combineAvoidDuplicates && (
+                  <div className="pt-2 border-t border-slate-800/60 animate-in fade-in duration-200">
+                    <label className="text-[10px] font-bold text-slate-500 mb-1 flex justify-between">
+                      <span>Fuzzy Strictness Threshold</span>
+                      <span className="text-purple-400 font-bold">{combineDuplicateStrictness}%</span>
+                    </label>
+                    <input 
+                      type="range" 
+                      min="50" 
+                      max="100" 
+                      value={combineDuplicateStrictness}
+                      onChange={(e) => setCombineDuplicateStrictness(parseInt(e.target.value))}
+                      className="w-full accent-purple-500"
+                    />
+                    <div className="flex justify-between text-[9px] text-slate-650">
+                      <span>Loose Similarity</span>
+                      <span>Exact Track Match</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Summary stats */}
+              <div className="bg-purple-500/5 border border-purple-500/10 rounded-xl p-3.5 flex items-center justify-between text-xs">
+                <span className="text-slate-400 font-medium">Candidate Tracks to Inspect:</span>
+                <span className="font-mono font-bold bg-purple-500/20 text-purple-305 px-3 py-1 rounded border border-purple-500/20">
+                  {combineCandidateCount} Tracks
+                </span>
+              </div>
+            </div>
+            
+            {/* Actions Footer */}
+            <div className="p-4 border-t border-slate-800 flex justify-end space-x-3 bg-slate-950/40">
+              <button 
+                onClick={() => setIsCombinePanelOpen(false)}
+                className="px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:bg-slate-850 hover:text-slate-350 transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => {
+                  if (!combineSourceId || !combineTargetId) {
+                    alert("Please choose both source and target playlists.");
+                    return;
+                  }
+                  if (combineSourceId === combineTargetId) {
+                    alert("Source and target playlists cannot be the same.");
+                    return;
+                  }
+                  if (combineCriteria === 'artist' && !combineArtistVal) {
+                    alert("Please select an artist to filter.");
+                    return;
+                  }
+                  if (combineCriteria === 'album' && !combineAlbumVal) {
+                    alert("Please select an album to filter.");
+                    return;
+                  }
+                  handleCombinePlaylists(
+                    combineSourceId,
+                    combineTargetId,
+                    combineCriteria,
+                    combineArtistVal,
+                    combineAlbumVal,
+                    combineAvoidDuplicates,
+                    combineDuplicateStrictness
+                  );
+                  setIsCombinePanelOpen(false);
+                }}
+                disabled={combineCandidateCount === 0 || !combineSourceId || !combineTargetId || combineSourceId === combineTargetId}
+                className="px-4 py-2 rounded-lg text-xs font-bold bg-purple-650 hover:bg-purple-600 text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1.5 shadow-lg shadow-purple-950/20"
+              >
+                <Layers size={14} />
+                <span>Inject Tracks</span>
+              </button>
             </div>
           </div>
         </div>
