@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ArrowLeft, Scissors, Download, Copy, Search, RefreshCcw, CheckSquare, Square, FileText, FileSpreadsheet, Music, SlidersHorizontal, Sparkles, Plus, Trash2, Check, Wand2, Filter, Columns } from 'lucide-react';
+import { ArrowLeft, Scissors, Download, Copy, Search, RefreshCcw, CheckSquare, Square, FileText, FileSpreadsheet, Music, SlidersHorizontal, Sparkles, Plus, Trash2, Check, Wand2, Filter, Columns, ShieldCheck } from 'lucide-react';
 import { downloadPlaylistFile } from '../services/downloadHelper';
 
 interface ScrapeStripperViewProps {
@@ -102,39 +102,115 @@ function parseDurationSeconds(durationStr: string): number {
   return 0;
 }
 
-function parseChannelScrape(text: string): ParsedScrapeTrack[] {
-  const lines = text.split(/\r?\n/).map(l => l.trim());
+// Standardized Unified Scrape Parser (Backward compatible with manual & automated scrapes)
+function parseStandardizedScrape(text: string, excludeRecommendations: boolean = true): ParsedScrapeTrack[] {
+  let mainText = text;
+
+  // 1. Truncate at recommendations section if excludeRecommendations enabled
+  if (excludeRecommendations) {
+    const recsRegex = /\b(Recommended videos|Recommended playlists|Related videos|You might also like|People also watched)\b/i;
+    const recMatch = text.search(recsRegex);
+    if (recMatch !== -1) {
+      mainText = text.substring(0, recMatch);
+    }
+  }
+
+  const lines = mainText.split(/\r?\n/).map(l => l.trim());
   const tracks: ParsedScrapeTrack[] = [];
+
+  const isDuration = (str: string) => /^\d{1,2}:\d{2}(?::\d{2})?$/.test(str);
+  const isViews = (str: string) => /^\d+(\.\d+)?[KMB]?\s+views$/i.test(str);
+  const isAge = (str: string) => /\b(ago|year|month|week|day|hour|minute)s?\b/i.test(str);
+  const isViewsAgeCombined = (str: string) => /views\s*•/i.test(str) || (str.includes('views') && isAge(str));
+  const isBullet = (str: string) => str === '•';
+
+  // Filter out top navigation & sidebar headers
+  const isHeaderNoise = (str: string) => {
+    if (!str) return true;
+    if (str === 'true' || str === 'Now playing' || str === 'Play all' || str === 'Shuffle' || str === 'Skip navigation' || str === 'Create') return true;
+    if (/^(Home|Shorts|Subscriptions|History|Playlists|Watch later|Liked videos|Your videos|Downloads|Explore|Music|Gaming|News|Report history|TermsPrivacyPolicy|© \d+ Google LLC|Manual)$/i.test(str)) return true;
+    if (/^\d+\s+(subscribers|videos|views|unavailable videos are hidden)$/i.test(str)) return true;
+    if (str.startsWith('AboutPressCopyright') || str.startsWith('TermsPrivacyPolicy') || str.includes('unavailable videos are hidden')) return true;
+    return false;
+  };
+
   let i = 0;
-
   while (i < lines.length) {
-    const line = lines[i];
-    if (/^\d{1,2}:\d{2}(?::\d{2})?$/.test(line)) {
-      const duration = line;
-      let title = '';
-      let views = '';
-      let age = '';
+    let line = lines[i];
+
+    if (!line || isHeaderNoise(line)) {
       i++;
+      continue;
+    }
 
-      while (i < lines.length && lines[i] === '') i++;
+    // Pattern 1: Leading Duration (e.g. 2:50, 3:36)
+    if (isDuration(line)) {
+      const duration = line;
+      i++;
+      while (i < lines.length && (!lines[i] || isHeaderNoise(lines[i]))) i++;
 
-      if (i < lines.length && !/^\d+(\.\d+)?[KMB]?\s+views$/i.test(lines[i]) && lines[i] !== '•') {
+      let title = '';
+      if (i < lines.length && !isBullet(lines[i]) && !isViews(lines[i])) {
         title = lines[i];
         i++;
       }
 
       while (i < lines.length && lines[i] === '') i++;
 
-      if (i < lines.length && /^\d+(\.\d+)?[KMB]?\s+views$/i.test(lines[i])) {
-        views = lines[i];
+      let channelOrViews = '';
+      if (i < lines.length && !isBullet(lines[i])) {
+        channelOrViews = lines[i];
         i++;
       }
 
-      while (i < lines.length && (lines[i] === '' || lines[i] === '•')) i++;
+      while (i < lines.length && (lines[i] === '' || isBullet(lines[i]))) i++;
 
-      if (i < lines.length && /\b(ago|year|month|week|day|hour|minute)s?\b/i.test(lines[i])) {
-        age = lines[i];
-        i++;
+      let views = '';
+      let age = '';
+
+      if (isViewsAgeCombined(channelOrViews)) {
+        const parts = channelOrViews.split('•').map(p => p.trim());
+        views = parts[0] || '';
+        age = parts[1] || '';
+      } else if (isViews(channelOrViews)) {
+        views = channelOrViews;
+        if (i < lines.length && isAge(lines[i])) {
+          age = lines[i];
+          i++;
+        }
+      } else {
+        // channelOrViews was a channel name
+        const channel = channelOrViews;
+        if (i < lines.length && isViewsAgeCombined(lines[i])) {
+          const parts = lines[i].split('•').map(p => p.trim());
+          views = parts[0] || '';
+          age = parts[1] || '';
+          i++;
+        } else if (i < lines.length && isViews(lines[i])) {
+          views = lines[i];
+          i++;
+          while (i < lines.length && (lines[i] === '' || isBullet(lines[i]))) i++;
+          if (i < lines.length && isAge(lines[i])) {
+            age = lines[i];
+            i++;
+          }
+        }
+
+        if (title) {
+          tracks.push({
+            id: generateId(),
+            originalTitle: title,
+            cleanedTitle: title,
+            originalArtist: channel || 'Unknown Artist',
+            cleanedArtist: channel || 'Unknown Artist',
+            duration,
+            durationSeconds: parseDurationSeconds(duration),
+            views,
+            age,
+            selected: true
+          });
+          continue;
+        }
       }
 
       if (title) {
@@ -150,102 +226,57 @@ function parseChannelScrape(text: string): ParsedScrapeTrack[] {
           age,
           selected: true
         });
+        continue;
       }
-    } else {
-      i++;
     }
-  }
 
-  return tracks;
-}
+    // Pattern 2: Items without leading duration line (e.g. Title, Channel, •, Views • Age)
+    let lookAhead = i;
+    let candidateTitle = lines[lookAhead];
+    lookAhead++;
+    while (lookAhead < lines.length && lines[lookAhead] === '') lookAhead++;
 
-function parsePlaylistScrape(text: string): ParsedScrapeTrack[] {
-  const lines = text.split(/\r?\n/).map(l => l.trim());
-  const tracks: ParsedScrapeTrack[] = [];
-  let i = 0;
+    let candidateChannel = '';
+    if (lookAhead < lines.length && !isBullet(lines[lookAhead]) && !isViews(lines[lookAhead])) {
+      candidateChannel = lines[lookAhead];
+      lookAhead++;
+    }
 
-  while (i < lines.length) {
-    const line = lines[i];
-    if (line === 'true' || /^\d{1,2}:\d{2}(?::\d{2})?$/.test(line)) {
-      let duration = '';
-      if (line === 'true') {
-        i++;
-        while (i < lines.length && lines[i] === '') i++;
-        if (i < lines.length && /^\d{1,2}:\d{2}(?::\d{2})?$/.test(lines[i])) {
-          duration = lines[i];
-          i++;
-        }
-      } else {
-        duration = line;
-        i++;
-      }
+    while (lookAhead < lines.length && (lines[lookAhead] === '' || isBullet(lines[lookAhead]))) lookAhead++;
 
-      while (i < lines.length && lines[i] === '') i++;
-
-      if (i < lines.length && lines[i] === 'Now playing') {
-        i++;
-        while (i < lines.length && lines[i] === '') i++;
-      }
-
-      let title = '';
-      if (i < lines.length && lines[i] !== '•' && !/views/i.test(lines[i])) {
-        title = lines[i];
-        i++;
-      }
-
-      while (i < lines.length && lines[i] === '') i++;
-
-      let channel = '';
-      if (i < lines.length && lines[i] !== '•' && !/views/i.test(lines[i])) {
-        channel = lines[i];
-        i++;
-      }
-
-      while (i < lines.length && lines[i] === '') i++;
-
+    if (lookAhead < lines.length && (isViewsAgeCombined(lines[lookAhead]) || isViews(lines[lookAhead]) || isAge(lines[lookAhead]))) {
       let views = '';
       let age = '';
-
-      if (i < lines.length && lines[i] === '•') {
-        i++;
-        while (i < lines.length && lines[i] === '') i++;
+      const vLine = lines[lookAhead];
+      if (isViewsAgeCombined(vLine)) {
+        const parts = vLine.split('•').map(p => p.trim());
+        views = parts[0] || '';
+        age = parts[1] || '';
+      } else if (isViews(vLine)) {
+        views = vLine;
+      } else if (isAge(vLine)) {
+        age = vLine;
       }
 
-      if (i < lines.length && /views/i.test(lines[i])) {
-        const viewsLine = lines[i];
-        if (viewsLine.includes('•')) {
-          const parts = viewsLine.split('•').map(p => p.trim());
-          views = parts[0] || '';
-          age = parts[1] || '';
-        } else {
-          views = viewsLine;
-        }
-        i++;
-      }
-
-      while (i < lines.length && lines[i] === '') i++;
-      if (!age && i < lines.length && /\b(ago|year|month|week|day|hour|minute)s?\b/i.test(lines[i])) {
-        age = lines[i];
-        i++;
-      }
-
-      if (title) {
+      if (!isHeaderNoise(candidateTitle) && candidateTitle.length > 1) {
         tracks.push({
           id: generateId(),
-          originalTitle: title,
-          cleanedTitle: title,
-          originalArtist: channel || 'Unknown Artist',
-          cleanedArtist: channel || 'Unknown Artist',
-          duration,
-          durationSeconds: parseDurationSeconds(duration),
+          originalTitle: candidateTitle,
+          cleanedTitle: candidateTitle,
+          originalArtist: candidateChannel || 'Unknown Artist',
+          cleanedArtist: candidateChannel || 'Unknown Artist',
+          duration: '',
+          durationSeconds: 0,
           views,
           age,
           selected: true
         });
+        i = lookAhead + 1;
+        continue;
       }
-    } else {
-      i++;
     }
+
+    i++;
   }
 
   return tracks;
@@ -259,7 +290,8 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
   const [showDiffPreview, setShowDiffPreview] = useState<boolean>(false);
   const [copiedNotification, setCopiedNotification] = useState<boolean>(false);
 
-  // Power Tool Preset Toggles
+  // Power Tool Filters & Exclusions
+  const [excludeRecommendations, setExcludeRecommendations] = useState<boolean>(true);
   const [stripHD, setStripHD] = useState<boolean>(true);
   const [stripMV, setStripMV] = useState<boolean>(true);
   const [stripLyrics, setStripLyrics] = useState<boolean>(true);
@@ -323,7 +355,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
   const cleanTitleAndArtist = (rawTitle: string, initialArtist: string) => {
     let text = rawTitle;
 
-    // 1. Unescape markdown / raw escape characters (e.g. \& -> &, \[ -> [, \] -> ], \\ -> ' ')
+    // 1. Unescape markdown / raw escape characters
     text = text.replace(/\\&/g, '&');
     text = text.replace(/\\\[/g, '[');
     text = text.replace(/\\\]/g, ']');
@@ -392,25 +424,13 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
     return { title: finalTitle || rawTitle, artist: finalArtist || 'Unknown Artist' };
   };
 
-  const handleParseAndClean = (inputRawText: string, targetModule: ScrapeModule = activeModule) => {
+  const handleParseAndClean = (inputRawText: string) => {
     if (!inputRawText.trim()) {
       setParsedTracks([]);
       return;
     }
 
-    let parsed: ParsedScrapeTrack[] = [];
-    if (targetModule === 'channel') {
-      parsed = parseChannelScrape(inputRawText);
-    } else if (targetModule === 'playlist') {
-      parsed = parsePlaylistScrape(inputRawText);
-    } else {
-      // Auto detect
-      if (inputRawText.includes('Now playing') || inputRawText.startsWith('true')) {
-        parsed = parsePlaylistScrape(inputRawText);
-      } else {
-        parsed = parseChannelScrape(inputRawText);
-      }
-    }
+    const parsed = parseStandardizedScrape(inputRawText, excludeRecommendations);
 
     // Apply cleaning
     const cleaned = parsed.map(track => {
@@ -427,7 +447,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
 
   const handleTextChange = (text: string) => {
     setRawText(text);
-    handleParseAndClean(text, activeModule);
+    handleParseAndClean(text);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -435,13 +455,13 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
       const file = e.target.files[0];
       const text = await file.text();
       setRawText(text);
-      handleParseAndClean(text, activeModule);
+      handleParseAndClean(text);
     }
   };
 
   const handleModuleSwitch = (mod: ScrapeModule) => {
     setActiveModule(mod);
-    handleParseAndClean(rawText, mod);
+    handleParseAndClean(rawText);
   };
 
   // Re-run cleaning when keyword filters or split options change
@@ -456,6 +476,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
     });
   }, [
     parsedTracks,
+    excludeRecommendations,
     stripHD,
     stripMV,
     stripLyrics,
@@ -516,7 +537,6 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
       return;
     }
 
-    // UTF-8 Byte Order Mark (\uFEFF) for Excel & text editors
     let content = '\uFEFF' + selectedCols.map(c => c.header).join(',') + '\n';
     for (const t of targets) {
       const row = selectedCols.map(c => {
@@ -545,7 +565,6 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
       return;
     }
 
-    // UTF-8 BOM
     let content = '\uFEFF' + selectedCols.map(c => c.header).join('\t') + '\n';
     for (const t of targets) {
       const row = selectedCols.map(c => String(t[c.key] || ''));
@@ -559,7 +578,6 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
     const targets = processedTracks.filter(t => t.selected);
     if (targets.length === 0) return;
 
-    // UTF-8 BOM
     let content = '\uFEFF';
     for (const t of targets) {
       const parts: string[] = [];
@@ -633,10 +651,10 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
                 Scrape Stripper & Formatter
               </h2>
               <span className="text-[9px] bg-violet-500/20 text-violet-300 border border-violet-500/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                Power Tool
+                Standardized Engine
               </span>
             </div>
-            <p className="text-[10px] text-slate-500 font-medium">Clean messy channel & playlist scrapes into structured documents</p>
+            <p className="text-[10px] text-slate-500 font-medium">Standardized parser for manual & automated scrapes with noise/recommendation filters</p>
           </div>
         </div>
 
@@ -675,7 +693,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
                 <button
                   onClick={() => {
                     setRawText(SAMPLE_CHANNEL_SCRAPE);
-                    handleParseAndClean(SAMPLE_CHANNEL_SCRAPE, 'channel');
+                    handleParseAndClean(SAMPLE_CHANNEL_SCRAPE);
                   }}
                   className="text-[10px] font-bold bg-violet-500/15 text-violet-300 hover:bg-violet-500/30 border border-violet-500/30 px-2 py-1 rounded-md transition-colors"
                 >
@@ -684,7 +702,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
                 <button
                   onClick={() => {
                     setRawText(SAMPLE_PLAYLIST_SCRAPE);
-                    handleParseAndClean(SAMPLE_PLAYLIST_SCRAPE, 'playlist');
+                    handleParseAndClean(SAMPLE_PLAYLIST_SCRAPE);
                   }}
                   className="text-[10px] font-bold bg-indigo-500/15 text-indigo-300 hover:bg-indigo-500/30 border border-indigo-500/30 px-2 py-1 rounded-md transition-colors"
                 >
@@ -696,7 +714,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
             <textarea
               value={rawText}
               onChange={(e) => handleTextChange(e.target.value)}
-              placeholder="Paste raw channel scrape or playlist scrape text here..."
+              placeholder="Paste raw channel scrape or playlist scrape text here (manual or automated scrapes)..."
               rows={7}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono text-slate-200 placeholder:text-slate-600 outline-none focus:border-violet-500/60 transition-colors custom-scrollbar resize-none"
             />
@@ -726,6 +744,28 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
             <div className="flex items-center space-x-2 text-xs font-bold text-violet-400 uppercase tracking-wider border-b border-slate-800 pb-2">
               <Wand2 size={16} />
               <span>Keyword & Tag Exclusion Power Tools</span>
+            </div>
+
+            {/* Recommendations & Top Headers Shield Toggle */}
+            <div className="bg-violet-500/10 border border-violet-500/20 p-2.5 rounded-xl">
+              <label className="flex items-center space-x-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={excludeRecommendations}
+                  onChange={e => {
+                    setExcludeRecommendations(e.target.checked);
+                    if (rawText) handleParseAndClean(rawText);
+                  }}
+                  className="accent-violet-500 rounded w-4 h-4"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center space-x-1.5">
+                    <ShieldCheck size={14} className="text-violet-400" />
+                    <span className="text-xs font-bold text-violet-200">Exclude Recommendations & Top Headers</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Filters out YouTube sidebar clutter and truncates at 'Recommended videos/playlists'</p>
+                </div>
+              </label>
             </div>
 
             {/* Presets Grid */}
