@@ -41,7 +41,7 @@ I cross-publish the exact same essays on both platforms, so you can follow the s
     <td colspan="2" align="center"><b>Playlist Haven Dashboard</b><br/><img src="docs/screenshots/Playlist-Haven Homepage.png" width="800"/></td>
   </tr>
   <tr>
-    <td><b>Playlist Manipulator</b><br/><img src="docs/screenshots/Playlist-Haven Playlist Manipulator.png" width="400"/></td>
+    <td><b>Playlist Manipulator (Single, Dual & 4-Pane Modes)</b><br/><img src="docs/screenshots/Playlist-Haven Playlist Manipulator.png" width="400"/></td>
     <td><b>Vision-to-Playlist (AI)</b><br/><img src="docs/screenshots/Playlist-Haven Vision to AI.png" width="400"/></td>
   </tr>
   <tr>
@@ -129,7 +129,7 @@ By digitizing my meticulous curation rituals, I hope to inspire Musicolet's next
 
 ## 🛠️ Comprehensive Module Specifications
 
-Playlist Haven features 11 specialized functional views, mapped directly to the **DAESO** playlist layers:
+Playlist Haven features 12 specialized functional views, mapped directly to the **DAESO** playlist layers:
 
 ### 1. 🎛️ Sonic Sieve Logic Engine (`SonicSieveView.tsx`) [Integration Layer]
 The ultimate weekly playlist generator that automates your listening rotation:
@@ -141,6 +141,8 @@ The ultimate weekly playlist generator that automates your listening rotation:
 
 ### 2. 🎚️ Playlist Manipulator (`PlaylistManipulatorView.tsx`) [Analytic & Capture Layer]
 An extensive interactive workbench to rearrange, slice, and cross-reference multiple M3U, CSV, or TXT playlists simultaneously:
+*   **Multi-Pane Layout Support (1, 2, or 4 Viewing Panes)**: Toggle between Single-Pane, Dual-Pane, or 4-Pane Quad View modes to view and manipulate up to 4 distinct playlist files side-by-side.
+*   **Universal Toolbar Features**: Universal Move Top, Move Bottom, Cross-Prune, Combine, and Copy To across single-pane and multi-pane views.
 *   **Fuzzy Cross-Prune**: Cross-reference multiple loaded playlists to identify and remove fuzzy duplicate matches across files using Jaro-Winkler bigram similarity with customizable matching strictness percentages.
 *   **Plain Text Support**: Upload plain text track lists (`.txt` files formatted as `Title - Artist`). Rearrange or sort them, and export them back to clean text lists or convert them directly to standard playable M3U playlists.
 *   **Play Count Filters**: Dynamically parses play statistics from CSV fields to let you select, deselect, replace, or intersect tracks using custom play-range boundaries—passing completely silently for files without play metadata.
@@ -184,6 +186,18 @@ Reconcile and align tracklist variations between a shared playlist (M3U, CSV, or
 *   **AI Assist Lookup**: Send low-confidence candidate tracks in token-optimized chunks to Gemini to identify and match the correct candidate.
 *   **Real-time Searchable Resolution Overlay**: Quickly search your entire library database inline to manually assign matches for unresolved tracks.
 *   **Export Options**: Download a playable local M3U playlist with your local file paths, or export a CSV list of all missing songs.
+
+### 12. 🪄 Scrape Stripper & Formatter (`ScrapeStripperView.tsx`) [Capture & Curation Layer]
+Standardized, automated YouTube channel and playlist scrape parser & formatter:
+*   **Standardized Manual & Automated Scrape Parser**: Ingests raw text dumps from YouTube channel pages, playlists, and browser scrapes (supports leading durations or compact formats, with zero header noise).
+*   **Automated Recommendation Exclusion**: Truncates output automatically at recommendation section boundaries (`Recommended videos`, `Recommended playlists`, `Related videos`, `You might also like`, `People also watched`).
+*   **Smart Metadata Normalization**:
+    *   **Featured Artist Normalizer**: Extracts `feat.` / `ft.` from song titles into the Artist field (`Main Artist feat. Featured Artist`).
+    *   **Smart Title Case**: Normalizes capitalization while intelligently preserving acronyms like `DJ`, `MC`, `OP`, `ED`, `MV`, `HD`, `OST`, and `REMIX`.
+    *   **CJK & Slash Delimiter Orientation**: Handles `Title / Artist` ordering for Japanese and CJK music channels (e.g. Bella Ping's channel).
+*   **1-Click Swap & Batch Artist Manager**: 1-click **Swap Artist ↔ Title** button and **Batch Set Artist** overrider for complex edge cases.
+*   **Custom Rule Presets**: Save, load, and persist custom keyword exclusions and formatting rules to `localStorage`.
+*   **Multi-Format UTF-8 BOM Exports**: Export cleaned lists directly to **CSV**, **TSV**, **TXT**, **M3U**, or **Clipboard** with UTF-8 Byte Order Marks (`\uFEFF`) and interactive column selector pills (`Title`, `Artist`, `Duration`, `Views`, `Age`) for instant ingestion into Tune My Music, Spotify, Musicolet, or Musify.
 
 ---
 
