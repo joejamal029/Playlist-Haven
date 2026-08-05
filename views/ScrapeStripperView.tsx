@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ArrowLeft, Scissors, Download, Copy, Search, RefreshCcw, CheckSquare, Square, FileText, FileSpreadsheet, Music, SlidersHorizontal, Sparkles, Plus, Trash2, Check, Wand2, Filter } from 'lucide-react';
+import { ArrowLeft, Scissors, Download, Copy, Search, RefreshCcw, CheckSquare, Square, FileText, FileSpreadsheet, Music, SlidersHorizontal, Sparkles, Plus, Trash2, Check, Wand2, Filter, Columns } from 'lucide-react';
 import { downloadPlaylistFile } from '../services/downloadHelper';
 
 interface ScrapeStripperViewProps {
@@ -24,7 +24,7 @@ type ScrapeModule = 'autodetect' | 'channel' | 'playlist';
 // Sample scrape datasets for quick 1-click demonstration
 const SAMPLE_CHANNEL_SCRAPE = `3:36
 
-Ryan.B & 周延英 - 沒有理由【歌詞字幕 / 完整高清音質】♫「不知不覺的放開你...」Ryan.B & Effie - No Reason
+Ryan.B \\& 周延英 - 沒有理由【歌詞字幕 / 完整高清音質】♫「不知不覺的放開你...」Ryan.B \\& Effie - No Reason
 
 19M views
 
@@ -38,7 +38,7 @@ Ryan.B & 周延英 - 沒有理由【歌詞字幕 / 完整高清音質】♫「�
 
 3:21
 
-【HD】余佳運 - 和你 [新歌][歌詞字幕][完整高清音質] Yu Jia Yun - With You
+【HD】余佳運 - 和你 \\[新歌\\]\\[歌詞字幕\\]\\[完整高清音質\\] Yu Jia Yun - With You
 
 3.1M views
 
@@ -52,7 +52,7 @@ Ryan.B & 周延英 - 沒有理由【歌詞字幕 / 完整高清音質】♫「�
 
 4:09
 
-【HD】張碧晨 - 一吻之間 [新歌字幕][電視劇《青年醫生》插曲][完整高音質] The Young Doctor Theme Song
+【HD】張碧晨 - 一吻之間 \\[新歌字幕\\]\\[電視劇《青年醫生》插曲\\]\\[完整高音質\\] The Young Doctor Theme Song
 
 1.7M views
 
@@ -275,6 +275,13 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
   // Auto Splitter Settings
   const [autoSplitDelimiter, setAutoSplitDelimiter] = useState<boolean>(true);
 
+  // Export Column Chooser Selection States
+  const [exportColTitle, setExportColTitle] = useState<boolean>(true);
+  const [exportColArtist, setExportColArtist] = useState<boolean>(true);
+  const [exportColDuration, setExportColDuration] = useState<boolean>(true);
+  const [exportColViews, setExportColViews] = useState<boolean>(true);
+  const [exportColAge, setExportColAge] = useState<boolean>(true);
+
   // Default Keyword Presets list built dynamically
   const activeExclusionKeywords = useMemo(() => {
     const keywords: string[] = [];
@@ -312,11 +319,20 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
     return Array.from(new Set(keywords));
   }, [stripHD, stripMV, stripLyrics, stripAudioQuality, customKeywords]);
 
-  // Clean title & split artist logic
+  // Clean title & split artist logic with unescaping support
   const cleanTitleAndArtist = (rawTitle: string, initialArtist: string) => {
     let text = rawTitle;
 
-    // Strip bracket contents
+    // 1. Unescape markdown / raw escape characters (e.g. \& -> &, \[ -> [, \] -> ], \\ -> ' ')
+    text = text.replace(/\\&/g, '&');
+    text = text.replace(/\\\[/g, '[');
+    text = text.replace(/\\\]/g, ']');
+    text = text.replace(/\\\(/g, '(');
+    text = text.replace(/\\\)/g, ')');
+    text = text.replace(/\\\\/g, ' ');
+    text = text.replace(/\\/g, ' ');
+
+    // 2. Strip bracket contents
     if (stripSquareBrackets) {
       text = text.replace(/\[[^\]]*\]/g, ' ');
     }
@@ -326,12 +342,12 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
       text = text.replace(/「[^」]*」/g, ' ');
     }
 
-    // Strip music symbols
+    // 3. Strip music symbols
     if (stripSymbols) {
       text = text.replace(/[♫♪★☆▶️]/g, ' ');
     }
 
-    // Keyword replacements
+    // 4. Keyword replacements (case-insensitive)
     for (const kw of activeExclusionKeywords) {
       if (!kw.trim()) continue;
       const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -339,7 +355,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
       text = text.replace(regex, ' ');
     }
 
-    // Remove empty brackets left behind
+    // 5. Remove empty brackets left behind
     text = text.replace(/\(\s*\)/g, ' ');
     text = text.replace(/\[\s*\]/g, ' ');
     text = text.replace(/【\s*】/g, ' ');
@@ -349,11 +365,15 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
       text = text.replace(/\(\s*(official|music|video|visualizer|audio|hd|4k|lyric|lyrics)\s*\)/gi, ' ');
     }
 
-    // Clean extra whitespace
+    // Remove any lingering slashes or double backslashes
+    text = text.replace(/\\/g, ' ');
+    text = text.replace(/\/\s*\//g, ' ');
+
+    // 6. Clean extra whitespace
     text = text.replace(/\s+/g, ' ').trim();
     text = text.replace(/^[\s\-–—/|:;]+|[\s\-–—/|:;]+$/g, '').trim();
 
-    let finalArtist = initialArtist;
+    let finalArtist = initialArtist.replace(/\\&/g, '&').replace(/\\/g, '').trim();
     let finalTitle = text;
 
     // Auto-split artist and title if delimiter exists
@@ -479,18 +499,31 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
     setParsedTracks(prev => prev.map(t => t.id === id ? { ...t, cleanedArtist: newArtist } : t));
   };
 
-  // Export handlers
+  // Export handlers with UTF-8 BOM (\uFEFF) and column selection support
   const handleExportCSV = async () => {
     const targets = processedTracks.filter(t => t.selected);
     if (targets.length === 0) return;
 
-    let content = 'Title,Artist,Duration,Views,Age\n';
+    const selectedCols: { key: keyof ParsedScrapeTrack; header: string }[] = [];
+    if (exportColTitle) selectedCols.push({ key: 'cleanedTitle', header: 'Title' });
+    if (exportColArtist) selectedCols.push({ key: 'cleanedArtist', header: 'Artist' });
+    if (exportColDuration) selectedCols.push({ key: 'duration', header: 'Duration' });
+    if (exportColViews) selectedCols.push({ key: 'views', header: 'Views' });
+    if (exportColAge) selectedCols.push({ key: 'age', header: 'Age' });
+
+    if (selectedCols.length === 0) {
+      alert('Please select at least one column to export.');
+      return;
+    }
+
+    // UTF-8 Byte Order Mark (\uFEFF) for Excel & text editors
+    let content = '\uFEFF' + selectedCols.map(c => c.header).join(',') + '\n';
     for (const t of targets) {
-      const escTitle = `"${t.cleanedTitle.replace(/"/g, '""')}"`;
-      const escArtist = `"${t.cleanedArtist.replace(/"/g, '""')}"`;
-      const escViews = `"${(t.views || '').replace(/"/g, '""')}"`;
-      const escAge = `"${(t.age || '').replace(/"/g, '""')}"`;
-      content += `${escTitle},${escArtist},${t.duration || ''},${escViews},${escAge}\n`;
+      const row = selectedCols.map(c => {
+        const val = String(t[c.key] || '');
+        return `"${val.replace(/"/g, '""')}"`;
+      });
+      content += row.join(',') + '\n';
     }
 
     await downloadPlaylistFile(content, 'cleaned_scrape.csv', 'text/csv;charset=utf-8;');
@@ -500,9 +533,23 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
     const targets = processedTracks.filter(t => t.selected);
     if (targets.length === 0) return;
 
-    let content = 'Title\tArtist\tDuration\tViews\tAge\n';
+    const selectedCols: { key: keyof ParsedScrapeTrack; header: string }[] = [];
+    if (exportColTitle) selectedCols.push({ key: 'cleanedTitle', header: 'Title' });
+    if (exportColArtist) selectedCols.push({ key: 'cleanedArtist', header: 'Artist' });
+    if (exportColDuration) selectedCols.push({ key: 'duration', header: 'Duration' });
+    if (exportColViews) selectedCols.push({ key: 'views', header: 'Views' });
+    if (exportColAge) selectedCols.push({ key: 'age', header: 'Age' });
+
+    if (selectedCols.length === 0) {
+      alert('Please select at least one column to export.');
+      return;
+    }
+
+    // UTF-8 BOM
+    let content = '\uFEFF' + selectedCols.map(c => c.header).join('\t') + '\n';
     for (const t of targets) {
-      content += `${t.cleanedTitle}\t${t.cleanedArtist}\t${t.duration || ''}\t${t.views || ''}\t${t.age || ''}\n`;
+      const row = selectedCols.map(c => String(t[c.key] || ''));
+      content += row.join('\t') + '\n';
     }
 
     await downloadPlaylistFile(content, 'cleaned_scrape.tsv', 'text/tab-separated-values;charset=utf-8;');
@@ -512,9 +559,25 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
     const targets = processedTracks.filter(t => t.selected);
     if (targets.length === 0) return;
 
-    let content = '';
+    // UTF-8 BOM
+    let content = '\uFEFF';
     for (const t of targets) {
-      content += `${t.cleanedArtist} - ${t.cleanedTitle}\n`;
+      const parts: string[] = [];
+      if (exportColArtist && t.cleanedArtist) parts.push(t.cleanedArtist);
+      if (exportColTitle && t.cleanedTitle) parts.push(t.cleanedTitle);
+      
+      let line = parts.join(' - ');
+      
+      const extraParts: string[] = [];
+      if (exportColDuration && t.duration) extraParts.push(t.duration);
+      if (exportColViews && t.views) extraParts.push(t.views);
+      if (exportColAge && t.age) extraParts.push(t.age);
+      
+      if (extraParts.length > 0) {
+        line += ` (${extraParts.join(' • ')})`;
+      }
+
+      content += (line || t.cleanedTitle) + '\n';
     }
 
     await downloadPlaylistFile(content, 'cleaned_scrape.txt', 'text/plain;charset=utf-8;');
@@ -524,7 +587,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
     const targets = processedTracks.filter(t => t.selected);
     if (targets.length === 0) return;
 
-    let content = '#EXTM3U\n';
+    let content = '\uFEFF#EXTM3U\n';
     for (const t of targets) {
       content += `#EXTINF:${t.durationSeconds},${t.cleanedArtist} - ${t.cleanedTitle}\n`;
       content += `${t.cleanedArtist} - ${t.cleanedTitle}.mp3\n`;
@@ -537,7 +600,17 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
     const targets = processedTracks.filter(t => t.selected);
     if (targets.length === 0) return;
 
-    const lines = targets.map(t => `${t.cleanedArtist} - ${t.cleanedTitle}`);
+    const lines = targets.map(t => {
+      if (exportColArtist && exportColTitle) {
+        return `${t.cleanedArtist} - ${t.cleanedTitle}`;
+      } else if (exportColTitle) {
+        return t.cleanedTitle;
+      } else if (exportColArtist) {
+        return t.cleanedArtist;
+      }
+      return `${t.cleanedArtist} - ${t.cleanedTitle}`;
+    });
+
     navigator.clipboard.writeText(lines.join('\n'));
     setCopiedNotification(true);
     setTimeout(() => setCopiedNotification(false), 2000);
@@ -624,7 +697,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
               value={rawText}
               onChange={(e) => handleTextChange(e.target.value)}
               placeholder="Paste raw channel scrape or playlist scrape text here..."
-              rows={8}
+              rows={7}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono text-slate-200 placeholder:text-slate-600 outline-none focus:border-violet-500/60 transition-colors custom-scrollbar resize-none"
             />
 
@@ -726,7 +799,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
         {/* Right Column: Cleaned Data Preview & Exports (7 cols) */}
         <div className="lg:col-span-7 flex flex-col space-y-4">
           
-          {/* Top Control Bar & Live Stats */}
+          {/* Top Control Bar & Export Column Chooser */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center space-x-3">
@@ -747,8 +820,33 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
               </button>
             </div>
 
+            {/* Export Column Selection Pills */}
+            <div className="pt-2 border-t border-slate-800/80 space-y-2">
+              <div className="flex items-center space-x-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                <Columns size={12} className="text-violet-400" />
+                <span>Export Columns to Include:</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold">
+                {[
+                  { label: 'Title', state: exportColTitle, set: setExportColTitle },
+                  { label: 'Artist', state: exportColArtist, set: setExportColArtist },
+                  { label: 'Duration', state: exportColDuration, set: setExportColDuration },
+                  { label: 'Views', state: exportColViews, set: setExportColViews },
+                  { label: 'Age', state: exportColAge, set: setExportColAge },
+                ].map(col => (
+                  <button
+                    key={col.label}
+                    onClick={() => col.set(!col.state)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all border ${col.state ? 'bg-violet-500/20 text-violet-300 border-violet-500/40' : 'bg-slate-955 text-slate-500 border-slate-800 hover:text-slate-300'}`}
+                  >
+                    {col.state ? '✓ ' : ''}{col.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Search Filter & Bulk Selections */}
-            <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-slate-800/60">
+            <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-800/60">
               <div className="flex items-center space-x-2 bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 flex-1 min-w-[140px]">
                 <Search size={14} className="text-slate-500" />
                 <input
@@ -854,7 +952,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
                   onClick={handleExportCSV}
                   disabled={selectedCount === 0}
                   className="flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed border border-slate-700"
-                  title="Export Cleaned CSV"
+                  title="Export Cleaned CSV (UTF-8 BOM)"
                 >
                   <FileSpreadsheet size={14} className="text-emerald-400" />
                   <span>CSV</span>
@@ -864,7 +962,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
                   onClick={handleExportTSV}
                   disabled={selectedCount === 0}
                   className="flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed border border-slate-700"
-                  title="Export Cleaned TSV"
+                  title="Export Cleaned TSV (UTF-8 BOM)"
                 >
                   <FileText size={14} className="text-cyan-400" />
                   <span>TSV</span>
@@ -874,7 +972,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
                   onClick={handleExportTXT}
                   disabled={selectedCount === 0}
                   className="flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed border border-slate-700"
-                  title="Export Cleaned TXT List"
+                  title="Export Cleaned TXT List (UTF-8 BOM)"
                 >
                   <FileText size={14} className="text-amber-400" />
                   <span>TXT</span>
