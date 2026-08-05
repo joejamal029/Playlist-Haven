@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { ArrowLeft, Scissors, Download, Copy, Search, RefreshCcw, CheckSquare, Square, FileText, FileSpreadsheet, Music, SlidersHorizontal, Sparkles, Plus, Trash2, Check, Wand2, Filter, Columns, ShieldCheck, Bookmark, Save, UserCheck, X } from 'lucide-react';
+import { ArrowLeft, Scissors, Download, Copy, Search, RefreshCcw, CheckSquare, Square, FileText, FileSpreadsheet, Music, SlidersHorizontal, Sparkles, Plus, Trash2, Check, Wand2, Filter, Columns, ShieldCheck, Bookmark, Save, UserCheck, X, ArrowLeftRight } from 'lucide-react';
 import { downloadPlaylistFile } from '../services/downloadHelper';
 
 interface ScrapeStripperViewProps {
@@ -32,6 +32,7 @@ export interface StripperPreset {
   stripParenthesesTags: boolean;
   stripSymbols: boolean;
   autoSplitDelimiter: boolean;
+  splitOrder: 'artist-title' | 'title-artist';
   enableSmartTitleCase: boolean;
   enableFeatNormalizer: boolean;
 }
@@ -42,7 +43,7 @@ type ScrapeModule = 'autodetect' | 'channel' | 'playlist';
 const DEFAULT_PRESETS: StripperPreset[] = [
   {
     id: 'preset_standard',
-    name: 'Standard Music Clean',
+    name: 'Standard Music Clean (Artist - Title)',
     customKeywords: 'hd, 4k, theme song, 1080p',
     stripHD: true,
     stripMV: true,
@@ -53,12 +54,13 @@ const DEFAULT_PRESETS: StripperPreset[] = [
     stripParenthesesTags: true,
     stripSymbols: true,
     autoSplitDelimiter: true,
+    splitOrder: 'artist-title',
     enableSmartTitleCase: false,
     enableFeatNormalizer: true,
   },
   {
     id: 'preset_anime',
-    name: 'Anime & CJK Channels',
+    name: 'Anime & CJK Channels (Title / Artist)',
     customKeywords: 'op, ed, theme song, ost, full, tv size',
     stripHD: true,
     stripMV: true,
@@ -69,6 +71,7 @@ const DEFAULT_PRESETS: StripperPreset[] = [
     stripParenthesesTags: false,
     stripSymbols: true,
     autoSplitDelimiter: true,
+    splitOrder: 'title-artist',
     enableSmartTitleCase: false,
     enableFeatNormalizer: true,
   },
@@ -85,6 +88,7 @@ const DEFAULT_PRESETS: StripperPreset[] = [
     stripParenthesesTags: false,
     stripSymbols: true,
     autoSplitDelimiter: true,
+    splitOrder: 'artist-title',
     enableSmartTitleCase: true,
     enableFeatNormalizer: true,
   },
@@ -101,6 +105,7 @@ const DEFAULT_PRESETS: StripperPreset[] = [
     stripParenthesesTags: true,
     stripSymbols: true,
     autoSplitDelimiter: false,
+    splitOrder: 'title-artist',
     enableSmartTitleCase: true,
     enableFeatNormalizer: false,
   }
@@ -229,7 +234,7 @@ function normalizeFeaturedArtists(title: string, artist: string): { title: strin
   return { title: cleanedTitle, artist: cleanedArtist };
 }
 
-// Standardized Unified Scrape Parser (Backward compatible with manual & automated scrapes)
+// Standardized Unified Scrape Parser
 function parseStandardizedScrape(text: string, excludeRecommendations: boolean = true): ParsedScrapeTrack[] {
   let mainText = text;
 
@@ -268,7 +273,6 @@ function parseStandardizedScrape(text: string, excludeRecommendations: boolean =
       continue;
     }
 
-    // Pattern 1: Leading Duration (e.g. 2:50, 3:36)
     if (isDuration(line)) {
       const duration = line;
       i++;
@@ -304,7 +308,6 @@ function parseStandardizedScrape(text: string, excludeRecommendations: boolean =
           i++;
         }
       } else {
-        // channelOrViews was a channel name
         const channel = channelOrViews;
         if (i < lines.length && isViewsAgeCombined(lines[i])) {
           const parts = lines[i].split('•').map(p => p.trim());
@@ -355,7 +358,6 @@ function parseStandardizedScrape(text: string, excludeRecommendations: boolean =
       }
     }
 
-    // Pattern 2: Items without leading duration line
     let lookAhead = i;
     let candidateTitle = lines[lookAhead];
     lookAhead++;
@@ -437,7 +439,10 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
   const [stripParenthesesTags, setStripParenthesesTags] = useState<boolean>(true);
   const [stripSymbols, setStripSymbols] = useState<boolean>(true);
   const [customKeywords, setCustomKeywords] = useState<string>('hd, 4k, theme song, 1080p');
+  
+  // Auto Splitter & Delimiter Order
   const [autoSplitDelimiter, setAutoSplitDelimiter] = useState<boolean>(true);
+  const [splitOrder, setSplitOrder] = useState<'artist-title' | 'title-artist'>('artist-title');
   const [enableSmartTitleCase, setEnableSmartTitleCase] = useState<boolean>(false);
   const [enableFeatNormalizer, setEnableFeatNormalizer] = useState<boolean>(true);
 
@@ -461,7 +466,6 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
     }
   }, []);
 
-  // Save preset to localStorage
   const handleSavePreset = () => {
     if (!newPresetName.trim()) return;
     const newPreset: StripperPreset = {
@@ -477,6 +481,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
       stripParenthesesTags,
       stripSymbols,
       autoSplitDelimiter,
+      splitOrder,
       enableSmartTitleCase,
       enableFeatNormalizer
     };
@@ -509,6 +514,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
     setStripParenthesesTags(p.stripParenthesesTags);
     setStripSymbols(p.stripSymbols);
     setAutoSplitDelimiter(p.autoSplitDelimiter);
+    setSplitOrder(p.splitOrder || 'artist-title');
     setEnableSmartTitleCase(p.enableSmartTitleCase);
     setEnableFeatNormalizer(p.enableFeatNormalizer);
   };
@@ -599,12 +605,18 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
 
     // Auto-split artist and title if delimiter exists
     if (autoSplitDelimiter) {
-      const delimiters = [' - ', ' – ', '—', ' | ', ' / '];
+      const delimiters = [' / ', ' - ', ' – ', '—', ' | '];
       for (const d of delimiters) {
         if (text.includes(d)) {
           const parts = text.split(d);
-          finalArtist = parts[0].trim();
-          finalTitle = parts.slice(1).join(d).trim();
+          // If splitOrder is 'title-artist' OR delimiter is ' / ', format is Title / Artist!
+          if (splitOrder === 'title-artist' || d === ' / ') {
+            finalTitle = parts[0].trim();
+            finalArtist = parts.slice(1).join(d).trim();
+          } else {
+            finalArtist = parts[0].trim();
+            finalTitle = parts.slice(1).join(d).trim();
+          }
           break;
         }
       }
@@ -664,6 +676,20 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
     handleParseAndClean(rawText);
   };
 
+  // 1-Click Swap Artist <-> Title Action
+  const handleSwapArtistAndTitle = () => {
+    setParsedTracks(prev =>
+      prev.map(t => {
+        if (!t.selected) return t;
+        return {
+          ...t,
+          cleanedTitle: t.cleanedArtist,
+          cleanedArtist: t.cleanedTitle
+        };
+      })
+    );
+  };
+
   // Re-run cleaning when keyword filters or split options change
   const processedTracks = useMemo(() => {
     return parsedTracks.map(track => {
@@ -687,6 +713,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
     stripSymbols,
     activeExclusionKeywords,
     autoSplitDelimiter,
+    splitOrder,
     enableSmartTitleCase,
     enableFeatNormalizer
   ]);
@@ -722,7 +749,6 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
     setParsedTracks(prev => prev.map(t => t.id === id ? { ...t, cleanedArtist: newArtist } : t));
   };
 
-  // Batch Set Artist Action
   const applyBatchSetArtist = () => {
     const targetVal = batchArtistInput.trim() || '';
     setParsedTracks(prev =>
@@ -869,10 +895,10 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
                 Scrape Stripper & Formatter
               </h2>
               <span className="text-[9px] bg-violet-500/20 text-violet-300 border border-violet-500/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                Power Engine v3.0
+                Power Engine v3.1
               </span>
             </div>
-            <p className="text-[10px] text-slate-500 font-medium">Custom presets, smart metadata normalizers & batch artist manager</p>
+            <p className="text-[10px] text-slate-500 font-medium">Auto-split orientation, 1-click artist/title swap & custom rule presets</p>
           </div>
         </div>
 
@@ -920,7 +946,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
               <select
                 value={selectedPresetId}
                 onChange={e => handleApplyPreset(e.target.value)}
-                className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-violet-200 outline-none focus:border-violet-500 transition-colors cursor-pointer"
+                className="flex-1 bg-slate-955 border border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-violet-200 outline-none focus:border-violet-500 transition-colors cursor-pointer"
               >
                 {presets.map(p => (
                   <option key={p.id} value={p.id}>
@@ -975,7 +1001,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
               onChange={(e) => handleTextChange(e.target.value)}
               placeholder="Paste raw channel scrape or playlist scrape text here..."
               rows={6}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono text-slate-200 placeholder:text-slate-600 outline-none focus:border-violet-500/60 transition-colors custom-scrollbar resize-none"
+              className="w-full bg-slate-955 border border-slate-800 rounded-xl p-3 text-xs font-mono text-slate-200 placeholder:text-slate-600 outline-none focus:border-violet-500/60 transition-colors custom-scrollbar resize-none"
             />
 
             <div className="flex items-center justify-between pt-1">
@@ -1073,12 +1099,12 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
                 value={customKeywords}
                 onChange={e => setCustomKeywords(e.target.value)}
                 placeholder="e.g. hd, 4k, theme song, live, remix"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 outline-none focus:border-violet-500 transition-colors"
+                className="w-full bg-slate-955 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 outline-none focus:border-violet-500 transition-colors"
               />
             </div>
 
-            {/* Smart Metadata Normalizers & Auto Splitter */}
-            <div className="pt-2 border-t border-slate-800/80 space-y-2">
+            {/* Auto Splitter & Delimiter Order Selection */}
+            <div className="pt-2 border-t border-slate-800/80 space-y-3">
               <label className="flex items-center space-x-2.5 cursor-pointer">
                 <input
                   type="checkbox"
@@ -1091,6 +1117,28 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
                   <p className="text-[10px] text-slate-500">Splits titles containing ' - ', ' – ', '—', ' / ', or ' | '</p>
                 </div>
               </label>
+
+              {autoSplitDelimiter && (
+                <div className="pl-6 space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Delimiter Order Orientation:
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 text-xs font-semibold">
+                    <button
+                      onClick={() => setSplitOrder('artist-title')}
+                      className={`py-1.5 px-2 rounded-lg border text-left font-bold transition-all ${splitOrder === 'artist-title' ? 'bg-violet-600/30 border-violet-500 text-violet-200' : 'bg-slate-955 border-slate-800 text-slate-500 hover:text-slate-300'}`}
+                    >
+                      Artist - Title
+                    </button>
+                    <button
+                      onClick={() => setSplitOrder('title-artist')}
+                      className={`py-1.5 px-2 rounded-lg border text-left font-bold transition-all ${splitOrder === 'title-artist' ? 'bg-violet-600/30 border-violet-500 text-violet-200' : 'bg-slate-955 border-slate-800 text-slate-500 hover:text-slate-300'}`}
+                    >
+                      Title / Artist (CJK)
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <label className="flex items-center space-x-2.5 cursor-pointer">
                 <input
@@ -1136,20 +1184,30 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
                 </span>
               </div>
 
-              {/* Batch Artist & Diff Buttons */}
-              <div className="flex items-center space-x-2">
+              {/* Toolbar Buttons: Swap, Batch Set Artist, Diff */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  onClick={handleSwapArtistAndTitle}
+                  disabled={filteredTracks.length === 0}
+                  className="text-xs font-bold px-2.5 py-1.5 rounded-lg border bg-indigo-600/20 border-indigo-500/40 text-indigo-300 hover:bg-indigo-600 hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1"
+                  title="Swap Artist and Title fields for selected tracks"
+                >
+                  <ArrowLeftRight size={13} />
+                  <span>Swap Artist/Title</span>
+                </button>
+
                 <button
                   onClick={() => setBatchArtistModalOpen(true)}
                   disabled={filteredTracks.length === 0}
-                  className="text-xs font-bold px-3 py-1.5 rounded-lg border bg-violet-600/20 border-violet-500/40 text-violet-300 hover:bg-violet-600 hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1.5"
+                  className="text-xs font-bold px-2.5 py-1.5 rounded-lg border bg-violet-600/20 border-violet-500/40 text-violet-300 hover:bg-violet-600 hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1"
                 >
                   <UserCheck size={13} />
-                  <span>Batch Set Artist</span>
+                  <span>Batch Artist</span>
                 </button>
 
                 <button
                   onClick={() => setShowDiffPreview(!showDiffPreview)}
-                  className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${showDiffPreview ? 'bg-violet-600 border-violet-500 text-white shadow shadow-violet-950/40' : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'}`}
+                  className={`text-xs font-bold px-2.5 py-1.5 rounded-lg border transition-all ${showDiffPreview ? 'bg-violet-600 border-violet-500 text-white shadow shadow-violet-950/40' : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'}`}
                 >
                   {showDiffPreview ? 'Raw Diff' : 'Raw Diff'}
                 </button>
@@ -1183,7 +1241,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
 
             {/* Search Filter & Bulk Selections */}
             <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-800/60">
-              <div className="flex items-center space-x-2 bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 flex-1 min-w-[140px]">
+              <div className="flex items-center space-x-2 bg-slate-955 border border-slate-800 rounded-lg px-2.5 py-1.5 flex-1 min-w-[140px]">
                 <Search size={14} className="text-slate-500" />
                 <input
                   type="text"
@@ -1231,7 +1289,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
                         type="text"
                         value={t.cleanedTitle}
                         onChange={e => updateTrackTitle(t.id, e.target.value)}
-                        className="w-full bg-transparent text-xs font-bold text-slate-100 outline-none focus:bg-slate-950 focus:px-2 focus:py-0.5 focus:rounded border border-transparent focus:border-violet-500/50 truncate transition-all"
+                        className="w-full bg-transparent text-xs font-bold text-slate-100 outline-none focus:bg-slate-955 focus:px-2 focus:py-0.5 focus:rounded border border-transparent focus:border-violet-500/50 truncate transition-all"
                       />
 
                       {/* Editable Cleaned Artist */}
@@ -1241,7 +1299,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
                           value={t.cleanedArtist}
                           onChange={e => updateTrackArtist(t.id, e.target.value)}
                           placeholder="[Excluded Artist]"
-                          className="bg-transparent text-[11px] font-semibold text-violet-300 outline-none focus:bg-slate-950 focus:px-1.5 focus:rounded border border-transparent focus:border-violet-500/50 truncate max-w-[200px]"
+                          className="bg-transparent text-[11px] font-semibold text-violet-300 outline-none focus:bg-slate-955 focus:px-1.5 focus:rounded border border-transparent focus:border-violet-500/50 truncate max-w-[200px]"
                         />
                         {t.views && <span>• {t.views}</span>}
                         {t.age && <span>• {t.age}</span>}
@@ -1249,7 +1307,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
 
                       {/* Raw Diff Preview */}
                       {showDiffPreview && (
-                        <div className="text-[9px] font-mono text-slate-500 truncate bg-slate-950/80 p-1 rounded border border-slate-850 mt-1">
+                        <div className="text-[9px] font-mono text-slate-500 truncate bg-slate-955/80 p-1 rounded border border-slate-850 mt-1">
                           <span className="text-rose-400">RAW: </span>{t.originalTitle}
                         </div>
                       )}
@@ -1354,7 +1412,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
                 value={newPresetName}
                 onChange={e => setNewPresetName(e.target.value)}
                 placeholder="e.g. My Anime OP Channel Rules"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-200 outline-none focus:border-violet-500 transition-colors"
+                className="w-full bg-slate-955 border border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-200 outline-none focus:border-violet-500 transition-colors"
               />
             </div>
 
@@ -1401,7 +1459,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
                   value={batchArtistInput}
                   onChange={e => setBatchArtistInput(e.target.value)}
                   placeholder="e.g. Lavt or leave empty to exclude"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-200 outline-none focus:border-violet-500 transition-colors"
+                  className="w-full bg-slate-955 border border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-200 outline-none focus:border-violet-500 transition-colors"
                 />
               </div>
 
