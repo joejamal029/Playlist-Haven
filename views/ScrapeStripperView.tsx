@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { ArrowLeft, Scissors, Download, Copy, Search, RefreshCcw, CheckSquare, Square, FileText, FileSpreadsheet, Music, SlidersHorizontal, Sparkles, Plus, Trash2, Check, Wand2, Filter, Columns, ShieldCheck } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { ArrowLeft, Scissors, Download, Copy, Search, RefreshCcw, CheckSquare, Square, FileText, FileSpreadsheet, Music, SlidersHorizontal, Sparkles, Plus, Trash2, Check, Wand2, Filter, Columns, ShieldCheck, Bookmark, Save, UserCheck, X } from 'lucide-react';
 import { downloadPlaylistFile } from '../services/downloadHelper';
 
 interface ScrapeStripperViewProps {
@@ -19,7 +19,92 @@ export interface ParsedScrapeTrack {
   selected: boolean;
 }
 
+export interface StripperPreset {
+  id: string;
+  name: string;
+  customKeywords: string;
+  stripHD: boolean;
+  stripMV: boolean;
+  stripLyrics: boolean;
+  stripAudioQuality: boolean;
+  stripSquareBrackets: boolean;
+  stripCJKBrackets: boolean;
+  stripParenthesesTags: boolean;
+  stripSymbols: boolean;
+  autoSplitDelimiter: boolean;
+  enableSmartTitleCase: boolean;
+  enableFeatNormalizer: boolean;
+}
+
 type ScrapeModule = 'autodetect' | 'channel' | 'playlist';
+
+// Built-in Default Presets
+const DEFAULT_PRESETS: StripperPreset[] = [
+  {
+    id: 'preset_standard',
+    name: 'Standard Music Clean',
+    customKeywords: 'hd, 4k, theme song, 1080p',
+    stripHD: true,
+    stripMV: true,
+    stripLyrics: true,
+    stripAudioQuality: true,
+    stripSquareBrackets: true,
+    stripCJKBrackets: true,
+    stripParenthesesTags: true,
+    stripSymbols: true,
+    autoSplitDelimiter: true,
+    enableSmartTitleCase: false,
+    enableFeatNormalizer: true,
+  },
+  {
+    id: 'preset_anime',
+    name: 'Anime & CJK Channels',
+    customKeywords: 'op, ed, theme song, ost, full, tv size',
+    stripHD: true,
+    stripMV: true,
+    stripLyrics: true,
+    stripAudioQuality: true,
+    stripSquareBrackets: true,
+    stripCJKBrackets: true,
+    stripParenthesesTags: false,
+    stripSymbols: true,
+    autoSplitDelimiter: true,
+    enableSmartTitleCase: false,
+    enableFeatNormalizer: true,
+  },
+  {
+    id: 'preset_remix',
+    name: 'DJ Remix & EDM',
+    customKeywords: 'remix, bootleg, edit, mix, dj, club mix, extended',
+    stripHD: true,
+    stripMV: true,
+    stripLyrics: false,
+    stripAudioQuality: true,
+    stripSquareBrackets: true,
+    stripCJKBrackets: false,
+    stripParenthesesTags: false,
+    stripSymbols: true,
+    autoSplitDelimiter: true,
+    enableSmartTitleCase: true,
+    enableFeatNormalizer: true,
+  },
+  {
+    id: 'preset_strict',
+    name: 'Strict Clean (Title Only)',
+    customKeywords: 'hd, 4k, official, video, audio, mv, lyrics, live',
+    stripHD: true,
+    stripMV: true,
+    stripLyrics: true,
+    stripAudioQuality: true,
+    stripSquareBrackets: true,
+    stripCJKBrackets: true,
+    stripParenthesesTags: true,
+    stripSymbols: true,
+    autoSplitDelimiter: false,
+    enableSmartTitleCase: true,
+    enableFeatNormalizer: false,
+  }
+];
 
 // Sample scrape datasets for quick 1-click demonstration
 const SAMPLE_CHANNEL_SCRAPE = `3:36
@@ -102,11 +187,52 @@ function parseDurationSeconds(durationStr: string): number {
   return 0;
 }
 
+function toSmartTitleCase(str: string): string {
+  if (!str) return '';
+  const lowercaseWords = new Set(['a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'in', 'nor', 'of', 'on', 'or', 'so', 'the', 'to', 'up', 'yet', 'v', 'vs', 'ft', 'feat']);
+  const acronyms = new Set(['dj', 'mc', 'op', 'ed', 'mv', 'hd', '4k', 'tv', 'ost', 'ep', 'lp', 'remix']);
+
+  return str
+    .split(/\s+/)
+    .map((word, index, arr) => {
+      const lower = word.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (acronyms.has(lower)) {
+        return word.toUpperCase();
+      }
+      if (index > 0 && index < arr.length - 1 && lowercaseWords.has(lower)) {
+        return word.toLowerCase();
+      }
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(' ');
+}
+
+function normalizeFeaturedArtists(title: string, artist: string): { title: string; artist: string } {
+  let cleanedTitle = title;
+  let cleanedArtist = artist;
+
+  const featRegex = /(?:\(|\[)?\s*(?:feat\.?|ft\.?|featuring)\s+([^\]\)]+)(?:\)|\])?/gi;
+  const match = featRegex.exec(cleanedTitle);
+
+  if (match) {
+    const featuredPerson = match[1].trim();
+    cleanedTitle = cleanedTitle.replace(featRegex, '').trim();
+    if (cleanedArtist && cleanedArtist !== 'Unknown Artist') {
+      if (!cleanedArtist.toLowerCase().includes(featuredPerson.toLowerCase())) {
+        cleanedArtist = `${cleanedArtist} feat. ${featuredPerson}`;
+      }
+    } else {
+      cleanedArtist = `feat. ${featuredPerson}`;
+    }
+  }
+
+  return { title: cleanedTitle, artist: cleanedArtist };
+}
+
 // Standardized Unified Scrape Parser (Backward compatible with manual & automated scrapes)
 function parseStandardizedScrape(text: string, excludeRecommendations: boolean = true): ParsedScrapeTrack[] {
   let mainText = text;
 
-  // 1. Truncate at recommendations section if excludeRecommendations enabled
   if (excludeRecommendations) {
     const recsRegex = /\b(Recommended videos|Recommended playlists|Related videos|You might also like|People also watched)\b/i;
     const recMatch = text.search(recsRegex);
@@ -124,7 +250,6 @@ function parseStandardizedScrape(text: string, excludeRecommendations: boolean =
   const isViewsAgeCombined = (str: string) => /views\s*•/i.test(str) || (str.includes('views') && isAge(str));
   const isBullet = (str: string) => str === '•';
 
-  // Filter out top navigation & sidebar headers
   const isHeaderNoise = (str: string) => {
     if (!str) return true;
     if (str === 'true' || str === 'Now playing' || str === 'Play all' || str === 'Shuffle' || str === 'Skip navigation' || str === 'Create') return true;
@@ -230,7 +355,7 @@ function parseStandardizedScrape(text: string, excludeRecommendations: boolean =
       }
     }
 
-    // Pattern 2: Items without leading duration line (e.g. Title, Channel, •, Views • Age)
+    // Pattern 2: Items without leading duration line
     let lookAhead = i;
     let candidateTitle = lines[lookAhead];
     lookAhead++;
@@ -242,7 +367,7 @@ function parseStandardizedScrape(text: string, excludeRecommendations: boolean =
       lookAhead++;
     }
 
-    while (lookAhead < lines.length && (lines[lookAhead] === '' || isBullet(lines[lookAhead]))) lookAhead++;
+    while (lookAhead < lines.length && (lookAhead < lines.length && isBullet(lines[lookAhead]) || lines[lookAhead] === '')) lookAhead++;
 
     if (lookAhead < lines.length && (isViewsAgeCombined(lines[lookAhead]) || isViews(lines[lookAhead]) || isAge(lines[lookAhead]))) {
       let views = '';
@@ -290,6 +415,17 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
   const [showDiffPreview, setShowDiffPreview] = useState<boolean>(false);
   const [copiedNotification, setCopiedNotification] = useState<boolean>(false);
 
+  // Custom Presets State
+  const [presets, setPresets] = useState<StripperPreset[]>(DEFAULT_PRESETS);
+  const [selectedPresetId, setSelectedPresetId] = useState<string>('preset_standard');
+  const [savePresetModalOpen, setSavePresetModalOpen] = useState<boolean>(false);
+  const [newPresetName, setNewPresetName] = useState<string>('');
+
+  // Batch Set Artist Modal State
+  const [batchArtistModalOpen, setBatchArtistModalOpen] = useState<boolean>(false);
+  const [batchArtistInput, setBatchArtistInput] = useState<string>('');
+  const [batchTargetScope, setBatchTargetScope] = useState<'selected' | 'all'>('selected');
+
   // Power Tool Filters & Exclusions
   const [excludeRecommendations, setExcludeRecommendations] = useState<boolean>(true);
   const [stripHD, setStripHD] = useState<boolean>(true);
@@ -300,12 +436,10 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
   const [stripCJKBrackets, setStripCJKBrackets] = useState<boolean>(true);
   const [stripParenthesesTags, setStripParenthesesTags] = useState<boolean>(true);
   const [stripSymbols, setStripSymbols] = useState<boolean>(true);
-
-  // Custom User Exclusion Keywords
   const [customKeywords, setCustomKeywords] = useState<string>('hd, 4k, theme song, 1080p');
-
-  // Auto Splitter Settings
   const [autoSplitDelimiter, setAutoSplitDelimiter] = useState<boolean>(true);
+  const [enableSmartTitleCase, setEnableSmartTitleCase] = useState<boolean>(false);
+  const [enableFeatNormalizer, setEnableFeatNormalizer] = useState<boolean>(true);
 
   // Export Column Chooser Selection States
   const [exportColTitle, setExportColTitle] = useState<boolean>(true);
@@ -314,48 +448,105 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
   const [exportColViews, setExportColViews] = useState<boolean>(true);
   const [exportColAge, setExportColAge] = useState<boolean>(true);
 
-  // Default Keyword Presets list built dynamically
+  // Load custom presets from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('playlist_haven_stripper_presets');
+      if (saved) {
+        const customList: StripperPreset[] = JSON.parse(saved);
+        setPresets([...DEFAULT_PRESETS, ...customList]);
+      }
+    } catch (e) {
+      console.error('Failed to load presets from localStorage', e);
+    }
+  }, []);
+
+  // Save preset to localStorage
+  const handleSavePreset = () => {
+    if (!newPresetName.trim()) return;
+    const newPreset: StripperPreset = {
+      id: generateId(),
+      name: newPresetName.trim(),
+      customKeywords,
+      stripHD,
+      stripMV,
+      stripLyrics,
+      stripAudioQuality,
+      stripSquareBrackets,
+      stripCJKBrackets,
+      stripParenthesesTags,
+      stripSymbols,
+      autoSplitDelimiter,
+      enableSmartTitleCase,
+      enableFeatNormalizer
+    };
+
+    const updatedCustoms = presets.filter(p => !DEFAULT_PRESETS.some(d => d.id === p.id)).concat(newPreset);
+    try {
+      localStorage.setItem('playlist_haven_stripper_presets', JSON.stringify(updatedCustoms));
+    } catch (e) {
+      console.error('Failed to save preset to localStorage', e);
+    }
+
+    setPresets([...DEFAULT_PRESETS, ...updatedCustoms]);
+    setSelectedPresetId(newPreset.id);
+    setNewPresetName('');
+    setSavePresetModalOpen(false);
+  };
+
+  const handleApplyPreset = (presetId: string) => {
+    setSelectedPresetId(presetId);
+    const p = presets.find(pr => pr.id === presetId);
+    if (!p) return;
+
+    setCustomKeywords(p.customKeywords);
+    setStripHD(p.stripHD);
+    setStripMV(p.stripMV);
+    setStripLyrics(p.stripLyrics);
+    setStripAudioQuality(p.stripAudioQuality);
+    setStripSquareBrackets(p.stripSquareBrackets);
+    setStripCJKBrackets(p.stripCJKBrackets);
+    setStripParenthesesTags(p.stripParenthesesTags);
+    setStripSymbols(p.stripSymbols);
+    setAutoSplitDelimiter(p.autoSplitDelimiter);
+    setEnableSmartTitleCase(p.enableSmartTitleCase);
+    setEnableFeatNormalizer(p.enableFeatNormalizer);
+  };
+
+  const handleDeleteCustomPreset = (presetId: string) => {
+    if (DEFAULT_PRESETS.some(d => d.id === presetId)) return;
+    const filtered = presets.filter(p => p.id !== presetId);
+    const customOnly = filtered.filter(p => !DEFAULT_PRESETS.some(d => d.id === p.id));
+    try {
+      localStorage.setItem('playlist_haven_stripper_presets', JSON.stringify(customOnly));
+    } catch (e) {
+      console.error('Failed to update presets in localStorage', e);
+    }
+    setPresets(filtered);
+    setSelectedPresetId('preset_standard');
+    handleApplyPreset('preset_standard');
+  };
+
+  // Active Exclusion Keywords
   const activeExclusionKeywords = useMemo(() => {
     const keywords: string[] = [];
-    if (stripHD) {
-      keywords.push('hd', '4k', '1080p', '720p', 'uhd', '2k');
-    }
-    if (stripMV) {
-      keywords.push(
-        'official video', 'official music video', 'official visualizer', 'official audio',
-        'lyric video', 'visualizer', 'explicit version', 'mv', 'official mv', 'audio'
-      );
-    }
-    if (stripLyrics) {
-      keywords.push(
-        'lyrics', 'subtitles', '新歌字幕', '歌詞字幕', '歌詞', '動態歌詞',
-        '動態歌詞lyrics', 'lyrics video', 'sub'
-      );
-    }
-    if (stripAudioQuality) {
-      keywords.push(
-        '新歌', '完整高清音質', '完整高音質', '經典原曲', '高清音質無現場雜音版',
-        '完整搶聽版', '高音質', '高清音質', '無現場雜音版'
-      );
-    }
+    if (stripHD) keywords.push('hd', '4k', '1080p', '720p', 'uhd', '2k');
+    if (stripMV) keywords.push('official video', 'official music video', 'official visualizer', 'official audio', 'lyric video', 'visualizer', 'explicit version', 'mv', 'official mv', 'audio');
+    if (stripLyrics) keywords.push('lyrics', 'subtitles', '新歌字幕', '歌詞字幕', '歌詞', '動態歌詞', '動態歌詞lyrics', 'lyrics video', 'sub');
+    if (stripAudioQuality) keywords.push('新歌', '完整高清音質', '完整高音質', '經典原曲', '高清音質無現場雜音版', '完整搶聽版', '高音質', '高清音質', '無現場雜音版');
 
-    // Add user custom keywords
     if (customKeywords) {
-      const userKws = customKeywords
-        .split(/[,;\n]/)
-        .map(k => k.trim())
-        .filter(k => k.length > 0);
+      const userKws = customKeywords.split(/[,;\n]/).map(k => k.trim()).filter(k => k.length > 0);
       keywords.push(...userKws);
     }
-
     return Array.from(new Set(keywords));
   }, [stripHD, stripMV, stripLyrics, stripAudioQuality, customKeywords]);
 
-  // Clean title & split artist logic with unescaping support
+  // Clean title & split artist logic with unescaping & smart normalizers
   const cleanTitleAndArtist = (rawTitle: string, initialArtist: string) => {
     let text = rawTitle;
 
-    // 1. Unescape markdown / raw escape characters
+    // 1. Unescape markdown / escape characters
     text = text.replace(/\\&/g, '&');
     text = text.replace(/\\\[/g, '[');
     text = text.replace(/\\\]/g, ']');
@@ -379,7 +570,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
       text = text.replace(/[♫♪★☆▶️]/g, ' ');
     }
 
-    // 4. Keyword replacements (case-insensitive)
+    // 4. Keyword replacements
     for (const kw of activeExclusionKeywords) {
       if (!kw.trim()) continue;
       const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -387,17 +578,15 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
       text = text.replace(regex, ' ');
     }
 
-    // 5. Remove empty brackets left behind
+    // 5. Remove empty brackets
     text = text.replace(/\(\s*\)/g, ' ');
     text = text.replace(/\[\s*\]/g, ' ');
     text = text.replace(/【\s*】/g, ' ');
 
     if (stripParenthesesTags) {
-      // Remove common parenthetical video tags if left over
       text = text.replace(/\(\s*(official|music|video|visualizer|audio|hd|4k|lyric|lyrics)\s*\)/gi, ' ');
     }
 
-    // Remove any lingering slashes or double backslashes
     text = text.replace(/\\/g, ' ');
     text = text.replace(/\/\s*\//g, ' ');
 
@@ -421,6 +610,18 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
       }
     }
 
+    // Smart Featured Artist Normalizer
+    if (enableFeatNormalizer) {
+      const norm = normalizeFeaturedArtists(finalTitle, finalArtist);
+      finalTitle = norm.title;
+      finalArtist = norm.artist;
+    }
+
+    // Smart Title Case
+    if (enableSmartTitleCase && finalTitle) {
+      finalTitle = toSmartTitleCase(finalTitle);
+    }
+
     return { title: finalTitle || rawTitle, artist: finalArtist || 'Unknown Artist' };
   };
 
@@ -432,7 +633,6 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
 
     const parsed = parseStandardizedScrape(inputRawText, excludeRecommendations);
 
-    // Apply cleaning
     const cleaned = parsed.map(track => {
       const { title, artist } = cleanTitleAndArtist(track.originalTitle, track.originalArtist);
       return {
@@ -486,7 +686,9 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
     stripParenthesesTags,
     stripSymbols,
     activeExclusionKeywords,
-    autoSplitDelimiter
+    autoSplitDelimiter,
+    enableSmartTitleCase,
+    enableFeatNormalizer
   ]);
 
   const filteredTracks = useMemo(() => {
@@ -520,7 +722,19 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
     setParsedTracks(prev => prev.map(t => t.id === id ? { ...t, cleanedArtist: newArtist } : t));
   };
 
-  // Export handlers with UTF-8 BOM (\uFEFF) and column selection support
+  // Batch Set Artist Action
+  const applyBatchSetArtist = () => {
+    const targetVal = batchArtistInput.trim() || '';
+    setParsedTracks(prev =>
+      prev.map(t => {
+        if (batchTargetScope === 'selected' && !t.selected) return t;
+        return { ...t, cleanedArtist: targetVal };
+      })
+    );
+    setBatchArtistModalOpen(false);
+  };
+
+  // Export handlers
   const handleExportCSV = async () => {
     const targets = processedTracks.filter(t => t.selected);
     if (targets.length === 0) return;
@@ -607,8 +821,12 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
 
     let content = '\uFEFF#EXTM3U\n';
     for (const t of targets) {
-      content += `#EXTINF:${t.durationSeconds},${t.cleanedArtist} - ${t.cleanedTitle}\n`;
-      content += `${t.cleanedArtist} - ${t.cleanedTitle}.mp3\n`;
+      const artistPart = exportColArtist ? t.cleanedArtist : '';
+      const titlePart = exportColTitle ? t.cleanedTitle : t.cleanedTitle;
+      const displayLabel = artistPart ? `${artistPart} - ${titlePart}` : titlePart;
+
+      content += `#EXTINF:${t.durationSeconds},${displayLabel}\n`;
+      content += `${displayLabel}.mp3\n`;
     }
 
     await downloadPlaylistFile(content, 'cleaned_scrape.m3u', 'audio/x-mpegurl');
@@ -651,10 +869,10 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
                 Scrape Stripper & Formatter
               </h2>
               <span className="text-[9px] bg-violet-500/20 text-violet-300 border border-violet-500/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                Standardized Engine
+                Power Engine v3.0
               </span>
             </div>
-            <p className="text-[10px] text-slate-500 font-medium">Standardized parser for manual & automated scrapes with noise/recommendation filters</p>
+            <p className="text-[10px] text-slate-500 font-medium">Custom presets, smart metadata normalizers & batch artist manager</p>
           </div>
         </div>
 
@@ -682,6 +900,47 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
         {/* Left Column: Input & Power Tool Options (5 cols) */}
         <div className="lg:col-span-5 space-y-5">
           
+          {/* Preset Selector Card */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-2">
+                <Bookmark size={14} className="text-violet-400" />
+                <span>Custom Rule Presets</span>
+              </label>
+              <button
+                onClick={() => setSavePresetModalOpen(true)}
+                className="text-[10px] font-bold bg-violet-500/15 text-violet-300 hover:bg-violet-500/30 border border-violet-500/30 px-2.5 py-1 rounded-md transition-colors flex items-center space-x-1"
+              >
+                <Save size={12} />
+                <span>Save Preset</span>
+              </button>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <select
+                value={selectedPresetId}
+                onChange={e => handleApplyPreset(e.target.value)}
+                className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-violet-200 outline-none focus:border-violet-500 transition-colors cursor-pointer"
+              >
+                {presets.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} {DEFAULT_PRESETS.some(d => d.id === p.id) ? '(Built-in)' : '(Custom)'}
+                  </option>
+                ))}
+              </select>
+
+              {!DEFAULT_PRESETS.some(d => d.id === selectedPresetId) && (
+                <button
+                  onClick={() => handleDeleteCustomPreset(selectedPresetId)}
+                  className="p-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-xl border border-rose-500/20 transition-colors"
+                  title="Delete Custom Preset"
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Input Box & File Upload Card */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
             <div className="flex items-center justify-between">
@@ -714,8 +973,8 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
             <textarea
               value={rawText}
               onChange={(e) => handleTextChange(e.target.value)}
-              placeholder="Paste raw channel scrape or playlist scrape text here (manual or automated scrapes)..."
-              rows={7}
+              placeholder="Paste raw channel scrape or playlist scrape text here..."
+              rows={6}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono text-slate-200 placeholder:text-slate-600 outline-none focus:border-violet-500/60 transition-colors custom-scrollbar resize-none"
             />
 
@@ -763,7 +1022,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
                     <ShieldCheck size={14} className="text-violet-400" />
                     <span className="text-xs font-bold text-violet-200">Exclude Recommendations & Top Headers</span>
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-0.5">Filters out YouTube sidebar clutter and truncates at 'Recommended videos/playlists'</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Filters out YouTube sidebar clutter and truncates at 'Recommended'</p>
                 </div>
               </label>
             </div>
@@ -818,8 +1077,8 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
               />
             </div>
 
-            {/* Auto Delimiter Splitter */}
-            <div className="pt-2 border-t border-slate-800/80">
+            {/* Smart Metadata Normalizers & Auto Splitter */}
+            <div className="pt-2 border-t border-slate-800/80 space-y-2">
               <label className="flex items-center space-x-2.5 cursor-pointer">
                 <input
                   type="checkbox"
@@ -830,6 +1089,32 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
                 <div>
                   <span className="text-xs font-bold text-slate-200">Auto-Split Artist & Title</span>
                   <p className="text-[10px] text-slate-500">Splits titles containing ' - ', ' – ', '—', ' / ', or ' | '</p>
+                </div>
+              </label>
+
+              <label className="flex items-center space-x-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={enableFeatNormalizer}
+                  onChange={e => setEnableFeatNormalizer(e.target.checked)}
+                  className="accent-violet-500 rounded w-4 h-4"
+                />
+                <div>
+                  <span className="text-xs font-bold text-slate-200">Smart Featured Artist Normalizer</span>
+                  <p className="text-[10px] text-slate-500">Extracts 'feat.' / 'ft.' from title into Artist field cleanly</p>
+                </div>
+              </label>
+
+              <label className="flex items-center space-x-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={enableSmartTitleCase}
+                  onChange={e => setEnableSmartTitleCase(e.target.checked)}
+                  className="accent-violet-500 rounded w-4 h-4"
+                />
+                <div>
+                  <span className="text-xs font-bold text-slate-200">Smart Title Case</span>
+                  <p className="text-[10px] text-slate-500">Normalizes capitalization (keeps DJ, MC, OP, ED, MV in uppercase)</p>
                 </div>
               </label>
             </div>
@@ -851,13 +1136,24 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
                 </span>
               </div>
 
-              {/* Diff Preview Toggle */}
-              <button
-                onClick={() => setShowDiffPreview(!showDiffPreview)}
-                className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${showDiffPreview ? 'bg-violet-600 border-violet-500 text-white shadow shadow-violet-950/40' : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'}`}
-              >
-                {showDiffPreview ? 'Showing Raw Diff' : 'Show Raw Diff'}
-              </button>
+              {/* Batch Artist & Diff Buttons */}
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setBatchArtistModalOpen(true)}
+                  disabled={filteredTracks.length === 0}
+                  className="text-xs font-bold px-3 py-1.5 rounded-lg border bg-violet-600/20 border-violet-500/40 text-violet-300 hover:bg-violet-600 hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1.5"
+                >
+                  <UserCheck size={13} />
+                  <span>Batch Set Artist</span>
+                </button>
+
+                <button
+                  onClick={() => setShowDiffPreview(!showDiffPreview)}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${showDiffPreview ? 'bg-violet-600 border-violet-500 text-white shadow shadow-violet-950/40' : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'}`}
+                >
+                  {showDiffPreview ? 'Raw Diff' : 'Raw Diff'}
+                </button>
+              </div>
             </div>
 
             {/* Export Column Selection Pills */}
@@ -944,6 +1240,7 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
                           type="text"
                           value={t.cleanedArtist}
                           onChange={e => updateTrackArtist(t.id, e.target.value)}
+                          placeholder="[Excluded Artist]"
                           className="bg-transparent text-[11px] font-semibold text-violet-300 outline-none focus:bg-slate-950 focus:px-1.5 focus:rounded border border-transparent focus:border-violet-500/50 truncate max-w-[200px]"
                         />
                         {t.views && <span>• {t.views}</span>}
@@ -1033,6 +1330,119 @@ export default function ScrapeStripperView({ onBack }: ScrapeStripperViewProps) 
         </div>
 
       </div>
+
+      {/* Save Custom Preset Modal */}
+      {savePresetModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-955/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-2 text-violet-400">
+                <Bookmark size={18} />
+                <h3 className="text-sm font-bold text-slate-200">Save Custom Rule Preset</h3>
+              </div>
+              <button onClick={() => setSavePresetModalOpen(false)} className="text-slate-500 hover:text-slate-300">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                Preset Name
+              </label>
+              <input
+                type="text"
+                value={newPresetName}
+                onChange={e => setNewPresetName(e.target.value)}
+                placeholder="e.g. My Anime OP Channel Rules"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-200 outline-none focus:border-violet-500 transition-colors"
+              />
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-2">
+              <button
+                onClick={() => setSavePresetModalOpen(false)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-750 text-slate-400 text-xs font-bold rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSavePreset}
+                disabled={!newPresetName.trim()}
+                className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold rounded-xl transition-colors disabled:opacity-40"
+              >
+                Save Preset
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Set Artist Modal */}
+      {batchArtistModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-955/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-2 text-violet-400">
+                <UserCheck size={18} />
+                <h3 className="text-sm font-bold text-slate-200">Batch Set / Override Artist</h3>
+              </div>
+              <button onClick={() => setBatchArtistModalOpen(false)} className="text-slate-500 hover:text-slate-300">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                  Artist Name (Leave empty to exclude/clear artist)
+                </label>
+                <input
+                  type="text"
+                  value={batchArtistInput}
+                  onChange={e => setBatchArtistInput(e.target.value)}
+                  placeholder="e.g. Lavt or leave empty to exclude"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-200 outline-none focus:border-violet-500 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                  Apply Scope
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setBatchTargetScope('selected')}
+                    className={`py-2 rounded-xl text-xs font-bold border transition-all ${batchTargetScope === 'selected' ? 'bg-violet-600/30 border-violet-500 text-violet-200' : 'bg-slate-955 border-slate-800 text-slate-400'}`}
+                  >
+                    Selected ({selectedCount})
+                  </button>
+                  <button
+                    onClick={() => setBatchTargetScope('all')}
+                    className={`py-2 rounded-xl text-xs font-bold border transition-all ${batchTargetScope === 'all' ? 'bg-violet-600/30 border-violet-500 text-violet-200' : 'bg-slate-955 border-slate-800 text-slate-400'}`}
+                  >
+                    All Tracks ({parsedTracks.length})
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-2 border-t border-slate-800">
+              <button
+                onClick={() => setBatchArtistModalOpen(false)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-750 text-slate-400 text-xs font-bold rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={applyBatchSetArtist}
+                className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold rounded-xl transition-colors shadow-md shadow-violet-950/40"
+              >
+                Apply Artist
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
