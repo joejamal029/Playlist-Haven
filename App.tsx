@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layers, Merge, Music, Settings, Github, Activity, Scissors, Shuffle, Eraser, Type, BarChart3, Eye, Filter, SlidersHorizontal } from 'lucide-react';
+import { Layers, Merge, Music, Settings, Github, Activity, Scissors, Shuffle, Eraser, Type, BarChart3, Eye, Filter, SlidersHorizontal, Wand2 } from 'lucide-react';
 import SonicSieveView from './views/SonicSieveView';
 import PlaylistMergerView from './views/PlaylistMergerView';
 import PlaylistSplitterView from './views/PlaylistSplitterView';
@@ -11,8 +11,9 @@ import VisionToPlaylistView from './views/VisionToPlaylistView';
 import PlaylistManipulatorView from './views/PlaylistManipulatorView';
 import TierFilteringView from './views/TierFilteringView';
 import PlaylistMatcherView from './views/PlaylistMatcherView';
+import ScrapeStripperView from './views/ScrapeStripperView';
 
-type AppView = 'dashboard' | 'sieve' | 'merger' | 'splitter' | 'randomizer' | 'pruner' | 'renamer' | 'appearance' | 'vision' | 'tier' | 'manipulator' | 'matcher';
+type AppView = 'dashboard' | 'sieve' | 'merger' | 'splitter' | 'randomizer' | 'pruner' | 'renamer' | 'appearance' | 'vision' | 'tier' | 'manipulator' | 'matcher' | 'stripper';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<AppView>('dashboard');
@@ -41,6 +42,8 @@ export default function App() {
         return <PlaylistManipulatorView onBack={() => setCurrentView('dashboard')} />;
       case 'matcher':
         return <PlaylistMatcherView onBack={() => setCurrentView('dashboard')} />;
+      case 'stripper':
+        return <ScrapeStripperView onBack={() => setCurrentView('dashboard')} />;
       default:
         return <Dashboard onViewSelect={setCurrentView} />;
     }
@@ -102,6 +105,25 @@ const Dashboard = ({ onViewSelect }: { onViewSelect: (view: AppView) => void }) 
               <h2 className="text-xl font-bold text-slate-200 mb-1">Vision-to-Playlist</h2>
               <p className="text-xs text-slate-500 leading-relaxed font-medium">
                 AI Digitizer. Upload screenshots of playlists, extract songs, deduplicate, and export to CSV for Tune My Music.
+              </p>
+            </div>
+          </button>
+
+          {/* Scrape Stripper Card - Featured */}
+          <button 
+            onClick={() => onViewSelect('stripper')}
+            className="group relative overflow-hidden p-6 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-violet-500/50 hover:shadow-2xl hover:shadow-violet-900/10 active:scale-[0.98] col-span-2"
+          >
+            <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Wand2 size={80} />
+            </div>
+            <div className="relative z-10">
+              <div className="w-10 h-10 bg-violet-500/20 text-violet-400 rounded-xl flex items-center justify-center mb-4 group-hover:bg-violet-500 group-hover:text-white transition-colors">
+                <Wand2 size={20} />
+              </div>
+              <h2 className="text-xl font-bold text-slate-200 mb-1">Scrape Stripper & Formatter</h2>
+              <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                Parse channel & playlist scrapes. Exclude noise tags (HD, 4K, Official Video), auto-split artists, and convert to clean CSV, TSV, TXT, or M3U.
               </p>
             </div>
           </button>
