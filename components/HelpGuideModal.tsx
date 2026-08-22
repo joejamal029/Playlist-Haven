@@ -668,9 +668,6 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
                   <h2 className="text-lg font-black bg-gradient-to-r from-violet-300 via-indigo-200 to-cyan-300 bg-clip-text text-transparent">
                     Playlist Haven User Guide & Philosophy
                   </h2>
-                  <span className="text-[9px] bg-violet-500/20 text-violet-300 border border-violet-500/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono">
-                    ? Reference
-                  </span>
                 </div>
                 <p className="text-[11px] text-slate-500 font-medium">Master the Experience Engine, tools, and streaming bridge</p>
               </div>
