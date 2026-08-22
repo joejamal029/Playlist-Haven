@@ -54,6 +54,14 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
     };
   }, [isOpen, onClose]);
 
+  const openExternal = (url: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   const toggleTopic = (id: string) => {
     setExpandedTopics(prev => ({
       ...prev,
@@ -163,15 +171,13 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
               <p className="text-[11px] text-slate-400">
                 In-depth essays on listening autonomy, intentional curation, and audio philosophy.
               </p>
-              <a
-                href={SUBSTACK_BLOG_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center space-x-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 px-3 py-1.5 rounded-lg font-black text-xs transition-colors shadow-md shadow-amber-950/40"
+              <button
+                onClick={(e) => openExternal(SUBSTACK_BLOG_URL, e)}
+                className="flex items-center justify-center space-x-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 px-3 py-1.5 rounded-lg font-black text-xs transition-colors shadow-md shadow-amber-950/40 cursor-pointer"
               >
                 <span>Read on Substack</span>
                 <ExternalLink size={12} />
-              </a>
+              </button>
             </div>
 
             {/* GitHub Source Link Card */}
@@ -188,15 +194,13 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
               <p className="text-[11px] text-slate-400">
                 Full TypeScript + React codebase, Capacitor plugins, and parsing engines.
               </p>
-              <a
-                href={GITHUB_REPO_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center space-x-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white px-3 py-1.5 rounded-lg font-bold text-xs transition-colors border border-slate-700"
+              <button
+                onClick={(e) => openExternal(GITHUB_REPO_URL, e)}
+                className="flex items-center justify-center space-x-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white px-3 py-1.5 rounded-lg font-bold text-xs transition-colors border border-slate-700 cursor-pointer"
               >
                 <span>GitHub Repo</span>
                 <ExternalLink size={12} />
-              </a>
+              </button>
             </div>
 
             {/* GitHub Sponsor Link Card */}
@@ -213,16 +217,14 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
               <p className="text-[11px] text-slate-400">
                 Help sustain independent local-first audio tooling and feature development.
               </p>
-              <a
-                href={GITHUB_SPONSOR_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center space-x-1.5 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white px-3.5 py-1.5 rounded-lg font-bold text-xs transition-all shadow-md shadow-rose-950/40"
+              <button
+                onClick={(e) => openExternal(GITHUB_SPONSOR_URL, e)}
+                className="flex items-center justify-center space-x-1.5 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white px-3.5 py-1.5 rounded-lg font-bold text-xs transition-all shadow-md shadow-rose-950/40 cursor-pointer"
               >
                 <Heart size={12} className="fill-white" />
                 <span>Sponsor Project</span>
                 <ExternalLink size={12} />
-              </a>
+              </button>
             </div>
           </div>
         </div>
@@ -653,90 +655,95 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
       <div className="w-full max-w-4xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
         
         {/* Modal Header */}
-        <div className="p-5 border-b border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/90">
+        <div className="p-5 border-b border-slate-800 bg-slate-900/90 space-y-3">
           
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-violet-500/20 text-violet-400 rounded-2xl flex items-center justify-center border border-violet-500/30">
-              <HelpCircle size={22} />
-            </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <h2 className="text-lg font-black bg-gradient-to-r from-violet-300 via-indigo-200 to-cyan-300 bg-clip-text text-transparent">
-                  Playlist Haven User Guide & Philosophy
-                </h2>
-                <span className="text-[9px] bg-violet-500/20 text-violet-300 border border-violet-500/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono">
-                  ? Reference
-                </span>
+          {/* Top Row: Title, Reference Badge, and Header Action Buttons */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-violet-500/20 text-violet-400 rounded-2xl flex items-center justify-center border border-violet-500/30 shrink-0">
+                <HelpCircle size={22} />
               </div>
-              <p className="text-[11px] text-slate-500 font-medium">Master the Experience Engine, tools, and streaming bridge</p>
+              <div>
+                <div className="flex items-center space-x-2">
+                  <h2 className="text-lg font-black bg-gradient-to-r from-violet-300 via-indigo-200 to-cyan-300 bg-clip-text text-transparent">
+                    Playlist Haven User Guide & Philosophy
+                  </h2>
+                  <span className="text-[9px] bg-violet-500/20 text-violet-300 border border-violet-500/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono">
+                    ? Reference
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 font-medium">Master the Experience Engine, tools, and streaming bridge</p>
+              </div>
+            </div>
+
+            {/* Quick Header Actions: Blog, Sponsor, Source, ESC */}
+            <div className="flex items-center space-x-2 shrink-0">
+              
+              {/* Substack Blog Button */}
+              <button
+                type="button"
+                onClick={(e) => openExternal(SUBSTACK_BLOG_URL, e)}
+                className="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 hover:text-amber-200 rounded-xl border border-amber-500/30 transition-all flex items-center gap-1.5 text-xs font-bold shadow shadow-amber-950/30 cursor-pointer"
+                title="Read Beyond Shuffle & Algorithms on Substack"
+              >
+                <Bookmark size={13} className="text-amber-400 fill-amber-400/20" />
+                <span>Blog</span>
+              </button>
+
+              {/* GitHub Sponsors Button */}
+              <button
+                type="button"
+                onClick={(e) => openExternal(GITHUB_SPONSOR_URL, e)}
+                className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 rounded-xl border border-rose-500/30 transition-all flex items-center gap-1.5 text-xs font-bold shadow shadow-rose-950/30 cursor-pointer"
+                title="Sponsor on GitHub (joejamal029)"
+              >
+                <Heart size={13} className="text-rose-400 fill-rose-500/30" />
+                <span>Sponsor</span>
+              </button>
+
+              {/* GitHub Source Link Button */}
+              <button
+                type="button"
+                onClick={(e) => openExternal(GITHUB_REPO_URL, e)}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white rounded-xl border border-slate-700 transition-colors flex items-center gap-1.5 text-xs font-bold cursor-pointer"
+                title="Open GitHub Source Code (joejamal029/Playlist-Haven)"
+              >
+                <Github size={13} />
+                <span className="hidden sm:inline">Source</span>
+                <ExternalLink size={10} className="text-slate-400" />
+              </button>
+
+              {/* ESC Close Button */}
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-1.5 px-2.5 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition-colors border border-slate-800 font-mono text-xs flex items-center gap-1 cursor-pointer"
+                title="Close (ESC)"
+              >
+                <span>ESC</span>
+                <X size={15} />
+              </button>
             </div>
           </div>
 
-          {/* Search Input Bar & Top Links */}
-          <div className="flex items-center space-x-2 flex-1 max-w-lg">
-            <div className="flex items-center space-x-2 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 flex-1 focus-within:border-violet-500/60 transition-colors">
-              <Search size={15} className="text-slate-500 shrink-0" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search guide (e.g. substack, sponsor, bridge, scrape)..."
-                className="bg-transparent text-xs text-slate-200 placeholder:text-slate-600 outline-none w-full font-medium"
-                autoFocus
-              />
-              {searchQuery && (
-                <button onClick={() => setSearchQuery('')} className="text-slate-500 hover:text-slate-300 p-0.5">
-                  <X size={14} />
-                </button>
-              )}
-            </div>
-
-            {/* Substack Blog Button in Header */}
-            <a
-              href={SUBSTACK_BLOG_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 hover:text-amber-200 rounded-xl border border-amber-500/30 transition-all shrink-0 flex items-center gap-1.5 text-xs font-bold shadow shadow-amber-950/30"
-              title="Read Beyond Shuffle & Algorithms on Substack"
-            >
-              <Bookmark size={13} className="text-amber-400 fill-amber-400/20" />
-              <span className="hidden sm:inline">Blog</span>
-            </a>
-
-            {/* GitHub Sponsors Button in Header */}
-            <a
-              href={GITHUB_SPONSOR_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 rounded-xl border border-rose-500/30 transition-all shrink-0 flex items-center gap-1.5 text-xs font-bold shadow shadow-rose-950/30"
-              title="Sponsor the project on GitHub (joejamal029)"
-            >
-              <Heart size={13} className="text-rose-400 fill-rose-500/30" />
-              <span className="hidden sm:inline">Sponsor</span>
-            </a>
-
-            {/* GitHub Source Link Button in Header */}
-            <a
-              href={GITHUB_REPO_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-2 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white rounded-xl border border-slate-700 transition-colors shrink-0 flex items-center gap-1 text-xs font-bold"
-              title="Open GitHub Source Code (joejamal029/Playlist-Haven)"
-            >
-              <Github size={14} />
-              <span className="hidden sm:inline">Source</span>
-              <ExternalLink size={10} className="text-slate-400" />
-            </a>
-
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition-colors border border-slate-800 shrink-0 font-mono text-xs flex items-center gap-1"
-              title="Close (ESC)"
-            >
-              <span>ESC</span>
-              <X size={15} />
-            </button>
+          {/* Full-Width Search Input Bar */}
+          <div className="flex items-center space-x-2.5 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 focus-within:border-violet-500/60 transition-colors shadow-inner">
+            <Search size={16} className="text-slate-500 shrink-0" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search all guide topics, workflows, tools, and glossary (e.g. bridge, scrape, spotify, musicolet)..."
+              className="bg-transparent text-xs text-slate-200 placeholder:text-slate-500 outline-none w-full font-medium"
+              autoFocus
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="text-slate-500 hover:text-slate-300 p-1 cursor-pointer">
+                <X size={14} />
+              </button>
+            )}
           </div>
+
         </div>
 
         {/* Category Navigation Tabs (Hidden when searching to show unified results) */}
@@ -766,7 +773,7 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
             <span>Searching all guide topics for: <strong>"{searchQuery}"</strong> ({filteredTopics.length} matches)</span>
             <button
               onClick={() => setSearchQuery('')}
-              className="text-[11px] underline hover:text-white font-bold"
+              className="text-[11px] underline hover:text-white font-bold cursor-pointer"
             >
               Clear search & view categories
             </button>
@@ -777,9 +784,9 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
         <div className="px-5 py-2 bg-slate-900 border-b border-slate-850 flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider">
           <span>{filteredTopics.length} Topic{filteredTopics.length !== 1 ? 's' : ''} Available</span>
           <div className="flex items-center space-x-2">
-            <button onClick={expandAll} className="hover:text-violet-400 transition-colors">Expand All</button>
+            <button onClick={expandAll} className="hover:text-violet-400 transition-colors cursor-pointer">Expand All</button>
             <span>•</span>
-            <button onClick={collapseAll} className="hover:text-violet-400 transition-colors">Collapse All</button>
+            <button onClick={collapseAll} className="hover:text-violet-400 transition-colors cursor-pointer">Collapse All</button>
           </div>
         </div>
 
@@ -839,7 +846,7 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
                                 e.stopPropagation();
                                 setSearchQuery(tag);
                               }}
-                              className="text-[9px] font-mono bg-slate-900 text-slate-400 hover:text-violet-300 border border-slate-800 px-1.5 py-0.5 rounded transition-colors"
+                              className="text-[9px] font-mono bg-slate-900 text-slate-400 hover:text-violet-300 border border-slate-800 px-1.5 py-0.5 rounded transition-colors cursor-pointer"
                             >
                               #{tag}
                             </button>
@@ -860,7 +867,7 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
               </p>
               <button
                 onClick={() => setSearchQuery('')}
-                className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold rounded-xl transition-colors mt-2"
+                className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold rounded-xl transition-colors mt-2 cursor-pointer"
               >
                 Reset Search
               </button>
@@ -876,44 +883,41 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <a
-              href={SUBSTACK_BLOG_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center space-x-1.5 text-amber-400 hover:text-amber-300 transition-colors font-mono text-[11px]"
+            <button
+              type="button"
+              onClick={(e) => openExternal(SUBSTACK_BLOG_URL, e)}
+              className="flex items-center space-x-1.5 text-amber-400 hover:text-amber-300 transition-colors font-mono text-[11px] cursor-pointer"
             >
               <Bookmark size={12} className="fill-amber-400/30" />
               <span>Substack Blog</span>
-            </a>
+            </button>
 
             <span className="text-slate-700">•</span>
 
-            <a
-              href={GITHUB_SPONSOR_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center space-x-1.5 text-rose-400 hover:text-rose-300 transition-colors font-mono text-[11px]"
+            <button
+              type="button"
+              onClick={(e) => openExternal(GITHUB_SPONSOR_URL, e)}
+              className="flex items-center space-x-1.5 text-rose-400 hover:text-rose-300 transition-colors font-mono text-[11px] cursor-pointer"
             >
               <Heart size={12} className="fill-rose-400" />
               <span>Sponsor</span>
-            </a>
+            </button>
 
             <span className="text-slate-700">•</span>
 
-            <a
-              href={GITHUB_REPO_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center space-x-1.5 text-slate-400 hover:text-violet-300 transition-colors font-mono text-[11px]"
+            <button
+              type="button"
+              onClick={(e) => openExternal(GITHUB_REPO_URL, e)}
+              className="flex items-center space-x-1.5 text-slate-400 hover:text-violet-300 transition-colors font-mono text-[11px] cursor-pointer"
             >
               <Github size={13} />
               <span>GitHub</span>
               <ExternalLink size={10} />
-            </a>
+            </button>
 
             <button
               onClick={onClose}
-              className="px-4 py-1.5 bg-violet-600 hover:bg-violet-500 text-white font-bold rounded-xl transition-colors shadow shadow-violet-950/40 text-xs ml-1"
+              className="px-4 py-1.5 bg-violet-600 hover:bg-violet-500 text-white font-bold rounded-xl transition-colors shadow shadow-violet-950/40 text-xs ml-1 cursor-pointer"
             >
               Got it!
             </button>
