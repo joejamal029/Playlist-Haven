@@ -33,7 +33,6 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [expandedTopics, setExpandedTopics] = useState<Record<string, boolean>>({
     'why-experience-engine': true,
-    'why-source-code': true,
     'workflow-bridging-walled-gardens': true,
     'tool-scrape-stripper': true
   });
@@ -108,6 +107,30 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
           <p>
             <strong>Playlist Haven</strong> is the physical realization of the <strong>Experience Engine</strong>—a local-first Swiss Army Knife built to let you curate, sort, prune, sieve, and intentionally cultivate your music library with desktop-grade precision.
           </p>
+        </div>
+      )
+    },
+    {
+      id: 'why-bridging-walled-gardens',
+      category: 'why',
+      title: 'Bridging Walled Streaming Gardens (Spotify / YTM / Apple)',
+      badge: 'Streaming Bridge',
+      badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+      summary: 'Extend local desktop power tools directly to your live Spotify, Apple Music, and YouTube libraries.',
+      tags: ['spotify', 'youtube', 'tunemymusic', 'bridge', 'musify', 'export', 'csv'],
+      content: (
+        <div className="space-y-3 text-xs leading-relaxed text-slate-300">
+          <p>
+            Streaming services are walled gardens that forbid deep sorting, fuzzy cross-playlist deduplication, play-count sieving, or structural manipulation.
+          </p>
+          <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2 font-mono text-[11px]">
+            <div className="text-violet-400 font-bold">The Universal Extension Loop:</div>
+            <div className="text-slate-400 flex flex-col space-y-1">
+              <div>1. <strong>Extract:</strong> Export live playlists to CSV/TXT (via Tune My Music, Soundiiz, or Scrape Stripper).</div>
+              <div>2. <strong>Transform:</strong> Ingest into Playlist Haven to sieve by play-history, fuzzy cross-prune duplicates, or slice into equal parts.</div>
+              <div>3. <strong>Synchronize:</strong> Export clean UTF-8 CSVs back to Spotify/YTM or route directly to Musify & Musicolet.</div>
+            </div>
+          </div>
         </div>
       )
     },
@@ -194,36 +217,12 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
                 href={GITHUB_SPONSOR_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center space-x-1.5 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white px-3 py-1.5 rounded-lg font-bold text-xs transition-all shadow-md shadow-rose-950/40"
+                className="flex items-center justify-center space-x-1.5 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white px-3.5 py-1.5 rounded-lg font-bold text-xs transition-all shadow-md shadow-rose-950/40"
               >
                 <Heart size={12} className="fill-white" />
                 <span>Sponsor Project</span>
                 <ExternalLink size={12} />
               </a>
-            </div>
-          </div>
-        </div>
-      )
-    },
-    {
-      id: 'why-bridging-walled-gardens',
-      category: 'why',
-      title: 'Bridging Walled Streaming Gardens (Spotify / YTM / Apple)',
-      badge: 'Streaming Bridge',
-      badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
-      summary: 'Extend local desktop power tools directly to your live Spotify, Apple Music, and YouTube libraries.',
-      tags: ['spotify', 'youtube', 'tunemymusic', 'bridge', 'musify', 'export', 'csv'],
-      content: (
-        <div className="space-y-3 text-xs leading-relaxed text-slate-300">
-          <p>
-            Streaming services are walled gardens that forbid deep sorting, fuzzy cross-playlist deduplication, play-count sieving, or structural manipulation.
-          </p>
-          <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2 font-mono text-[11px]">
-            <div className="text-violet-400 font-bold">The Universal Extension Loop:</div>
-            <div className="text-slate-400 flex flex-col space-y-1">
-              <div>1. <strong>Extract:</strong> Export live playlists to CSV/TXT (via Tune My Music, Soundiiz, or Scrape Stripper).</div>
-              <div>2. <strong>Transform:</strong> Ingest into Playlist Haven to sieve by play-history, fuzzy cross-prune duplicates, or slice into equal parts.</div>
-              <div>3. <strong>Synchronize:</strong> Export clean UTF-8 CSVs back to Spotify/YTM or route directly to Musify & Musicolet.</div>
             </div>
           </div>
         </div>
