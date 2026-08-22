@@ -4,7 +4,7 @@ import {
   Layers, SlidersHorizontal, Wand2, Eye, GitCompare, Merge, Scissors, 
   Shuffle, Eraser, Filter, Type, Palette, BookOpen, ExternalLink, 
   Check, ArrowRight, ShieldCheck, FileText, Music, Info, Zap, Globe, 
-  Terminal, Bookmark, Columns, RefreshCw
+  Terminal, Bookmark, Columns, RefreshCw, Github
 } from 'lucide-react';
 
 interface HelpGuideModalProps {
@@ -24,11 +24,14 @@ interface GuideTopic {
   tags: string[];
 }
 
+const GITHUB_REPO_URL = 'https://github.com/joejamal029/Playlist-Haven';
+
 export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: HelpGuideModalProps) {
   const [activeTab, setActiveTab] = useState<string>(initialTab);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [expandedTopics, setExpandedTopics] = useState<Record<string, boolean>>({
     'why-experience-engine': true,
+    'why-source-code': true,
     'workflow-bridging-walled-gardens': true,
     'tool-scrape-stripper': true
   });
@@ -86,7 +89,7 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
       badge: 'Core Philosophy',
       badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
       summary: 'Why mainstream streaming platforms sabotage our relationship with music, and how to take back autonomy.',
-      tags: ['philosophy', 'discovery', 'experience', 'streaming', 'musicolet', 'daeso'],
+      tags: ['philosophy', 'discovery', 'experience', 'streaming', 'musicolet', 'daeso', 'source code', 'github'],
       content: (
         <div className="space-y-3 text-xs leading-relaxed text-slate-300">
           <p>
@@ -103,6 +106,42 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
           <p>
             <strong>Playlist Haven</strong> is the physical realization of the <strong>Experience Engine</strong>—a local-first Swiss Army Knife built to let you curate, sort, prune, sieve, and intentionally cultivate your music library with desktop-grade precision.
           </p>
+        </div>
+      )
+    },
+    {
+      id: 'why-source-code',
+      category: 'why',
+      title: 'Open Source Repository & Collaboration',
+      badge: 'GitHub Source Code',
+      badgeColor: 'bg-slate-700/60 text-slate-200 border-slate-600',
+      summary: 'Explore the full open-source codebase, contribute features, report issues, and star on GitHub.',
+      tags: ['github', 'source code', 'open source', 'repository', 'contribute', 'code'],
+      content: (
+        <div className="space-y-3 text-xs leading-relaxed text-slate-300">
+          <p>
+            Playlist Haven is completely open-source and built for the community of music audiophiles, local file collectors, and developers worldwide.
+          </p>
+          <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center space-x-3">
+              <div className="w-9 h-9 bg-slate-800 text-slate-200 rounded-xl flex items-center justify-center border border-slate-700 shrink-0">
+                <Github size={20} />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-slate-200">joejamal029 / Playlist-Haven</div>
+                <p className="text-[10px] text-slate-500">The Experience Engine Made Real</p>
+              </div>
+            </div>
+            <a
+              href={GITHUB_REPO_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center space-x-1.5 bg-violet-600 hover:bg-violet-500 text-white px-3.5 py-1.5 rounded-xl font-bold text-xs transition-colors shadow shadow-violet-950/40 shrink-0"
+            >
+              <span>View on GitHub</span>
+              <ExternalLink size={13} />
+            </a>
+          </div>
         </div>
       )
     },
@@ -574,7 +613,7 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
             </div>
           </div>
 
-          {/* Search Input Bar */}
+          {/* Search Input Bar & Top Links */}
           <div className="flex items-center space-x-2 flex-1 max-w-md">
             <div className="flex items-center space-x-2 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 flex-1 focus-within:border-violet-500/60 transition-colors">
               <Search size={15} className="text-slate-500 shrink-0" />
@@ -592,6 +631,18 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
                 </button>
               )}
             </div>
+
+            <a
+              href={GITHUB_REPO_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white rounded-xl border border-slate-700 transition-colors shrink-0 flex items-center gap-1 text-xs font-bold"
+              title="Open GitHub Source Code (joejamal029/Playlist-Haven)"
+            >
+              <Github size={15} />
+              <span className="hidden sm:inline">Source</span>
+              <ExternalLink size={11} className="text-slate-400" />
+            </a>
 
             <button
               onClick={onClose}
@@ -721,7 +772,7 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
               <Search size={32} className="text-slate-700 animate-pulse" />
               <p className="text-sm font-bold text-slate-400">No guide topics match "{searchQuery}"</p>
               <p className="text-xs text-slate-600 max-w-sm">
-                Try searching for keywords like <em>bridge</em>, <em>scrape</em>, <em>spotify</em>, <em>chinese</em>, <em>cjk</em>, <em>bom</em>, <em>musicolet</em>, or <em>sieve</em>.
+                Try searching for keywords like <em>bridge</em>, <em>github</em>, <em>scrape</em>, <em>spotify</em>, <em>chinese</em>, <em>cjk</em>, <em>bom</em>, <em>musicolet</em>, or <em>sieve</em>.
               </p>
               <button
                 onClick={() => setSearchQuery('')}
@@ -734,13 +785,24 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
         </div>
 
         {/* Footer Summary Bar */}
-        <div className="p-4 border-t border-slate-800 bg-slate-950 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-slate-500">
+        <div className="p-4 border-t border-slate-800 bg-slate-950 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-500">
           <div className="flex items-center space-x-2">
             <Sparkles size={14} className="text-violet-400" />
             <span>Playlist Haven — The Experience Engine Made Real</span>
           </div>
+
           <div className="flex items-center space-x-3">
-            <span className="font-mono text-[10px]">Tip: Press Shift + ? anytime to open</span>
+            <a
+              href={GITHUB_REPO_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center space-x-1.5 text-slate-400 hover:text-violet-300 transition-colors font-mono text-[11px]"
+            >
+              <Github size={13} />
+              <span>GitHub Repository</span>
+              <ExternalLink size={10} />
+            </a>
+
             <button
               onClick={onClose}
               className="px-4 py-1.5 bg-violet-600 hover:bg-violet-500 text-white font-bold rounded-xl transition-colors shadow shadow-violet-950/40 text-xs"
