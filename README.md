@@ -1,11 +1,13 @@
 # Playlist Haven - The Experience Engine Made Real
 
 [![Live Demo](https://img.shields.io/badge/Live_Demo-Vercel-blueviolet?style=for-the-badge&logo=vercel)](https://playlist-haven.vercel.app)
-
+[![GitHub Repository](https://img.shields.io/badge/Source-GitHub-slate?style=for-the-badge&logo=github)](https://github.com/joejamal029/Playlist-Haven)
+[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub_Sponsors-rose?style=for-the-badge&logo=githubsponsors)](https://github.com/sponsors/joejamal029)
+[![Substack Publication](https://img.shields.io/badge/Essays-Substack-amber?style=for-the-badge&logo=substack)](https://substack.com/@beyondshuffleandalgorithms)
 
 > *"I once saw a quote about how the difference between art shoved in the attic and art hung on your wall is experience. To have your art on the wall is to experience it. To find your art is to use the discovery engine; to stop there is to put it in the attic. To use the experience engine is to put your art on your wall and live with it."*
 
-**Playlist Haven** is a premium, state-of-the-art mobile playlist utility suite built to empower music audiophiles to take back autonomy over their media libraries, resist algorithmic feed fatigue, and intentionally cultivate their own listening environments. It serves as the physical realization of the **Experience Engine**—a local-first "swiss army knife" designed to organize, sort, slice, and sieve music assets with absolute control.
+**Playlist Haven** is a premium, state-of-the-art playlist utility suite built to empower music audiophiles to take back autonomy over their media libraries, resist algorithmic feed fatigue, and intentionally cultivate their own listening environments. It serves as the physical realization of the **Experience Engine**—a local-first "swiss army knife" designed to organize, sort, slice, sieve, and bridge music assets with absolute desktop-grade control.
 
 ---
 
@@ -28,9 +30,9 @@ graph LR
 
 This application was designed to serve as the technological engine for my music blog, **Beyond Shuffle & Algorithms**, where I explore the deep intersections of technology, listening autonomy, playlist functional layers, and the preservation of art in an age of algorithmic feed fatigue. 
 
-I cross-publish the exact same essays on both platforms, so you can follow the series on whichever reader interface you prefer:
-*   **Substack**: [Beyond Shuffle & Algorithms on Substack](https://substack.com/@beyondshuffleandalgorithms)
-*   **Medium**: [Beyond Shuffle & Algorithms on Medium](https://beyondshuffleandalgorithms.medium.com/)
+*   **Substack Publication**: [Beyond Shuffle & Algorithms on Substack](https://substack.com/@beyondshuffleandalgorithms)
+*   **Medium Essays**: [Beyond Shuffle & Algorithms on Medium](https://beyondshuffleandalgorithms.medium.com/)
+*   **GitHub Sponsors**: [Support the Developer on GitHub Sponsors](https://github.com/sponsors/joejamal029)
 
 ---
 
@@ -38,24 +40,36 @@ I cross-publish the exact same essays on both platforms, so you can follow the s
 
 <table align="center">
   <tr>
-    <td colspan="2" align="center"><b>Playlist Haven Dashboard</b><br/><img src="docs/screenshots/Playlist-Haven Homepage.png" width="800"/></td>
+    <td colspan="2" align="center"><b>Playlist Haven Dashboard & Help Guide</b><br/><img src="docs/screenshots/Playlist-Haven Homepage.png" width="800"/></td>
   </tr>
   <tr>
-    <td><b>Playlist Manipulator (Single, Dual & 4-Pane Modes)</b><br/><img src="docs/screenshots/Playlist-Haven Playlist Manipulator.png" width="400"/></td>
-    <td><b>Vision-to-Playlist (AI)</b><br/><img src="docs/screenshots/Playlist-Haven Vision to AI.png" width="400"/></td>
+    <td><b>Playlist Manipulator (Single, Dual & 4-Pane Quad Modes)</b><br/><img src="docs/screenshots/Playlist-Haven Playlist Manipulator.png" width="400"/></td>
+    <td><b>Vision-to-Playlist (AI Cloud & Local Ollama)</b><br/><img src="docs/screenshots/Playlist-Haven Vision to AI.png" width="400"/></td>
   </tr>
   <tr>
-    <td><b>Appearance Counter</b><br/><img src="docs/screenshots/Playlist-Haven Appearance Counter.png" width="400"/></td>
+    <td><b>Scrape Stripper & Formatter (BOM & Presets)</b><br/><img src="docs/screenshots/Playlist-Haven Appearance Counter.png" width="400"/></td>
     <td><b>Playlist Merger & Time-Grouping</b><br/><img src="docs/screenshots/Playlist-Haven Playlist Merger.png" width="400"/></td>
   </tr>
 </table>
 
 ---
 
+## 💡 Searchable Interactive Help & Philosophy Modal (`?`)
+
+Anyone exploring the application can press the **`Guide (?)`** button in the header, click the **New to Playlist Haven? Quick Tour (?)** banner, or press <kbd>?</kbd> / <kbd>Shift</kbd> + <kbd>?</kbd> from anywhere to open the comprehensive user guide:
+
+*   **1. 💡 Why Playlist Haven (Philosophy Tab)**: In-depth essays on the Experience Engine creed, breaking streaming walled gardens, the DAESO curation cycle, and representing regional & Chinese/CJK artists.
+*   **2. 🚀 Quick Start & Workflows**: Step-by-step guides for bridging walled gardens, 60-second YouTube-to-Spotify scrapes, weekly Musicolet rotation sieving, and Vision AI digitizing.
+*   **3. 🎛️ Tool-by-Tool Guide**: Detailed interactive breakdowns for all 12 modules.
+*   **4. 📖 Formats & Glossary**: Complete specifications for M3U/M3U8 `#EXTINF`, Songs CSV, plain text tracklists, UTF-8 BOM (`\uFEFF`), and Jaro-Winkler bigram similarity.
+*   **5. ❓ FAQ & Troubleshooting**: Practical answers covering browser automation scripts, offline LLMs, and Excel encoding.
+*   **🔍 Instant Multi-Field Search Engine**: Search across questions, answers, tool names, and tags (`#spotify`, `#scrape`, `#cjk`, `#bom`, `#musicolet`, `#sieve`, `#ollama`).
+
+---
 
 ## 🌉 Bridging Walled Gardens: Streaming Extension Pipeline
 
-mainstream streaming services (Spotify, YouTube Music, Apple Music) are walled gardens that restrict how you manage your music, offering zero advanced sorting, fuzzy pruning, multi-tier play-count filtering, or structural manipulation. 
+Mainstream streaming services (Spotify, YouTube Music, Apple Music) are walled gardens that restrict how you manage your music, offering zero advanced sorting, fuzzy pruning, multi-tier play-count filtering, or structural manipulation. 
 
 **Playlist Haven acts as a bidirectional bridge that extends local desktop-grade power tools to your cloud streaming libraries:**
 
@@ -79,11 +93,11 @@ mainstream streaming services (Spotify, YouTube Music, Apple Music) are walled g
    └────────────────────────────────────────────────────────┘
 ```
 
-### The Curation Workflow:
-1.  **Extract**: Export your live Spotify or YouTube Music playlists as a CSV file using online synchronization tools (e.g., *Tune My Music* or *Soundiiz*).
-2.  **Enhance**: Import the CSV into Playlist Haven's web suite. Apply dynamic play-count filters, run multiple randomizations, fuzzy-prune duplicates across different open lists, or sieve tracks based on play-history.
-3.  **Synchronize**: Export the optimized CSV from Playlist Haven and upload it back to Spotify or YTM via the same sync tools—instantly extending local power-user sorting, sieving, and deduplication features directly to your live streaming experience.
-4.  **Free-Stream Transition**: Alternatively, route sieved CSVs directly into **Musify** (which enables free streaming of YouTube content) or offline players like **Musicolet** (the legendary Android local file manager celebrating its 10th anniversary).
+### The 4-Step Universal Extension Loop:
+1.  **Extract**: Export your live Spotify, Apple Music, or YouTube Music playlists as a `.csv` or `.txt` file using online synchronization tools (e.g., *Tune My Music* or *Soundiiz*) or browser text scrapers.
+2.  **Transform**: Import the CSV into Playlist Haven's web suite. Apply dynamic play-count filters, run multi-pane quad view manipulations, fuzzy-prune duplicates across different open lists, or sieve tracks based on play-history.
+3.  **Synchronize**: Export the optimized **UTF-8 BOM CSV** from Playlist Haven and upload it back to Spotify or YTM via the same sync tools—instantly extending local power-user sorting, sieving, and deduplication features directly to your live streaming experience.
+4.  **Autonomous Transition**: Alternatively, route sieved CSVs directly into **Musify** (which enables free streaming of YouTube content) or offline players like **Musicolet** (the legendary Android local file manager celebrating its 10th anniversary).
 
 ---
 
@@ -120,10 +134,6 @@ While Playlist Haven serves as a standalone web utility, my ultimate vision is *
 
 *   **Unlocking the M3U Potential**: Musicolet is the undisputed king of offline playback, but what is **fundamentally missing is a powerful, deep way of working with playlists—specifically, unlocking the vast, untapped potential of native M3U playlist manipulation**. Playlists should not be static, isolated listings of files; they are active, dynamic layers of qualitative taste and structural experience.
 *   **Direct Collaboration Invitation**: **I would absolutely love to collaborate directly with the Musicolet development team** to bring these features to life natively on Android. By integrating these advanced Experience Engine capabilities—such as automated play-count sieving, fuzzy cross-playlist duplicates pruning, and skeleton anchor conflict resolution—directly as native, on-device controls within Musicolet, we can revolutionize how offline libraries are managed.
-
-By digitizing my meticulous curation rituals, I hope to inspire Musicolet's next decade of library management innovation and invite direct joint efforts to make this dream a reality.
-
-*A massive salute of respect to the developers of Musicolet for a decade of empowering music curational autonomy worldwide!*
 
 ---
 
@@ -178,7 +188,7 @@ Edit metadata blocks like EXTINF tags, covers, playlist titles, file directory m
 Filter playlist tracks into distinct high, medium, or low tiers based on custom play count boundaries, exporting segmented tier files.
 
 ### 10. 👁️ Vision-To-Playlist (`VisionToPlaylistView.tsx`) [Capture Layer]
-AI-assisted screenshot playlist converter. Upload images or screenshots of online playlists, and the visual engine will extract track titles and artists, automatically resolving them into clean, standards-compliant M3U or CSV files.
+AI-assisted screenshot playlist converter. Upload images or screenshots of online playlists, and the visual engine will extract track titles and artists, automatically resolving them into clean, standards-compliant M3U or CSV files. Supports Cloud (Gemini) and 100% offline local vision models (Ollama / LM Studio).
 
 ### 11. 🔗 Offline Playlist Matcher & Reconciler (`PlaylistMatcherView.tsx`) [Integration & Capture Layer]
 Reconcile and align tracklist variations between a shared playlist (M3U, CSV, or TXT) and your local library database:
@@ -201,33 +211,39 @@ Standardized, automated YouTube channel and playlist scrape parser & formatter:
 
 ---
 
-## 🛠️ Run Locally
+## 🛠️ Run Locally & Build
 
-**Prerequisites:** Node.js installed.
+**Prerequisites:** Node.js (v18+) installed.
 
+### ⚡ 1-Click Startup (Windows)
+Double-click `launch.bat` in the project root to automatically start the development server and open `http://localhost:3000` in your default browser.
+
+### 💻 Manual Command Line
 1.  **Install dependencies**:
     ```bash
     npm install
     ```
 2.  **Configure AI Models (Universal & Local-First)**:
-    Playlist Haven features a fully universal, provider-agnostic AI engine for Vision-to-Playlist conversions. You have complete freedom to choose your backend:
     *   **Option A: Cloud Models (Gemini)**:
-        Create a `.env.local` file in the root directory and add your key:
+        Create a `.env.local` file in the root directory:
         ```env
         VITE_GEMINI_API_KEY=your_gemini_api_key_here
         ```
     *   **Option B: Local Models (OpenAI-Compatible / Ollama / LM Studio)**:
         Playlist Haven supports **100% offline, local-first vision models** out of the box!
-        *   Launch your local model server (e.g., `ollama run llama3.2-vision` or use LM Studio).
-        *   In the app, click the Settings/AI gear to configure any custom `Base URL` (defaults to Ollama's `http://localhost:11434/v1`), specify your local `Model Name`, and toggle the provider to **OpenAI-Compatible**—no cloud key required!
+        *   Launch your local model server (e.g., `ollama run llama3.2-vision`).
+        *   In the app, open Vision-to-Playlist settings, configure the Base URL (`http://localhost:11434/v1`), and toggle provider to **OpenAI-Compatible**—no cloud key required!
 3.  **Run Development Server**:
     ```bash
     npm run dev
     ```
-4.  **Verify Production Compilation**:
-    Verify asset bundling and TypeScript static analysis:
+4.  **Production Compilation**:
     ```bash
     npm run build
+    ```
+5.  **Capacitor Android Native Sync**:
+    ```bash
+    npm run android:build
     ```
 
 ---
