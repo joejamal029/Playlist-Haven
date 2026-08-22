@@ -4,7 +4,7 @@ import {
   Layers, SlidersHorizontal, Wand2, Eye, GitCompare, Merge, Scissors, 
   Shuffle, Eraser, Filter, Type, Palette, BookOpen, ExternalLink, 
   Check, ArrowRight, ShieldCheck, FileText, Music, Info, Zap, Globe, 
-  Terminal, Bookmark, Columns
+  Terminal, Bookmark, Columns, RefreshCw
 } from 'lucide-react';
 
 interface HelpGuideModalProps {
@@ -29,7 +29,7 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [expandedTopics, setExpandedTopics] = useState<Record<string, boolean>>({
     'why-experience-engine': true,
-    'workflow-scrape-spotify': true,
+    'workflow-bridging-walled-gardens': true,
     'tool-scrape-stripper': true
   });
 
@@ -109,7 +109,7 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
     {
       id: 'why-bridging-walled-gardens',
       category: 'why',
-      title: 'Bridging Walled Streaming Gardens (YouTube → Spotify / Musify)',
+      title: 'Bridging Walled Streaming Gardens (Spotify / YTM / Apple)',
       badge: 'Streaming Bridge',
       badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
       summary: 'Extend local desktop power tools directly to your live Spotify, Apple Music, and YouTube libraries.',
@@ -172,10 +172,78 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
 
     // --- QUICK START & WORKFLOWS ---
     {
+      id: 'workflow-bridging-walled-gardens',
+      category: 'workflows',
+      title: 'Workflow 1: 🌉 Bridging Walled Streaming Gardens (The 4-Step Extension Loop)',
+      badge: 'Flagship Architecture',
+      badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+      summary: 'Extend desktop-grade power tools, play-count sieving, and cross-pruning to live Spotify, Apple Music & YouTube libraries.',
+      tags: ['bridge', 'spotify', 'tunemymusic', 'soundiiz', 'workflow', 'streaming', 'musify', 'musicolet', 'walled garden'],
+      content: (
+        <div className="space-y-3 text-xs text-slate-300 leading-relaxed">
+          <p>
+            Mainstream streaming platforms are walled gardens with zero advanced curation capabilities. <strong>Playlist Haven acts as a bidirectional bridge</strong> that unlocks desktop power tools for your live streaming account:
+          </p>
+
+          <div className="space-y-2.5">
+            {/* Step 1 */}
+            <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <div className="flex items-center gap-2 font-bold text-indigo-300 font-mono text-xs">
+                <span className="w-5 h-5 bg-indigo-500/20 rounded-full flex items-center justify-center text-[10px]">1</span>
+                <span>EXTRACT: Export from Walled Streaming Platforms</span>
+              </div>
+              <p className="text-[11px] text-slate-400 pl-7">
+                Use online synchronization utilities like <strong className="text-slate-200">Tune My Music</strong> or <strong className="text-slate-200">Soundiiz</strong> (or browser text scrapers) to export your live Spotify, Apple Music, or YouTube playlists into standard <code>.csv</code> or <code>.txt</code> files.
+              </p>
+            </div>
+
+            {/* Step 2 */}
+            <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <div className="flex items-center gap-2 font-bold text-violet-300 font-mono text-xs">
+                <span className="w-5 h-5 bg-violet-500/20 rounded-full flex items-center justify-center text-[10px]">2</span>
+                <span>TRANSFORM: Ingest & Apply Desktop Power Tools</span>
+              </div>
+              <div className="text-[11px] text-slate-400 pl-7 space-y-1">
+                <p>Import your CSV/TXT files into Playlist Haven's specialized tool modules:</p>
+                <ul className="list-disc list-inside space-y-0.5 text-slate-300">
+                  <li><strong className="text-indigo-200">Playlist Manipulator:</strong> Open 2 to 4 playlists side-by-side in <em>Quad View</em> and fuzzy cross-prune duplicate songs across lists using Jaro-Winkler similarity.</li>
+                  <li><strong className="text-indigo-200">Sonic Sieve:</strong> Filter tracks by play-count thresholds (e.g. $\ge 2$ plays) and rank them preserving positional memory with the Skeleton Anchor.</li>
+                  <li><strong className="text-indigo-200">Scrape Stripper:</strong> Strip noise tags (HD, 4K, Official Video, CJK brackets), auto-split CJK artists, and normalize <code>feat.</code> credits.</li>
+                  <li><strong className="text-indigo-200">Playlist Splitter / Tier Filter:</strong> Slice massive 2,000-track playlists into clean, digestible sub-playlists.</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Step 3 */}
+            <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <div className="flex items-center gap-2 font-bold text-cyan-300 font-mono text-xs">
+                <span className="w-5 h-5 bg-cyan-500/20 rounded-full flex items-center justify-center text-[10px]">3</span>
+                <span>SYNCHRONIZE: Re-Import Clean Data Back to Streaming</span>
+              </div>
+              <p className="text-[11px] text-slate-400 pl-7">
+                Click <strong>CSV</strong> or <strong>Copy Cleaned</strong> in Playlist Haven (exported with UTF-8 BOM encoding so Chinese, Japanese, and accented characters are never garbled). In <strong className="text-slate-200">Tune My Music</strong>, select <em>Upload CSV</em> $\rightarrow$ choose destination <strong className="text-slate-200">Spotify / YouTube Music</strong>. Your live streaming account is updated in seconds!
+              </p>
+            </div>
+
+            {/* Step 4 */}
+            <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <div className="flex items-center gap-2 font-bold text-emerald-300 font-mono text-xs">
+                <span className="w-5 h-5 bg-emerald-500/20 rounded-full flex items-center justify-center text-[10px]">4</span>
+                <span>AUTONOMOUS TRANSITION: Port to Musify & Musicolet</span>
+              </div>
+              <p className="text-[11px] text-slate-400 pl-7">
+                Alternatively, route your manipulated playlists into <strong className="text-slate-200">Musify</strong> (for free, ad-free YouTube streaming) or <strong className="text-slate-200">Musicolet</strong> on Android for complete, 100% offline listening autonomy.
+              </p>
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
       id: 'workflow-scrape-spotify',
       category: 'workflows',
-      title: 'Workflow 1: Port 1,000+ YouTube Channel Songs to Spotify in 60s',
-      badge: 'Popular Workflow',
+      title: 'Workflow 2: Port 1,000+ YouTube Channel Songs to Spotify in 60s',
+      badge: 'High-Speed Curation',
       badgeColor: 'bg-violet-500/20 text-violet-300 border-violet-500/30',
       summary: 'Scrape a YouTube channel or playlist, strip noise, and generate a clean CSV for Tune My Music.',
       tags: ['scrape', 'youtube', 'spotify', 'tunemymusic', 'workflow', 'channel', 'csv'],
@@ -196,7 +264,7 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
     {
       id: 'workflow-weekly-sonic-sieve',
       category: 'workflows',
-      title: 'Workflow 2: Automated Weekly Listening Rotation (Musicolet + Sonic Sieve)',
+      title: 'Workflow 3: Automated Weekly Listening Rotation (Musicolet + Sonic Sieve)',
       badge: 'Audiophile Routine',
       badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
       summary: 'Turn your offline Musicolet play history into an intelligent weekly top-tier playlist.',
@@ -217,7 +285,7 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
     {
       id: 'workflow-screenshot-vision-ai',
       category: 'workflows',
-      title: 'Workflow 3: Digitize Playlist Screenshots with Vision AI',
+      title: 'Workflow 4: Digitize Playlist Screenshots with Vision AI',
       badge: 'AI Powered',
       badgeColor: 'bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30',
       summary: 'Convert images/screenshots of music playlists into standard playable M3U or CSV files.',
@@ -232,6 +300,26 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
             <li>Drag & drop the image screenshot.</li>
             <li>Select your backend: Cloud (Gemini) or <strong>100% Offline Local Model</strong> (Ollama / LM Studio).</li>
             <li>Click <em>Digitize Playlist</em> to extract tracks, deduplicate titles, and download a ready-to-play M3U or CSV!</li>
+          </ol>
+        </div>
+      )
+    },
+    {
+      id: 'workflow-matcher-reconciler',
+      category: 'workflows',
+      title: 'Workflow 5: Reconcile Shared Online Playlists with Local Library',
+      badge: 'Local Paths',
+      badgeColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+      summary: 'Resolve online track names against your local storage audio files using fuzzy bigram matching.',
+      tags: ['matcher', 'reconciler', 'fuzzy', 'local files', 'm3u', 'offline'],
+      content: (
+        <div className="space-y-2 text-xs text-slate-300 text-[11px]">
+          <ol className="space-y-1.5 list-decimal list-inside">
+            <li>Open <strong>Playlist Reconciler (Matcher)</strong>.</li>
+            <li>Upload a shared M3U, CSV, or TXT playlist.</li>
+            <li>Select your local music folder or upload your library index.</li>
+            <li>The engine matches files using Jaro-Winkler bigram similarity and highlights unresolved songs for 1-click manual search.</li>
+            <li>Download the playable local M3U playlist with your exact directory paths!</li>
           </ol>
         </div>
       )
@@ -494,7 +582,7 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search guide (e.g. scrape, spotify, musicolet, chinese, bom)..."
+                placeholder="Search guide (e.g. bridge, spotify, scrape, musicolet)..."
                 className="bg-transparent text-xs text-slate-200 placeholder:text-slate-600 outline-none w-full font-medium"
                 autoFocus
               />
@@ -633,7 +721,7 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
               <Search size={32} className="text-slate-700 animate-pulse" />
               <p className="text-sm font-bold text-slate-400">No guide topics match "{searchQuery}"</p>
               <p className="text-xs text-slate-600 max-w-sm">
-                Try searching for keywords like <em>scrape</em>, <em>spotify</em>, <em>chinese</em>, <em>cjk</em>, <em>bom</em>, <em>musicolet</em>, or <em>sieve</em>.
+                Try searching for keywords like <em>bridge</em>, <em>scrape</em>, <em>spotify</em>, <em>chinese</em>, <em>cjk</em>, <em>bom</em>, <em>musicolet</em>, or <em>sieve</em>.
               </p>
               <button
                 onClick={() => setSearchQuery('')}
