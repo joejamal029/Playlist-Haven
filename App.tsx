@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Layers, Merge, Music, Settings, Github, Activity, Scissors, Shuffle, Eraser, Type, BarChart3, Eye, Filter, SlidersHorizontal, Wand2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Layers, Merge, Music, Settings, Github, Activity, Scissors, Shuffle, Eraser, Type, BarChart3, Eye, Filter, SlidersHorizontal, Wand2, HelpCircle, Sparkles, BookOpen } from 'lucide-react';
 import SonicSieveView from './views/SonicSieveView';
 import PlaylistMergerView from './views/PlaylistMergerView';
 import PlaylistSplitterView from './views/PlaylistSplitterView';
@@ -12,11 +12,30 @@ import PlaylistManipulatorView from './views/PlaylistManipulatorView';
 import TierFilteringView from './views/TierFilteringView';
 import PlaylistMatcherView from './views/PlaylistMatcherView';
 import ScrapeStripperView from './views/ScrapeStripperView';
+import HelpGuideModal from './components/HelpGuideModal';
 
 type AppView = 'dashboard' | 'sieve' | 'merger' | 'splitter' | 'randomizer' | 'pruner' | 'renamer' | 'appearance' | 'vision' | 'tier' | 'manipulator' | 'matcher' | 'stripper';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<AppView>('dashboard');
+  const [isHelpModalOpen, setIsHelpModalOpen] = useState<boolean>(false);
+
+  // Global Keyboard Shortcut listener for ? (Shift + / or Shift + ?)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // If active element is an input, textarea, or contentEditable, don't hijack
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+      if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+        e.preventDefault();
+        setIsHelpModalOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const renderView = () => {
     switch (currentView) {
@@ -45,29 +64,82 @@ export default function App() {
       case 'stripper':
         return <ScrapeStripperView onBack={() => setCurrentView('dashboard')} />;
       default:
-        return <Dashboard onViewSelect={setCurrentView} />;
+        return <Dashboard onViewSelect={setCurrentView} onOpenHelp={() => setIsHelpModalOpen(true)} />;
     }
   };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200">
       {renderView()}
+      
+      {/* Universal Searchable Help & Guidance Modal (?) */}
+      <HelpGuideModal 
+        isOpen={isHelpModalOpen} 
+        onClose={() => setIsHelpModalOpen(false)} 
+      />
     </div>
   );
 }
 
-const Dashboard = ({ onViewSelect }: { onViewSelect: (view: AppView) => void }) => {
+const Dashboard = ({ 
+  onViewSelect, 
+  onOpenHelp 
+}: { 
+  onViewSelect: (view: AppView) => void;
+  onOpenHelp: () => void;
+}) => {
   return (
     <div className="flex flex-col min-h-screen pb-10">
-      <header className="p-6 pt-8 pb-2">
-        <h1 className="text-3xl font-black tracking-tighter bg-gradient-to-r from-slate-100 to-slate-500 bg-clip-text text-transparent">
-          Playlist Haven
-        </h1>
-        <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Mobile Playlist Toolkit</p>
+      <header className="p-6 pt-8 pb-3 flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-black tracking-tighter bg-gradient-to-r from-slate-100 to-slate-500 bg-clip-text text-transparent">
+            Playlist Haven
+          </h1>
+          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Mobile Playlist Toolkit</p>
+        </div>
+
+        {/* Global Help Guide Trigger Button */}
+        <button
+          onClick={onOpenHelp}
+          className="flex items-center space-x-2 bg-violet-600/20 hover:bg-violet-600 text-violet-300 hover:text-white px-3.5 py-2 rounded-2xl border border-violet-500/30 transition-all shadow-lg shadow-violet-950/30 active:scale-95 cursor-pointer font-bold text-xs"
+          title="User Guide & Philosophy (Press ?)"
+        >
+          <HelpCircle size={17} />
+          <span className="hidden sm:inline font-mono">Guide (?)</span>
+        </button>
       </header>
 
-      <main className="flex-1 px-4 space-y-6 mt-4">
+      <main className="flex-1 px-4 space-y-6 mt-1">
         
+        {/* Onboarding Guide Banner for Strangers / New Visitors */}
+        <div 
+          onClick={onOpenHelp}
+          className="group p-4 bg-gradient-to-r from-violet-950/40 via-indigo-950/30 to-slate-900 border border-violet-500/30 rounded-2xl flex items-center justify-between gap-3 cursor-pointer hover:border-violet-500/60 transition-all shadow-xl hover:shadow-violet-950/20"
+        >
+          <div className="flex items-center space-x-3.5">
+            <div className="w-10 h-10 bg-violet-500/20 text-violet-300 rounded-xl flex items-center justify-center border border-violet-500/30 shrink-0 group-hover:scale-105 transition-transform">
+              <BookOpen size={20} />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="text-xs font-black text-slate-100 group-hover:text-violet-200 transition-colors">
+                  New to Playlist Haven?
+                </span>
+                <span className="text-[9px] bg-violet-500/30 text-violet-200 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono">
+                  Quick Tour (?)
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 font-medium">
+                Learn the Experience Engine philosophy, 60s YouTube-to-Spotify workflows & power tools.
+              </p>
+            </div>
+          </div>
+          <div className="hidden md:flex items-center space-x-1.5 text-xs font-bold text-violet-400 group-hover:text-violet-300 shrink-0 font-mono">
+            <span>Open Guide</span>
+            <span>→</span>
+          </div>
+        </div>
+
         {/* Unified, Balanced & Fully Responsive Tools Grid */}
         <div className="grid grid-cols-2 gap-4">
           
@@ -150,58 +222,20 @@ const Dashboard = ({ onViewSelect }: { onViewSelect: (view: AppView) => void }) 
           {/* Playlist Reconciler Card */}
           <button 
             onClick={() => onViewSelect('matcher')}
-            className="group relative overflow-hidden p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-violet-500/50 hover:shadow-2xl hover:shadow-violet-900/10 active:scale-[0.98]"
+            className="group relative overflow-hidden p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-cyan-500/50 hover:shadow-2xl hover:shadow-cyan-900/10 active:scale-[0.98]"
           >
             <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
-              <Merge size={60} />
+              <GitCompare size={60} />
             </div>
             <div className="relative z-10">
-              <div className="w-8 h-8 bg-violet-500/20 text-violet-400 rounded-lg flex items-center justify-center mb-3 group-hover:bg-violet-500 group-hover:text-white transition-colors">
-                <Merge size={16} />
+              <div className="w-8 h-8 bg-cyan-500/20 text-cyan-400 rounded-lg flex items-center justify-center mb-3 group-hover:bg-cyan-500 group-hover:text-white transition-colors">
+                <GitCompare size={16} />
               </div>
-              <h2 className="text-sm font-bold text-slate-200 mb-1">Playlist Reconciler</h2>
+              <h2 className="text-sm font-bold text-slate-200 mb-1">Reconciler</h2>
               <p className="text-[10px] text-slate-500 leading-tight font-medium">
-                Convert online exports (Spotify/YT CSV) or shared playlists into playable local M3Us.
+                Offline Matcher for local paths.
               </p>
             </div>
-          </button>
-
-          {/* Smart Renamer Card */}
-          <button 
-              onClick={() => onViewSelect('renamer')}
-              className="group relative overflow-hidden p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-teal-500/50 hover:shadow-2xl hover:shadow-teal-900/10 active:scale-[0.98]"
-          >
-              <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
-              <Type size={60} />
-              </div>
-              <div className="relative z-10">
-              <div className="w-8 h-8 bg-teal-500/20 text-teal-400 rounded-lg flex items-center justify-center mb-3 group-hover:bg-teal-500 group-hover:text-white transition-colors">
-                  <Type size={16} />
-              </div>
-              <h2 className="text-sm font-bold text-slate-200 mb-1">Renamer</h2>
-              <p className="text-[10px] text-slate-500 leading-tight font-medium">
-                  Logical sequences.
-              </p>
-              </div>
-          </button>
-
-           {/* Appearance Counter Card */}
-           <button 
-              onClick={() => onViewSelect('appearance')}
-              className="group relative overflow-hidden p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-sky-500/50 hover:shadow-2xl hover:shadow-sky-900/10 active:scale-[0.98]"
-          >
-              <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
-              <BarChart3 size={60} />
-              </div>
-              <div className="relative z-10">
-              <div className="w-8 h-8 bg-sky-500/20 text-sky-400 rounded-lg flex items-center justify-center mb-3 group-hover:bg-sky-500 group-hover:text-white transition-colors">
-                  <BarChart3 size={16} />
-              </div>
-              <h2 className="text-sm font-bold text-slate-200 mb-1">Frequency</h2>
-              <p className="text-[10px] text-slate-500 leading-tight font-medium">
-                  Count song occurrences.
-              </p>
-              </div>
           </button>
 
           {/* Playlist Randomizer Card */}
@@ -300,28 +334,25 @@ const Dashboard = ({ onViewSelect }: { onViewSelect: (view: AppView) => void }) 
           </button>
         </div>
 
-        {/* Status / Coming Soon Area */}
-        <div className="pt-4 border-t border-slate-800/50">
-            <h3 className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-3">Roadmap</h3>
-            <div className="p-4 bg-slate-900/50 border border-slate-800/50 border-dashed rounded-xl flex items-center space-x-3 opacity-60">
-                <div className="p-2 bg-slate-800 rounded-lg text-slate-600">
-                    <Music size={16} />
-                </div>
-                <div className="flex-1">
-                    <h4 className="text-xs font-bold text-slate-500">Metadata Editor</h4>
-                    <p className="text-[10px] text-slate-600">Bulk edit EXTINF tags</p>
-                </div>
-                <span className="text-[9px] bg-slate-800 text-slate-500 px-2 py-0.5 rounded-full font-bold">Soon</span>
-            </div>
+        {/* Status / Quick Links Area */}
+        <div className="pt-4 border-t border-slate-800/50 flex items-center justify-between text-xs text-slate-500">
+          <button 
+            onClick={onOpenHelp}
+            className="flex items-center space-x-2 text-violet-400 hover:text-violet-300 font-bold transition-colors"
+          >
+            <HelpCircle size={15} />
+            <span>Open User Guide & FAQ</span>
+          </button>
+
+          <div className="flex items-center space-x-2 font-mono text-[10px] text-slate-600">
+            <Activity size={12} className="text-emerald-500/50" />
+            <span>Experience Engine v3.1</span>
+          </div>
         </div>
       </main>
 
       <footer className="text-center p-6 text-[10px] text-slate-600 font-mono">
-        <div className="flex items-center justify-center space-x-2 mb-2">
-            <Activity size={12} className="text-emerald-500/50" />
-            <span>v2.6.0 Stable</span>
-        </div>
-        <p>M3U Haven &copy; {new Date().getFullYear()}</p>
+        <p>Playlist Haven &copy; {new Date().getFullYear()} — Experience Your Art</p>
       </footer>
     </div>
   );
