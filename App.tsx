@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layers, Merge, Music, Settings, Github, Activity, Scissors, Shuffle, Eraser, Type, BarChart3, Eye, Filter, SlidersHorizontal, Wand2, HelpCircle, Sparkles, BookOpen } from 'lucide-react';
+import { Layers, Merge, Music, Settings, Github, Activity, Scissors, Shuffle, Eraser, Type, BarChart3, Eye, Filter, SlidersHorizontal, Wand2, HelpCircle, Sparkles, BookOpen, GitCompare } from 'lucide-react';
 import SonicSieveView from './views/SonicSieveView';
 import PlaylistMergerView from './views/PlaylistMergerView';
 import PlaylistSplitterView from './views/PlaylistSplitterView';
