@@ -13,14 +13,19 @@ const DEFAULT_CONFIG: AIConfig = {
   provider: 'gemini',
   apiKey: '',
   baseUrl: 'http://localhost:11434/v1',
-  modelName: 'gemini-3-flash-preview',
+  modelName: 'gemini-2.5-flash',
 };
 
 let currentAIConfig: AIConfig = (() => {
   try {
     const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (saved) {
-      return { ...DEFAULT_CONFIG, ...JSON.parse(saved) };
+      const parsed = JSON.parse(saved);
+      // Auto-migrate legacy or unavailable model names
+      if (!parsed.modelName || parsed.modelName === 'gemini-3-flash-preview' || parsed.modelName === 'gemini-1.5-flash') {
+        parsed.modelName = 'gemini-2.5-flash';
+      }
+      return { ...DEFAULT_CONFIG, ...parsed };
     }
   } catch (e) {
     console.error("Failed to load AI config from localStorage:", e);

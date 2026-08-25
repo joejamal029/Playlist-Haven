@@ -25,7 +25,9 @@ dist-ssr
 
 # Agent Artifacts, Brain, Scratch & VibeCode
 .vibecode/
+.vibecode.yaml
 *.vibecode
+*_llm.md
 .gemini/
 brain/
 scratch/

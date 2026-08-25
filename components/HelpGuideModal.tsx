@@ -424,6 +424,36 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
         </div>
       )
     },
+    {
+      id: 'workflow-language-nationality-clustering',
+      category: 'workflows',
+      title: 'Workflow 6: Intelligently Partition Large Music Libraries by Language & Nationality',
+      badge: 'Module #13 Flagship',
+      badgeColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+      summary: 'Automatically group hundreds or thousands of tracks into authentic regional/language buckets in seconds.',
+      tags: ['language', 'nationality', 'clustering', 'waterfall', 'musicbrainz', 'gemini', 'c-pop', 'j-pop', 'naija', 'k-pop', 'module 13'],
+      content: (
+        <div className="space-y-2 text-xs text-slate-300 text-[11px]">
+          <p>
+            Traditional genre systems fail to reflect cultural roots. Module 13 partitions your music into 13 canonical buckets (English, J-Pop, Naija, K-Pop, C-Pop, Instrumental, Gospel, Filipino, I-Pop, African, Latina, Français, Other):
+          </p>
+          <ol className="space-y-1.5 list-decimal list-inside">
+            <li>Open <strong>Language & Nationality Clustering</strong> (Module 13).</li>
+            <li>Upload your playlist files (.m3u, .csv, .tsv, .txt).</li>
+            <li>The 5-Tier Waterfall executes instantly:
+              <ul className="list-disc list-inside pl-4 space-y-0.5 text-slate-400">
+                <li><strong className="text-emerald-300">Tier 0:</strong> 1,341 pre-seeded baseline artists resolve in &lt;100ms.</li>
+                <li><strong className="text-cyan-300">Tier 1:</strong> Unicode Script Histogram instantly classifies non-Latin Han (CJK), Kana, Hangul, and Devanagari titles.</li>
+                <li><strong className="text-blue-300">Tier 2:</strong> MusicBrainz API maps ISO country codes to canonical regions.</li>
+                <li><strong className="text-purple-300">Tier 3:</strong> Free-tier Gemini AI (2.5 Flash) batch-classifies any remaining ambiguous artists. (Click <em>⚡ Skip to AI</em> for instant batch processing).</li>
+                <li><strong className="text-amber-300">Tier 4:</strong> 1-click manual reassignment badges permanently saved to your cache.</li>
+              </ul>
+            </li>
+            <li>Click <strong>Export All as ZIP</strong> to get clean separate playlists for every language group, or <strong>Export Enriched CSV</strong> with UTF-8 BOM.</li>
+          </ol>
+        </div>
+      )
+    },
 
     // --- TOOL-BY-TOOL GUIDE ---
     {
@@ -531,6 +561,32 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
           <p><strong>Randomizer:</strong> Multi-mode shuffling (artist grouping, segment shuffles, full mix).</p>
           <p><strong>Pruner:</strong> Use a Source playlist as an "Eraser" to strip matching songs across multiple target playlists.</p>
           <p><strong>Smart Renamer:</strong> Batch modify file path strings, casing, prefixes, and directory mappings.</p>
+        </div>
+      )
+    },
+    {
+      id: 'tool-clustering',
+      category: 'tools',
+      title: '🌐 Module 13: Language & Nationality Clustering Engine',
+      badge: 'Speed Engine',
+      badgeColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+      summary: 'Intelligently partition large libraries into 13 language & nationality groups in seconds using a 5-tier waterfall.',
+      tags: ['clustering', 'language', 'nationality', 'c-pop', 'j-pop', 'k-pop', 'naija', 'musicbrainz', 'gemini', 'offline'],
+      content: (
+        <div className="space-y-3 text-xs text-slate-300">
+          <p>
+            Playlist Haven rejects arbitrary genre tags in favor of <strong>language and cultural origin</strong>. The Clustering Engine uses a speed-first 5-tier waterfall to group thousands of tracks in milliseconds:
+          </p>
+          <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1.5 font-mono text-[11px]">
+            <div className="text-emerald-400"><strong>Tier 0: Pre-Seeded Cache</strong> — 1,341 verified artist mappings loaded instantly (&lt;100ms) with multi-artist delimiter splitting.</div>
+            <div className="text-cyan-400"><strong>Tier 1: Unicode Script Histogram</strong> — Instant offline detection for Han (Chinese), Kana (Japanese), Hangul (Korean), and Devanagari (Indian).</div>
+            <div className="text-blue-400"><strong>Tier 2: MusicBrainz Web Service</strong> — Official rate-throttled API querying country of origin (TW, KR, NG, GB, US).</div>
+            <div className="text-purple-400"><strong>Tier 3: Gemini AI Batch Fallback</strong> — Packs remaining unresolved artists into batches of 30 with 429 quota backoff and instant cancellation.</div>
+            <div className="text-amber-400"><strong>Tier 4: Manual Override</strong> — Click any badge to reassign an artist; permanently overrides all tiers.</div>
+          </div>
+          <p className="text-[11px] text-slate-400">
+            <strong>Exports:</strong> Export individual bucket playlists (.m3u / .csv), export all 13 buckets bundled as a ZIP archive, or export enriched CSVs with full country and source metadata.
+          </p>
         </div>
       )
     },

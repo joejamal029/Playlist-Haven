@@ -59,11 +59,11 @@ This application was designed to serve as the technological engine for my music 
 Anyone exploring the application can press the **`Guide (?)`** button in the header, click the **New to Playlist Haven? Quick Tour (?)** banner, or press <kbd>?</kbd> / <kbd>Shift</kbd> + <kbd>?</kbd> from anywhere to open the comprehensive user guide:
 
 *   **1. 💡 Why Playlist Haven (Philosophy Tab)**: In-depth essays on the Experience Engine creed, breaking streaming walled gardens, the DAESO curation cycle, and representing regional & Chinese/CJK artists.
-*   **2. 🚀 Quick Start & Workflows**: Step-by-step guides for bridging walled gardens, 60-second YouTube-to-Spotify scrapes, weekly Musicolet rotation sieving, and Vision AI digitizing.
-*   **3. 🎛️ Tool-by-Tool Guide**: Detailed interactive breakdowns for all 12 modules.
+*   **2. 🚀 Quick Start & Workflows**: Step-by-step guides for bridging walled gardens, 60-second YouTube-to-Spotify scrapes, weekly Musicolet rotation sieving, Vision AI digitizing, and Language & Nationality library clustering.
+*   **3. 🎛️ Tool-by-Tool Guide**: Detailed interactive breakdowns for all 13 modules.
 *   **4. 📖 Formats & Glossary**: Complete specifications for M3U/M3U8 `#EXTINF`, Songs CSV, plain text tracklists, UTF-8 BOM (`\uFEFF`), and Jaro-Winkler bigram similarity.
 *   **5. ❓ FAQ & Troubleshooting**: Practical answers covering browser automation scripts, offline LLMs, and Excel encoding.
-*   **🔍 Instant Multi-Field Search Engine**: Search across questions, answers, tool names, and tags (`#spotify`, `#scrape`, `#cjk`, `#bom`, `#musicolet`, `#sieve`, `#ollama`).
+*   **🔍 Instant Multi-Field Search Engine**: Search across questions, answers, tool names, and tags (`#spotify`, `#scrape`, `#cjk`, `#bom`, `#musicolet`, `#sieve`, `#ollama`, `#language`, `#clustering`).
 
 ---
 
@@ -139,7 +139,7 @@ While Playlist Haven serves as a standalone web utility, my ultimate vision is *
 
 ## 🛠️ Comprehensive Module Specifications
 
-Playlist Haven features 12 specialized functional views, mapped directly to the **DAESO** playlist layers:
+Playlist Haven features 13 specialized functional views, mapped directly to the **DAESO** playlist layers:
 
 ### 1. 🎛️ Sonic Sieve Logic Engine (`SonicSieveView.tsx`) [Integration Layer]
 The ultimate weekly playlist generator that automates your listening rotation:
@@ -209,6 +209,18 @@ Standardized, automated YouTube channel and playlist scrape parser & formatter:
 *   **Custom Rule Presets**: Save, load, and persist custom keyword exclusions and formatting rules to `localStorage`.
 *   **Multi-Format UTF-8 BOM Exports**: Export cleaned lists directly to **CSV**, **TSV**, **TXT**, **M3U**, or **Clipboard** with UTF-8 Byte Order Marks (`\uFEFF`) and interactive column selector pills (`Title`, `Artist`, `Duration`, `Views`, `Age`) for instant ingestion into Tune My Music, Spotify, Musicolet, or Musify.
 
+### 13. 🌐 Language & Nationality Clustering Engine (`LanguageClusteringView.tsx`) [Curation & Analytic Layer]
+Intelligent, multi-tiered music library partitioner that groups tracks by artist language spoken and cultural origin in milliseconds:
+*   **Speed-First 5-Tier Waterfall Architecture**:
+    *   **Tier 0: Pre-Seeded Cache & Ingestion**: 1,341 verified base artist mappings loaded instantly with automatic composite multi-artist splitting (`Wizkid, Skepta, Naira Marley` or `Vaundy ft. Ado`).
+    *   **Tier 1: Unicode Script Histogram**: Deterministic offline signature detection for Han (Chinese), Kana (Japanese), Hangul (Korean), and Devanagari (Indian).
+    *   **Tier 2: MusicBrainz Web Service**: Official rate-throttled API querying country of origin (`TW`, `KR`, `NG`, `GB`, `US`, `FR`, `BR`, `IN`, `PH`, `ES`).
+    *   **Tier 3: Gemini AI Batch Fallback**: Free-tier optimized batch classification (30 artists/call) with automated 429 quota backoff, jitter, and instant `AbortController` cancellation.
+    *   **Tier 4: Manual Override**: Inline 1-click badge reassignment permanently stored to `localStorage`.
+*   **13 Canonical Language & Regional Buckets**: English, J-Pop, Naija, K-Pop, C-Pop, Instrumental, Gospel, Filipino, I-Pop, African, Latina, Français, and Other.
+*   **Advanced Export Suite**: Export individual bucket playlists (.m3u / .csv), export all 13 buckets bundled as a multi-playlist ZIP archive, or export enriched CSVs with full country and confidence source metadata.
+*   **Persistent Cache & Dataset Manager**: Ingest custom `COL_ARTIST, COL_GENRE` CSVs, inspect and search the persistent cache, and export/import JSON backups.
+
 ---
 
 ## 🛠️ Run Locally & Build
@@ -245,6 +257,13 @@ Double-click `launch.bat` in the project root to automatically start the develop
     ```bash
     npm run android:build
     ```
+
+### 🚀 Cloud Deployment (Vercel) & Architecture
+Playlist Haven is designed with a **100% Zero-Backend, Client-Side Architecture**:
+*   **Static SPA Hosting**: Deploys seamlessly to **Vercel**, GitHub Pages, or Netlify with zero server dependencies (`npm run build`).
+*   **Browser-Native Ingestion & Export**: All parsing (M3U, CSV, TSV, TXT), Unicode histogram script analysis, ZIP archiving (`jszip`), and UTF-8 BOM CSV generation execute purely in the browser.
+*   **CORS-Enabled APIs**: MusicBrainz Web Service v2 natively supports global browser CORS.
+*   **Secure Client-Side AI**: Gemini AI and OpenAI-compatible API calls run directly from the browser with keys securely stored in local browser storage (`localStorage`) or injected via `VITE_GEMINI_API_KEY` environment variables.
 
 ---
 

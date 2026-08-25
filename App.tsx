@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layers, Merge, Music, Settings, Github, Activity, Scissors, Shuffle, Eraser, Type, BarChart3, Eye, Filter, SlidersHorizontal, Wand2, HelpCircle, Sparkles, BookOpen, GitCompare } from 'lucide-react';
+import { Layers, Merge, Music, Settings, Github, Activity, Scissors, Shuffle, Eraser, Type, BarChart3, Eye, Filter, SlidersHorizontal, Wand2, HelpCircle, Sparkles, BookOpen, GitCompare, Globe } from 'lucide-react';
 import SonicSieveView from './views/SonicSieveView';
 import PlaylistMergerView from './views/PlaylistMergerView';
 import PlaylistSplitterView from './views/PlaylistSplitterView';
@@ -12,9 +12,10 @@ import PlaylistManipulatorView from './views/PlaylistManipulatorView';
 import TierFilteringView from './views/TierFilteringView';
 import PlaylistMatcherView from './views/PlaylistMatcherView';
 import ScrapeStripperView from './views/ScrapeStripperView';
+import LanguageClusteringView from './views/LanguageClusteringView';
 import HelpGuideModal from './components/HelpGuideModal';
 
-type AppView = 'dashboard' | 'sieve' | 'merger' | 'splitter' | 'randomizer' | 'pruner' | 'renamer' | 'appearance' | 'vision' | 'tier' | 'manipulator' | 'matcher' | 'stripper';
+type AppView = 'dashboard' | 'sieve' | 'merger' | 'splitter' | 'randomizer' | 'pruner' | 'renamer' | 'appearance' | 'vision' | 'tier' | 'manipulator' | 'matcher' | 'stripper' | 'clustering';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<AppView>('dashboard');
@@ -63,6 +64,8 @@ export default function App() {
         return <PlaylistMatcherView onBack={() => setCurrentView('dashboard')} />;
       case 'stripper':
         return <ScrapeStripperView onBack={() => setCurrentView('dashboard')} />;
+      case 'clustering':
+        return <LanguageClusteringView onBack={() => setCurrentView('dashboard')} />;
       default:
         return <Dashboard onViewSelect={setCurrentView} onOpenHelp={() => setIsHelpModalOpen(true)} />;
     }
@@ -196,6 +199,30 @@ const Dashboard = ({
               <h2 className="text-xl font-bold text-slate-200 mb-1">Scrape Stripper & Formatter</h2>
               <p className="text-xs text-slate-500 leading-relaxed font-medium">
                 Parse channel & playlist scrapes. Exclude noise tags (HD, 4K, Official Video), auto-split artists, and convert to clean CSV, TSV, TXT, or M3U.
+              </p>
+            </div>
+          </button>
+
+          {/* Language & Nationality Clustering Card - Featured */}
+          <button 
+            onClick={() => onViewSelect('clustering')}
+            className="group relative overflow-hidden p-6 bg-slate-900 border border-slate-800 rounded-2xl text-left transition-all hover:border-cyan-500/50 hover:shadow-2xl hover:shadow-cyan-900/10 active:scale-[0.98] col-span-2"
+          >
+            <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Globe size={80} />
+            </div>
+            <div className="relative z-10">
+              <div className="w-10 h-10 bg-cyan-500/20 text-cyan-400 rounded-xl flex items-center justify-center mb-4 group-hover:bg-cyan-500 group-hover:text-white transition-colors">
+                <Globe size={20} />
+              </div>
+              <div className="flex items-center space-x-2">
+                <h2 className="text-xl font-bold text-slate-200 mb-1">Language & Nationality Clustering</h2>
+                <span className="text-[9px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono">
+                  Module 13
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                Multi-tiered classification engine. Intelligently cluster your library into 13 language & nationality groups in seconds using cached base data, Unicode script detection, MusicBrainz, and Gemini AI.
               </p>
             </div>
           </button>
