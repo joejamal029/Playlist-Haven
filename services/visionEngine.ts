@@ -18,14 +18,16 @@ const DEFAULT_CONFIG: AIConfig = {
 
 let currentAIConfig: AIConfig = (() => {
   try {
-    const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      // Auto-migrate legacy or unavailable model names
-      if (!parsed.modelName || parsed.modelName === 'gemini-3-flash-preview' || parsed.modelName === 'gemini-1.5-flash') {
-        parsed.modelName = 'gemini-2.5-flash';
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Auto-migrate legacy or missing/invalid model names
+        if (!parsed.modelName || parsed.modelName === 'gemini-3-flash-preview') {
+          parsed.modelName = 'gemini-2.5-flash';
+        }
+        return { ...DEFAULT_CONFIG, ...parsed };
       }
-      return { ...DEFAULT_CONFIG, ...parsed };
     }
   } catch (e) {
     console.error("Failed to load AI config from localStorage:", e);
@@ -319,7 +321,7 @@ export const parseScreenshot = async (file: File): Promise<ExtractedSong[]> => {
 
       if (currentAIConfig.provider === 'gemini') {
         const response = await getAIClient().models.generateContent({
-          model: currentAIConfig.modelName || "gemini-3-flash-preview",
+          model: currentAIConfig.modelName || "gemini-2.5-flash",
           contents: {
             parts: [
               {
@@ -378,7 +380,7 @@ export const parseScreenshotWithArt = async (file: File): Promise<ArtContextSong
 
       if (currentAIConfig.provider === 'gemini') {
         const response = await getAIClient().models.generateContent({
-          model: currentAIConfig.modelName || "gemini-3-flash-preview",
+          model: currentAIConfig.modelName || "gemini-2.5-flash",
           contents: {
             parts: [
               {
@@ -441,7 +443,7 @@ export const enrichMetadataWithSearch = async (song: ArtContextSong): Promise<En
 
       if (currentAIConfig.provider === 'gemini') {
         const response = await getAIClient().models.generateContent({
-          model: currentAIConfig.modelName || "gemini-3-flash-preview",
+          model: currentAIConfig.modelName || "gemini-2.5-flash",
           contents: `Find the correct music metadata for this song.
           
           Known Title: "${song.title}"

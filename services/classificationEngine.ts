@@ -1,6 +1,7 @@
 import { PRE_SEEDED_ARTIST_CACHE } from './preSeededArtistData';
 import { getAIConfig } from './visionEngine';
 import { GoogleGenAI, Type } from '@google/genai';
+import { resolveAreaToBucket } from './areaDictionary';
 
 export const CLASSIFICATION_CACHE_KEY = 'playlist_haven_artist_language_cache';
 
@@ -30,13 +31,20 @@ export type CanonicalBucket =
   | 'Naija'
   | 'K-Pop'
   | 'C-Pop'
-  | 'Instrumental'
-  | 'Gospel'
+  | 'Thai'
+  | 'Vietnamese'
+  | 'Dutch'
+  | 'Arabic'
+  | 'German'
+  | 'Italian'
+  | 'Portuguese'
   | 'Filipino'
   | 'I-Pop'
   | 'African'
   | 'Latina'
   | 'Français'
+  | 'Gospel'
+  | 'Instrumental'
   | 'Other';
 
 export interface BucketMetadata {
@@ -51,7 +59,7 @@ export interface BucketMetadata {
 export const CANONICAL_BUCKETS: Record<CanonicalBucket, BucketMetadata> = {
   'English': {
     name: 'English',
-    displayName: 'English (UK / US / CA / AU / Global)',
+    displayName: 'English',
     colorClass: 'text-blue-400',
     badgeBg: 'bg-blue-500/10 text-blue-300 border-blue-500/30',
     borderClass: 'border-blue-500/40',
@@ -59,7 +67,7 @@ export const CANONICAL_BUCKETS: Record<CanonicalBucket, BucketMetadata> = {
   },
   'J-Pop': {
     name: 'J-Pop',
-    displayName: 'J-Pop / Japanese',
+    displayName: 'J-Pop',
     colorClass: 'text-rose-400',
     badgeBg: 'bg-rose-500/10 text-rose-300 border-rose-500/30',
     borderClass: 'border-rose-500/40',
@@ -67,7 +75,7 @@ export const CANONICAL_BUCKETS: Record<CanonicalBucket, BucketMetadata> = {
   },
   'Naija': {
     name: 'Naija',
-    displayName: 'Naija (Afrobeats / Nigerian)',
+    displayName: 'Naija',
     colorClass: 'text-emerald-400',
     badgeBg: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
     borderClass: 'border-emerald-500/40',
@@ -75,7 +83,7 @@ export const CANONICAL_BUCKETS: Record<CanonicalBucket, BucketMetadata> = {
   },
   'K-Pop': {
     name: 'K-Pop',
-    displayName: 'K-Pop / Korean',
+    displayName: 'K-Pop',
     colorClass: 'text-purple-400',
     badgeBg: 'bg-purple-500/10 text-purple-300 border-purple-500/30',
     borderClass: 'border-purple-500/40',
@@ -83,31 +91,71 @@ export const CANONICAL_BUCKETS: Record<CanonicalBucket, BucketMetadata> = {
   },
   'C-Pop': {
     name: 'C-Pop',
-    displayName: 'C-Pop / Chinese (TW / CN / HK)',
+    displayName: 'C-Pop',
     colorClass: 'text-amber-400',
     badgeBg: 'bg-amber-500/10 text-amber-300 border-amber-500/30',
     borderClass: 'border-amber-500/40',
     description: 'Mandarin, Cantonese, Taiwanese pop, ballads, and indie.',
   },
-  'Instrumental': {
-    name: 'Instrumental',
-    displayName: 'Instrumental / Lofi / OST',
-    colorClass: 'text-cyan-400',
-    badgeBg: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30',
-    borderClass: 'border-cyan-500/40',
-    description: 'Pure instrumental tracks, soundtracks, piano solos, lofi beats, and ambient noise.',
+  'Thai': {
+    name: 'Thai',
+    displayName: 'Thai',
+    colorClass: 'text-teal-400',
+    badgeBg: 'bg-teal-500/10 text-teal-300 border-teal-500/30',
+    borderClass: 'border-teal-500/40',
+    description: 'Thai pop (T-Pop), Thai indie, rock, soundtracks, and Bangkok alternative music.',
   },
-  'Gospel': {
-    name: 'Gospel',
-    displayName: 'Gospel / Christian & Teaching',
-    colorClass: 'text-yellow-400',
+  'Vietnamese': {
+    name: 'Vietnamese',
+    displayName: 'Vietnamese',
+    colorClass: 'text-emerald-300',
+    badgeBg: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
+    borderClass: 'border-emerald-500/40',
+    description: 'Vietnamese pop (V-Pop), ballads, R&B, and contemporary indie releases.',
+  },
+  'Dutch': {
+    name: 'Dutch',
+    displayName: 'Dutch',
+    colorClass: 'text-orange-400',
+    badgeBg: 'bg-orange-500/10 text-orange-300 border-orange-500/30',
+    borderClass: 'border-orange-500/40',
+    description: 'Nederpop, Nederhop, Dutch electronic, pop, and contemporary Netherlands releases.',
+  },
+  'Arabic': {
+    name: 'Arabic',
+    displayName: 'Arabic',
+    colorClass: 'text-amber-300',
+    badgeBg: 'bg-amber-500/10 text-amber-300 border-amber-500/30',
+    borderClass: 'border-amber-500/40',
+    description: 'Egyptian pop, Arabesque, Khaliji, Levantine, and Maghreb music.',
+  },
+  'German': {
+    name: 'German',
+    displayName: 'German',
+    colorClass: 'text-yellow-300',
     badgeBg: 'bg-yellow-500/10 text-yellow-300 border-yellow-500/30',
     borderClass: 'border-yellow-500/40',
-    description: 'Christian worship, hymns, praise, and spoken ministry.',
+    description: 'Deutschrap, Schlager, Neue Deutsche Welle, German pop, and rock.',
+  },
+  'Italian': {
+    name: 'Italian',
+    displayName: 'Italian',
+    colorClass: 'text-green-400',
+    badgeBg: 'bg-green-500/10 text-green-300 border-green-500/30',
+    borderClass: 'border-green-500/40',
+    description: 'Sanremo, Italian pop, modern Italian trap, and classical vocal opera.',
+  },
+  'Portuguese': {
+    name: 'Portuguese',
+    displayName: 'Portuguese',
+    colorClass: 'text-lime-300',
+    badgeBg: 'bg-lime-500/10 text-lime-300 border-lime-500/30',
+    borderClass: 'border-lime-500/40',
+    description: 'Brazilian Funk Carioca, Bossa Nova, MPB, Samba, Sertanejo, and Portuguese Fado.',
   },
   'Filipino': {
     name: 'Filipino',
-    displayName: 'Filipino / OPM',
+    displayName: 'Filipino',
     colorClass: 'text-orange-400',
     badgeBg: 'bg-orange-500/10 text-orange-300 border-orange-500/30',
     borderClass: 'border-orange-500/40',
@@ -115,7 +163,7 @@ export const CANONICAL_BUCKETS: Record<CanonicalBucket, BucketMetadata> = {
   },
   'I-Pop': {
     name: 'I-Pop',
-    displayName: 'I-Pop / Indian Subcontinent',
+    displayName: 'I-Pop',
     colorClass: 'text-indigo-400',
     badgeBg: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30',
     borderClass: 'border-indigo-500/40',
@@ -123,7 +171,7 @@ export const CANONICAL_BUCKETS: Record<CanonicalBucket, BucketMetadata> = {
   },
   'African': {
     name: 'African',
-    displayName: 'African (Continental / Pan-African)',
+    displayName: 'African',
     colorClass: 'text-lime-400',
     badgeBg: 'bg-lime-500/10 text-lime-300 border-lime-500/30',
     borderClass: 'border-lime-500/40',
@@ -131,7 +179,7 @@ export const CANONICAL_BUCKETS: Record<CanonicalBucket, BucketMetadata> = {
   },
   'Latina': {
     name: 'Latina',
-    displayName: 'Latina / Spanish & Reggaeton',
+    displayName: 'Latina',
     colorClass: 'text-red-400',
     badgeBg: 'bg-red-500/10 text-red-300 border-red-500/30',
     borderClass: 'border-red-500/40',
@@ -139,15 +187,31 @@ export const CANONICAL_BUCKETS: Record<CanonicalBucket, BucketMetadata> = {
   },
   'Français': {
     name: 'Français',
-    displayName: 'Français / French-speaking',
+    displayName: 'Français',
     colorClass: 'text-sky-400',
     badgeBg: 'bg-sky-500/10 text-sky-300 border-sky-500/30',
     borderClass: 'border-sky-500/40',
     description: 'French chansons, French rap, and Francophone Belgian/Swiss artists.',
   },
+  'Gospel': {
+    name: 'Gospel',
+    displayName: 'Gospel',
+    colorClass: 'text-yellow-400',
+    badgeBg: 'bg-yellow-500/10 text-yellow-300 border-yellow-500/30',
+    borderClass: 'border-yellow-500/40',
+    description: 'Christian worship, hymns, praise, and spoken ministry.',
+  },
+  'Instrumental': {
+    name: 'Instrumental',
+    displayName: 'Instrumental',
+    colorClass: 'text-cyan-400',
+    badgeBg: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30',
+    borderClass: 'border-cyan-500/40',
+    description: 'Pure instrumental tracks, soundtracks, piano solos, lofi beats, and ambient noise.',
+  },
   'Other': {
     name: 'Other',
-    displayName: 'Other / Unclassified',
+    displayName: 'Other',
     colorClass: 'text-slate-400',
     badgeBg: 'bg-slate-500/10 text-slate-300 border-slate-500/30',
     borderClass: 'border-slate-500/40',
@@ -173,6 +237,38 @@ export const BUCKET_CONSOLIDATION_MAP: Record<string, CanonicalBucket> = {
   'chinese': 'C-Pop',
   'mandopop': 'C-Pop',
   'cantopop': 'C-Pop',
+  'thai': 'Thai',
+  't-pop': 'Thai',
+  'thailand': 'Thai',
+  'vietnamese': 'Vietnamese',
+  'v-pop': 'Vietnamese',
+  'vietnam': 'Vietnamese',
+  'dutch': 'Dutch',
+  'netherlands': 'Dutch',
+  'nederlands': 'Dutch',
+  'nederpop': 'Dutch',
+  'nederhop': 'Dutch',
+  'holland': 'Dutch',
+  'arabic': 'Arabic',
+  'arabesque': 'Arabic',
+  'khaliji': 'Arabic',
+  'egyptian': 'Arabic',
+  'levantine': 'Arabic',
+  'german': 'German',
+  'deutsch': 'German',
+  'schlager': 'German',
+  'austrian': 'German',
+  'italian': 'Italian',
+  'italiano': 'Italian',
+  'sanremo': 'Italian',
+  'portuguese': 'Portuguese',
+  'brasil': 'Portuguese',
+  'brazil': 'Portuguese',
+  'bossa nova': 'Portuguese',
+  'samba': 'Portuguese',
+  'mpb': 'Portuguese',
+  'funk carioca': 'Portuguese',
+  'fado': 'Portuguese',
   'instrumental music': 'Instrumental',
   'instrumental': 'Instrumental',
   'lofi': 'Instrumental',
@@ -200,11 +296,7 @@ export const BUCKET_CONSOLIDATION_MAP: Record<string, CanonicalBucket> = {
   'reggaeton': 'Latina',
   'français': 'Français',
   'french': 'Français',
-  'nether-pop': 'Other',
-  'dutch': 'Other',
   'ukrainian': 'Other',
-  'v-pop': 'Other',
-  'vietnamese': 'Other',
   'intro': 'Other',
   'genre': 'Other',
   'other': 'Other',
@@ -217,10 +309,32 @@ export const COUNTRY_TO_BUCKET: Record<string, CanonicalBucket> = {
   US: 'English', GB: 'English', UK: 'English', CA: 'English', AU: 'English', 
   NZ: 'English', IE: 'English', JM: 'English', BB: 'English', BS: 'English',
   
-  // East Asian
+  // East & Southeast Asian
   JP: 'J-Pop', 
   KR: 'K-Pop', KP: 'K-Pop',
   TW: 'C-Pop', CN: 'C-Pop', HK: 'C-Pop', MO: 'C-Pop', SG: 'C-Pop',
+  TH: 'Thai',
+  VN: 'Vietnamese',
+  PH: 'Filipino',
+
+  // Netherlands
+  NL: 'Dutch',
+
+  // Portuguese & Brazilian
+  BR: 'Portuguese', PT: 'Portuguese', AO: 'Portuguese', MZ: 'Portuguese', 
+  CV: 'Portuguese', GW: 'Portuguese', ST: 'Portuguese', TL: 'Portuguese',
+
+  // German-speaking
+  DE: 'German', AT: 'German',
+
+  // Italian
+  IT: 'Italian', SM: 'Italian', VA: 'Italian',
+
+  // Middle East & North Africa (Arabic)
+  EG: 'Arabic', LB: 'Arabic', SA: 'Arabic', AE: 'Arabic', MA: 'Arabic', 
+  DZ: 'Arabic', TN: 'Arabic', JO: 'Arabic', IQ: 'Arabic', SY: 'Arabic', 
+  KW: 'Arabic', OM: 'Arabic', QA: 'Arabic', BH: 'Arabic', LY: 'Arabic', 
+  SD: 'Arabic', YE: 'Arabic', PS: 'Arabic',
   
   // Nigerian & African
   NG: 'Naija',
@@ -234,18 +348,20 @@ export const COUNTRY_TO_BUCKET: Record<string, CanonicalBucket> = {
   // Latin & Spanish
   MX: 'Latina', CO: 'Latina', PR: 'Latina', AR: 'Latina', CL: 'Latina',
   PE: 'Latina', VE: 'Latina', CU: 'Latina', DO: 'Latina', ES: 'Latina',
-  BR: 'Latina', EC: 'Latina', GT: 'Latina', CR: 'Latina', PA: 'Latina',
+  EC: 'Latina', GT: 'Latina', CR: 'Latina', PA: 'Latina',
   
   // French-speaking
   FR: 'Français', BE: 'Français', CH: 'Français', MC: 'Français',
   
-  // Filipino
-  PH: 'Filipino',
-  
-  // European countries that predominantly sing/record in English
-  SE: 'English', NO: 'English', DK: 'English', FI: 'English',
-  IS: 'English', NL: 'English', DE: 'English', AT: 'English',
+  // Nordic countries (English/Global default)
+  SE: 'English', NO: 'English', DK: 'English', FI: 'English', IS: 'English',
 };
+
+/**
+ * Transient cache of raw contextual hints (area, disambiguation, tags, type)
+ * gathered during Tier 2 (MusicBrainz) to enrich Tier 3 (Gemini 2.5 Flash) queries.
+ */
+export const musicBrainzHintsCache = new Map<string, string>();
 
 export interface ClusteredTrack {
   id: string;
@@ -335,11 +451,29 @@ export function initClassificationCache(): Map<string, ArtistClassification> {
 
   // 2. Load stored localStorage cache (contains previous runtime runs + manual edits)
   try {
-    const saved = localStorage.getItem(CLASSIFICATION_CACHE_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      for (const [key, val] of Object.entries(parsed)) {
-        runtimeCache.set(key, val as ArtistClassification);
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem(CLASSIFICATION_CACHE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        let purgedCount = 0;
+        for (const [key, val] of Object.entries(parsed)) {
+          const entry = val as ArtistClassification;
+          // Strict sanitation: strip out any invalid, unresolved, or poisoned MusicBrainz 'Other' records
+          if (
+            !entry || 
+            entry.confidence === 'unresolved' || 
+            !entry.bucket || 
+            !entry.artist ||
+            (entry.confidence === 'musicbrainz' && entry.bucket === 'Other')
+          ) {
+            purgedCount++;
+            continue;
+          }
+          runtimeCache.set(key, entry);
+        }
+        if (purgedCount > 0) {
+          saveClassificationCache();
+        }
       }
     }
   } catch (e) {
@@ -355,9 +489,18 @@ export function initClassificationCache(): Map<string, ArtistClassification> {
  */
 export function saveClassificationCache(): void {
   try {
+    if (typeof localStorage === 'undefined') return;
     const obj: Record<string, ArtistClassification> = {};
     for (const [k, v] of runtimeCache.entries()) {
-      obj[k] = v;
+      // Never serialize unresolved entries or poisoned MusicBrainz 'Other' records
+      if (
+        v && 
+        v.confidence !== 'unresolved' && 
+        v.bucket &&
+        !(v.confidence === 'musicbrainz' && v.bucket === 'Other')
+      ) {
+        obj[k] = v;
+      }
     }
     localStorage.setItem(CLASSIFICATION_CACHE_KEY, JSON.stringify(obj));
   } catch (e) {
@@ -396,9 +539,19 @@ export function getCachedClassification(artistName: string): ArtistClassificatio
 }
 
 /**
- * Store an artist classification in cache
+ * Store an artist classification in cache (unresolved or MusicBrainz 'Other' entries are strictly blocked)
  */
 export function setCachedClassification(artistName: string, classification: ArtistClassification): void {
+  // Strict Guard: Never persist unresolved classifications or MusicBrainz 'Other' placeholders to cache
+  if (
+    !classification || 
+    classification.confidence === 'unresolved' || 
+    !classification.bucket ||
+    (classification.confidence === 'musicbrainz' && classification.bucket === 'Other')
+  ) {
+    return;
+  }
+
   initClassificationCache();
   const key = normalizeArtistKey(artistName);
   
@@ -437,17 +590,27 @@ export function detectScriptSignature(text: string): { bucket: CanonicalBucket; 
     // Pure Han characters without Kana/Hangul strongly indicate C-Pop
     return { bucket: 'C-Pop', scriptName: 'Han (Chinese)' };
   }
+  if (hasHangul) {
+    return { bucket: 'K-Pop', scriptName: 'Hangul (Korean)' };
+  }
+  if (hasKana) {
+    return { bucket: 'J-Pop', scriptName: 'Kana (Japanese)' };
+  }
+  if (hasHan && !hasKana && !hasHangul) {
+    // Pure Han characters without Kana/Hangul strongly indicate C-Pop
+    return { bucket: 'C-Pop', scriptName: 'Han (Chinese)' };
+  }
   if (hasDevanagari) {
     return { bucket: 'I-Pop', scriptName: 'Devanagari (Indian)' };
   }
+  if (hasThai) {
+    return { bucket: 'Thai', scriptName: 'Thai (Thailand)' };
+  }
   if (hasArabic) {
-    return { bucket: 'Other', scriptName: 'Arabic' };
+    return { bucket: 'Arabic', scriptName: 'Arabic (Middle East/North Africa)' };
   }
   if (hasCyrillic) {
     return { bucket: 'Other', scriptName: 'Cyrillic' };
-  }
-  if (hasThai) {
-    return { bucket: 'Other', scriptName: 'Thai' };
   }
 
   return null;
@@ -457,7 +620,7 @@ export function detectScriptSignature(text: string): { bucket: CanonicalBucket; 
  * Tier 2: MusicBrainz API Search with rate-limit queue
  */
 let lastMusicBrainzRequestTime = 0;
-const MUSICBRAINZ_MIN_INTERVAL_MS = 1100; // Strict rate-limit: >1 req/sec
+const MUSICBRAINZ_MIN_INTERVAL_MS = 1200; // Strict rate-limit: >1.2s per req
 
 export async function queryMusicBrainz(
   artistName: string,
@@ -465,6 +628,8 @@ export async function queryMusicBrainz(
 ): Promise<ArtistClassification | null> {
   const cleanName = artistName.replace(/\s*-\s*topic$/i, '').trim();
   if (!cleanName || cleanName === '<unknown>') return null;
+
+  const normKey = normalizeArtistKey(cleanName);
 
   // Rate-limit throttle
   const now = Date.now();
@@ -486,7 +651,7 @@ export async function queryMusicBrainz(
 
   try {
     const url = `https://musicbrainz.org/ws/2/artist/?query=${encodeURIComponent('"' + cleanName + '"')}&fmt=json&limit=3`;
-    const response = await fetch(url, {
+    let response = await fetch(url, {
       signal,
       headers: {
         'Accept': 'application/json',
@@ -494,10 +659,21 @@ export async function queryMusicBrainz(
       },
     });
 
+    // 503 backoff with single retry
+    if (response.status === 503) {
+      console.warn(`MusicBrainz rate limit busy (503) for ${cleanName}. Retrying in 1.5s...`);
+      await new Promise(r => setTimeout(r, 1500));
+      lastMusicBrainzRequestTime = Date.now();
+      response = await fetch(url, {
+        signal,
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'PlaylistHaven/1.0.0 (https://github.com/joejamal029/Playlist-Haven; contact@playlisthaven.app)',
+        },
+      });
+    }
+
     if (!response.ok) {
-      if (response.status === 503) {
-        console.warn('MusicBrainz rate limit busy (503)');
-      }
       return null;
     }
 
@@ -512,47 +688,121 @@ export async function queryMusicBrainz(
       return null;
     }
 
-    const countryCode = match.country || (match.area && match.area.type === 'Country' ? match.area['iso-3166-1-codes']?.[0] : undefined);
-    const areaName = match.area?.name || match['begin-area']?.name;
-    const disambiguation = match.disambiguation;
-
-    let bucket: CanonicalBucket = 'Other';
-
-    if (countryCode && COUNTRY_TO_BUCKET[countryCode]) {
-      bucket = COUNTRY_TO_BUCKET[countryCode];
-    } else if (areaName) {
-      // Fuzzy area name matches
-      const areaLower = areaName.toLowerCase();
-      if (areaLower.includes('nigeria') || areaLower.includes('lagos')) bucket = 'Naija';
-      else if (areaLower.includes('japan') || areaLower.includes('tokyo')) bucket = 'J-Pop';
-      else if (areaLower.includes('korea') || areaLower.includes('seoul')) bucket = 'K-Pop';
-      else if (areaLower.includes('taiwan') || areaLower.includes('china') || areaLower.includes('hong kong')) bucket = 'C-Pop';
-      else if (areaLower.includes('philippines') || areaLower.includes('manila')) bucket = 'Filipino';
-      else if (areaLower.includes('india') || areaLower.includes('mumbai')) bucket = 'I-Pop';
-      else if (areaLower.includes('france') || areaLower.includes('paris')) bucket = 'Français';
-      else if (areaLower.includes('puerto rico') || areaLower.includes('colombia') || areaLower.includes('spain')) bucket = 'Latina';
-      else if (areaLower.includes('united states') || areaLower.includes('united kingdom') || areaLower.includes('canada')) bucket = 'English';
+    // Extract ISO country code: check match.country, area ISO-3166-1, or area subdivision ISO-3166-2 (e.g. US-PA, AU-WA)
+    let countryCode = match.country || (match.area && match.area.type === 'Country' ? match.area['iso-3166-1-codes']?.[0] : undefined);
+    if (!countryCode && match.area?.['iso-3166-2-codes']?.[0]) {
+      const sub = match.area['iso-3166-2-codes'][0];
+      const prefix = sub.split('-')[0];
+      if (COUNTRY_TO_BUCKET[prefix]) {
+        countryCode = prefix;
+      }
     }
 
-    // Tag check: if tags contain "k-pop", "j-pop", "afrobeats", "gospel", refine bucket
+    const areaName = match.area?.name || match['begin-area']?.name;
+    const disambiguation = match.disambiguation || '';
+
+    let bucket: CanonicalBucket = 'Other';
+    let countryName: string | undefined = areaName;
+
+    // 1. Direct ISO country code mapping
+    if (countryCode && COUNTRY_TO_BUCKET[countryCode]) {
+      bucket = COUNTRY_TO_BUCKET[countryCode];
+    }
+
+    // 2. Comprehensive Area / City / State name mapping
+    if (bucket === 'Other' && areaName) {
+      const areaResolved = resolveAreaToBucket(areaName);
+      if (areaResolved) {
+        bucket = areaResolved.bucket;
+        countryCode = countryCode || areaResolved.country;
+        countryName = areaResolved.countryName || areaName;
+      }
+    }
+
+    // 3. Begin-area fallback if still unresolved
+    if (bucket === 'Other' && match['begin-area']?.name) {
+      const beginResolved = resolveAreaToBucket(match['begin-area'].name);
+      if (beginResolved) {
+        bucket = beginResolved.bucket;
+        countryCode = countryCode || beginResolved.country;
+        countryName = beginResolved.countryName || match['begin-area'].name;
+      }
+    }
+
+    // 4. Check disambiguation for explicit Christian/Gospel clues
+    const disLower = disambiguation.toLowerCase();
+    if (disLower.includes('christian') || disLower.includes('worship') || disLower.includes('gospel') || disLower.includes('church')) {
+      bucket = 'Gospel';
+    }
+
+    // 5. Community tags refinement
     if (match.tags && Array.isArray(match.tags)) {
       const tagNames = match.tags.map((t: any) => (t.name || '').toLowerCase());
-      if (tagNames.some((t: string) => t.includes('gospel') || t.includes('christian'))) {
+      if (tagNames.some((t: string) => t.includes('gospel') || t.includes('christian') || t.includes('worship') || t.includes('ccm') || t.includes('praise'))) {
         bucket = 'Gospel';
-      } else if (tagNames.some((t: string) => t.includes('anime') || t.includes('vocaloid'))) {
+      } else if (tagNames.some((t: string) => t.includes('anime') || t.includes('vocaloid') || t.includes('j-pop') || t.includes('j-rock') || t.includes('city pop'))) {
         bucket = 'J-Pop';
       } else if (tagNames.some((t: string) => t.includes('afrobeats') || t.includes('naija'))) {
         bucket = 'Naija';
+      } else if (tagNames.some((t: string) => t.includes('k-pop') || t.includes('kpop') || t.includes('k-hop') || t.includes('k-rap'))) {
+        bucket = 'K-Pop';
+      } else if (tagNames.some((t: string) => t.includes('c-pop') || t.includes('mandopop') || t.includes('cantopop'))) {
+        bucket = 'C-Pop';
+      } else if (tagNames.some((t: string) => t.includes('latin') || t.includes('reggaeton') || t.includes('bachata') || t.includes('flamenco') || t.includes('cumbia') || t.includes('spanish'))) {
+        bucket = 'Latina';
+      } else if (tagNames.some((t: string) => t.includes('t-pop') || t.includes('thai'))) {
+        bucket = 'Thai';
+      } else if (tagNames.some((t: string) => t.includes('v-pop') || t.includes('vietnamese'))) {
+        bucket = 'Vietnamese';
+      } else if (tagNames.some((t: string) => t.includes('nederpop') || t.includes('nederhop') || t.includes('dutch'))) {
+        bucket = 'Dutch';
+      } else if (tagNames.some((t: string) => t.includes('bossa nova') || t.includes('funk carioca') || t.includes('samba') || t.includes('mpb') || t.includes('fado'))) {
+        bucket = 'Portuguese';
+      } else if (tagNames.some((t: string) => t.includes('arabic') || t.includes('arabesque') || t.includes('khaliji'))) {
+        bucket = 'Arabic';
+      } else if (tagNames.some((t: string) => t.includes('deutschrap') || t.includes('schlager'))) {
+        bucket = 'German';
+      } else if (tagNames.some((t: string) => t.includes('sanremo') || t.includes('italiano'))) {
+        bucket = 'Italian';
+      } else if (tagNames.some((t: string) => t.includes('opm') || t.includes('filipino') || t.includes('tagalog'))) {
+        bucket = 'Filipino';
+      } else if (tagNames.some((t: string) => t.includes('bollywood') || t.includes('desi') || t.includes('punjabi') || t.includes('hindustani'))) {
+        bucket = 'I-Pop';
       }
+    }
+
+    // CRITICAL WATERFALL INVARIANT:
+    // If MusicBrainz cannot affirmatively classify the artist into a specific bucket,
+    // do NOT return 'Other' with confidence: 'musicbrainz'. Cache any extracted raw hints
+    // and return null so the waterfall cascades cleanly to Tier 3 (Gemini 2.5 Flash LLM).
+    if (bucket === 'Other') {
+      const hints: string[] = [];
+      if (match.name && match.name.toLowerCase() !== cleanName.toLowerCase()) {
+        hints.push(`MB Name: ${match.name}`);
+      }
+      if (match.type) hints.push(`Type: ${match.type}`);
+      if (areaName) hints.push(`Area: ${areaName}`);
+      if (match['begin-area']?.name && match['begin-area'].name !== areaName) {
+        hints.push(`Origin: ${match['begin-area'].name}`);
+      }
+      if (disambiguation) hints.push(`Disambiguation: ${disambiguation}`);
+      if (match.tags && Array.isArray(match.tags)) {
+        const tagList = match.tags.slice(0, 6).map((t: any) => t.name).filter(Boolean);
+        if (tagList.length > 0) hints.push(`Tags: ${tagList.join(', ')}`);
+      }
+      if (hints.length > 0) {
+        musicBrainzHintsCache.set(normKey, hints.join(' | '));
+      }
+      return null;
     }
 
     return {
       artist: cleanName,
       bucket,
       country: countryCode,
-      countryName: areaName,
+      countryName,
       confidence: 'musicbrainz',
-      sourceDetails: `MusicBrainz: ${match.name} (${areaName || countryCode || 'Match'})${disambiguation ? ` - ${disambiguation}` : ''}`,
+      sourceDetails: `MusicBrainz: ${match.name} (${countryName || countryCode || 'Match'})${disambiguation ? ` - ${disambiguation}` : ''}`,
       mbid: match.id,
       timestamp: Date.now(),
     };
@@ -570,7 +820,8 @@ export async function queryMusicBrainz(
 export async function batchClassifyWithLLM(
   unresolvedArtists: string[],
   signal?: AbortSignal,
-  onProgressMessage?: (msg: string) => void
+  onProgressMessage?: (msg: string) => void,
+  artistHintsMap?: Map<string, string>
 ): Promise<Map<string, ArtistClassification>> {
   const results = new Map<string, ArtistClassification>();
   if (unresolvedArtists.length === 0) return results;
@@ -602,38 +853,55 @@ export async function batchClassifyWithLLM(
     batches.push(unresolvedArtists.slice(i, i + BATCH_SIZE));
   }
 
-  const modelName = aiConfig.modelName && aiConfig.modelName !== 'gemini-3-flash-preview' 
-    ? aiConfig.modelName 
-    : 'gemini-2.5-flash';
+  const rawModel = aiConfig.modelName || 'gemini-2.5-flash';
+  const primaryModel = (rawModel === 'gemini-3-flash-preview') ? 'gemini-2.5-flash' : rawModel;
+  const secondaryModel = primaryModel === 'gemini-2.5-flash' ? 'gemini-2.0-flash' : 'gemini-1.5-flash';
+  const tertiaryModel = 'gemini-1.5-flash';
 
   for (let bIdx = 0; bIdx < batches.length; bIdx++) {
     if (signal?.aborted) break;
 
     const batch = batches[bIdx];
     if (onProgressMessage) {
-      onProgressMessage(`AI Batch ${bIdx + 1}/${batches.length} (${batch.length} artists with ${modelName})...`);
+      onProgressMessage(`AI Batch ${bIdx + 1}/${batches.length} (${batch.length} artists with ${primaryModel})...`);
     }
 
+    // Attach any preliminary metadata/contextual hints gathered from Tier 2 MusicBrainz
+    const batchWithHints = batch.map(artist => {
+      const key = normalizeArtistKey(artist);
+      const hints = artistHintsMap?.get(key) || musicBrainzHintsCache.get(key);
+      return hints ? { artist, preliminaryHints: hints } : { artist };
+    });
+
     const prompt = `You are an expert global music discographer. Group each of the following musical artists into exactly one of these canonical language/nationality buckets:
-[English, J-Pop, Naija, K-Pop, C-Pop, Instrumental, Gospel, Filipino, I-Pop, African, Latina, Français, Other]
+[English, J-Pop, Naija, K-Pop, C-Pop, Thai, Vietnamese, Dutch, Arabic, German, Italian, Portuguese, Filipino, I-Pop, African, Latina, Français, Gospel, Instrumental, Other]
 
 Guidelines:
 - "English": UK, US, Canada, Australia, Ireland, and global artists singing predominantly in English.
-- "J-Pop": Japanese artists, Anime OST composers, Vocaloid.
-- "Naija": Nigerian artists (Afrobeats, Highlife, Fuji, Street-pop).
+- "J-Pop": Japanese artists, Anime OST composers, Vocaloid, City Pop, J-Rock.
+- "Naija": Nigerian artists (Afrobeats, Highlife, Fuji, Street-pop, Alté).
 - "K-Pop": South Korean pop, K-hiphop, K-R&B.
 - "C-Pop": Chinese, Taiwanese, Hong Kong Mandopop/Cantopop.
-- "Instrumental": Pure instrumental music, sound design, piano solos, lofi beats.
-- "Gospel": Christian ministry, worship bands, hymns.
-- "Filipino": OPM, Tagalog pop artists.
-- "I-Pop": Indian pop, Bollywood playback, Punjabi music.
-- "African": Non-Nigerian African artists (Amapiano, South African, Ghanaian, Congolese).
+- "Thai": Thai pop (T-Pop), Thai indie/rock, Thailand artists.
+- "Vietnamese": Vietnamese pop (V-Pop), ballads, Vietnam artists.
+- "Dutch": Netherlands artists, Nederpop, Nederhop, Dutch electronic.
+- "Arabic": Middle Eastern and North African artists (Egyptian, Levantine, Khaliji, Maghreb).
+- "German": German, Austrian, Swiss Deutschrap, Schlager, Neue Deutsche Welle.
+- "Italian": Italian pop, Sanremo, modern Italian trap, classical vocal.
+- "Portuguese": Brazilian (Funk Carioca, Bossa Nova, MPB, Samba) and Portuguese (Fado, pop) artists.
+- "Filipino": OPM, Tagalog pop artists, Philippines acoustic.
+- "I-Pop": Indian pop, Bollywood playback, Punjabi, Hindi, South Asian music.
+- "African": Non-Nigerian continental African artists (Amapiano, South African, Ghanaian, Congolese).
 - "Latina": Spanish/Latin pop, Reggaeton, Bachata, Latin American artists.
 - "Français": French, Francophone Belgian/Swiss artists singing in French.
+- "Gospel": Christian ministry, worship bands, hymns, praise, Bible teaching, CCM, gospel artists.
+- "Instrumental": Pure instrumental music, sound design, piano solos, lofi beats, ambient.
 - "Other": Any other region or unclassifiable.
 
+Use any supplied preliminary hints (such as area, origin, community tags, or disambiguation) to inform your categorization accurately.
+
 Artists to classify:
-${JSON.stringify(batch)}
+${JSON.stringify(batchWithHints, null, 2)}
 
 Respond ONLY with a JSON array of objects with keys: "artist", "bucket", "country", "reason".`;
 
@@ -650,33 +918,58 @@ Respond ONLY with a JSON array of objects with keys: "artist", "bucket", "countr
 
         if (isGemini) {
           const ai = new GoogleGenAI({ apiKey });
-          const response = await ai.models.generateContent({
-            model: modelName,
-            contents: prompt,
-            config: {
-              responseMimeType: 'application/json',
-              responseSchema: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    artist: { type: Type.STRING },
-                    bucket: { 
-                      type: Type.STRING,
-                      enum: [
-                        'English', 'J-Pop', 'Naija', 'K-Pop', 'C-Pop',
-                        'Instrumental', 'Gospel', 'Filipino', 'I-Pop',
-                        'African', 'Latina', 'Français', 'Other'
-                      ]
+          const tryGenerate = async (m: string) => {
+            return await ai.models.generateContent({
+              model: m,
+              contents: prompt,
+              config: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      artist: { type: Type.STRING },
+                      bucket: { 
+                        type: Type.STRING,
+                        enum: [
+                          'English', 'J-Pop', 'Naija', 'K-Pop', 'C-Pop',
+                          'Thai', 'Vietnamese', 'Dutch', 'Arabic', 'German',
+                          'Italian', 'Portuguese', 'Filipino', 'I-Pop',
+                          'African', 'Latina', 'Français', 'Gospel',
+                          'Instrumental', 'Other'
+                        ]
+                      },
+                      country: { type: Type.STRING },
+                      reason: { type: Type.STRING },
                     },
-                    country: { type: Type.STRING },
-                    reason: { type: Type.STRING },
+                    required: ['artist', 'bucket'],
                   },
-                  required: ['artist', 'bucket'],
                 },
               },
-            },
-          });
+            });
+          };
+
+          let response: any;
+          try {
+            response = await tryGenerate(primaryModel);
+          } catch (primaryErr: any) {
+            if (primaryModel !== secondaryModel) {
+              console.warn(`[ClassificationEngine] Primary model ${primaryModel} failed (${primaryErr.message}). Failing over to ${secondaryModel}...`);
+              try {
+                response = await tryGenerate(secondaryModel);
+              } catch (secErr: any) {
+                if (secondaryModel !== tertiaryModel) {
+                  console.warn(`[ClassificationEngine] Secondary model ${secondaryModel} failed (${secErr.message}). Failing over to ${tertiaryModel}...`);
+                  response = await tryGenerate(tertiaryModel);
+                } else {
+                  throw secErr;
+                }
+              }
+            } else {
+              throw primaryErr;
+            }
+          }
 
           if (typeof (response as any).text === 'function') {
             rawText = (response as any).text();
@@ -696,7 +989,7 @@ Respond ONLY with a JSON array of objects with keys: "artist", "bucket", "countr
               ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {})
             },
             body: JSON.stringify({
-              model: modelName || 'llama3',
+              model: primaryModel || 'llama3',
               messages: [{ role: 'user', content: prompt }],
               response_format: { type: 'json_object' }
             })
@@ -722,7 +1015,7 @@ Respond ONLY with a JSON array of objects with keys: "artist", "bucket", "countr
                 bucket: canonical,
                 countryName: item.country,
                 confidence: 'llm',
-                sourceDetails: `AI (${modelName}): ${item.reason || canonical}`,
+                sourceDetails: `AI (${primaryModel}): ${item.reason || canonical}`,
                 timestamp: Date.now(),
               };
               results.set(normalizeArtistKey(item.artist), classification);
@@ -769,6 +1062,7 @@ export async function classifyPlaylistTracks(
     useMusicBrainz?: boolean;
     useLLM?: boolean;
     signal?: AbortSignal;
+    shouldSkipMusicBrainz?: () => boolean;
     onProgress?: (progress: ClassificationProgress) => void;
   }
 ): Promise<{
@@ -847,26 +1141,34 @@ export async function classifyPlaylistTracks(
     }
 
     // Check if dominant script in song titles gives away the language (e.g. all titles in Japanese/Korean)
-    let titleScriptMatch: { bucket: CanonicalBucket; scriptName: string } | null = null;
-    for (const title of info.titles.slice(0, 5)) {
-      const s = detectScriptSignature(title);
-      if (s) {
-        titleScriptMatch = s;
-        break;
+    // Only pool titles if the artist is not an unknown placeholder
+    if (key !== '<unknown>' && key !== 'unknown' && key !== 'unknown artist') {
+      let titleScriptMatch: { bucket: CanonicalBucket; scriptName: string } | null = null;
+      for (const title of info.titles.slice(0, 5)) {
+        const s = detectScriptSignature(title);
+        if (s) {
+          titleScriptMatch = s;
+          break;
+        }
+      }
+
+      if (titleScriptMatch) {
+        const cls: ArtistClassification = {
+          artist: info.originalName,
+          bucket: titleScriptMatch.bucket,
+          confidence: 'script',
+          sourceDetails: `Track title script: ${titleScriptMatch.scriptName}`,
+          timestamp: Date.now(),
+        };
+        resolvedClassifications.set(key, cls);
+        setCachedClassification(info.originalName, cls);
+        tierCounts.script++;
+        continue;
       }
     }
 
-    if (titleScriptMatch) {
-      const cls: ArtistClassification = {
-        artist: info.originalName,
-        bucket: titleScriptMatch.bucket,
-        confidence: 'script',
-        sourceDetails: `Track title script: ${titleScriptMatch.scriptName}`,
-        timestamp: Date.now(),
-      };
-      resolvedClassifications.set(key, cls);
-      setCachedClassification(info.originalName, cls);
-      tierCounts.script++;
+    // If artist is an unknown placeholder, do not query online MusicBrainz or LLM
+    if (key === '<unknown>' || key === 'unknown' || key === 'unknown artist') {
       continue;
     }
 
@@ -918,7 +1220,7 @@ export async function classifyPlaylistTracks(
 
       try {
         const mbResult = await queryMusicBrainz(info.originalName, signal);
-        if (mbResult) {
+        if (mbResult && mbResult.bucket !== 'Other') {
           resolvedClassifications.set(key, mbResult);
           setCachedClassification(info.originalName, mbResult);
           tierCounts.musicbrainz++;
@@ -956,7 +1258,8 @@ export async function classifyPlaylistTracks(
               isProcessing: true,
             });
           }
-        }
+        },
+        musicBrainzHintsCache
       );
 
       for (const key of stillUnresolvedKeys) {
@@ -995,13 +1298,20 @@ export async function classifyPlaylistTracks(
     'Naija': [],
     'K-Pop': [],
     'C-Pop': [],
-    'Instrumental': [],
-    'Gospel': [],
+    'Thai': [],
+    'Vietnamese': [],
+    'Dutch': [],
+    'Arabic': [],
+    'German': [],
+    'Italian': [],
+    'Portuguese': [],
     'Filipino': [],
     'I-Pop': [],
     'African': [],
     'Latina': [],
     'Français': [],
+    'Gospel': [],
+    'Instrumental': [],
     'Other': [],
   };
 
@@ -1019,12 +1329,37 @@ export async function classifyPlaylistTracks(
   tracks.forEach((track, idx) => {
     const rawArtist = (track.artist || '<unknown>').trim();
     const key = normalizeArtistKey(rawArtist);
-    const classification = resolvedClassifications.get(key) || {
-      artist: rawArtist,
-      bucket: 'Other' as CanonicalBucket,
-      confidence: 'unresolved' as ClassificationConfidence,
-      timestamp: Date.now(),
-    };
+    const isUnknown = !rawArtist || key === '<unknown>' || key === 'unknown' || key === 'unknown artist';
+
+    let classification: ArtistClassification;
+    if (isUnknown) {
+      // For tracks without an artist, detect script directly from track title
+      const scriptMatch = detectScriptSignature(track.title);
+      if (scriptMatch) {
+        classification = {
+          artist: rawArtist || '<unknown>',
+          bucket: scriptMatch.bucket,
+          confidence: 'script',
+          sourceDetails: `Track title script: ${scriptMatch.scriptName}`,
+          timestamp: Date.now(),
+        };
+      } else {
+        classification = {
+          artist: rawArtist || '<unknown>',
+          bucket: 'Other' as CanonicalBucket,
+          confidence: 'unresolved' as ClassificationConfidence,
+          sourceDetails: 'Unknown artist without recognizable script',
+          timestamp: Date.now(),
+        };
+      }
+    } else {
+      classification = resolvedClassifications.get(key) || {
+        artist: rawArtist,
+        bucket: 'Other' as CanonicalBucket,
+        confidence: 'unresolved' as ClassificationConfidence,
+        timestamp: Date.now(),
+      };
+    }
 
     const clusteredTrack: ClusteredTrack = {
       id: `track-${idx}-${key}`,
@@ -1166,7 +1501,160 @@ export function getAllCachedEntries(): ArtistClassification[] {
  * Clear all runtime cache (resets to pre-seeded 1,341 only)
  */
 export function resetCacheToDefault(): void {
-  localStorage.removeItem(CLASSIFICATION_CACHE_KEY);
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem(CLASSIFICATION_CACHE_KEY);
+  }
   isCacheInitialized = false;
   initClassificationCache();
 }
+
+/**
+ * Update a specific cached entry
+ */
+export function updateCachedEntry(
+  artistKeyOrName: string,
+  updates: Partial<ArtistClassification>
+): boolean {
+  initClassificationCache();
+  const key = normalizeArtistKey(artistKeyOrName);
+  const existing = runtimeCache.get(key);
+  if (!existing) return false;
+
+  const updated: ArtistClassification = {
+    ...existing,
+    ...updates,
+    timestamp: Date.now(),
+  };
+
+  // If bucket was updated, ensure it's valid canonical bucket
+  if (updates.bucket) {
+    const canonical = CANONICAL_BUCKETS[updates.bucket]?.name || BUCKET_CONSOLIDATION_MAP[updates.bucket.toLowerCase()] || updates.bucket;
+    updated.bucket = canonical as CanonicalBucket;
+  }
+
+  runtimeCache.set(key, updated);
+  saveClassificationCache();
+  return true;
+}
+
+/**
+ * Delete a specific entry from cache
+ */
+export function deleteCachedEntry(artistKeyOrName: string): boolean {
+  initClassificationCache();
+  const key = normalizeArtistKey(artistKeyOrName);
+  if (!runtimeCache.has(key)) return false;
+
+  runtimeCache.delete(key);
+  saveClassificationCache();
+  return true;
+}
+
+/**
+ * Batch update multiple cached entries (e.g. batch reassign bucket or country)
+ */
+export function batchUpdateCachedEntries(
+  artistKeysOrNames: string[],
+  updates: Partial<ArtistClassification>
+): number {
+  initClassificationCache();
+  let count = 0;
+
+  for (const name of artistKeysOrNames) {
+    const key = normalizeArtistKey(name);
+    const existing = runtimeCache.get(key);
+    if (existing) {
+      const updated: ArtistClassification = {
+        ...existing,
+        ...updates,
+        timestamp: Date.now(),
+      };
+      if (updates.bucket) {
+        const canonical = CANONICAL_BUCKETS[updates.bucket]?.name || BUCKET_CONSOLIDATION_MAP[updates.bucket.toLowerCase()] || updates.bucket;
+        updated.bucket = canonical as CanonicalBucket;
+      }
+      runtimeCache.set(key, updated);
+      count++;
+    }
+  }
+
+  if (count > 0) {
+    saveClassificationCache();
+  }
+  return count;
+}
+
+/**
+ * Batch delete multiple cached entries
+ */
+export function batchDeleteCachedEntries(artistKeysOrNames: string[]): number {
+  initClassificationCache();
+  let count = 0;
+
+  for (const name of artistKeysOrNames) {
+    const key = normalizeArtistKey(name);
+    if (runtimeCache.delete(key)) {
+      count++;
+    }
+  }
+
+  if (count > 0) {
+    saveClassificationCache();
+  }
+  return count;
+}
+
+/**
+ * Add a new manual artist mapping to cache directly
+ */
+export function addManualCacheEntry(
+  artist: string,
+  bucket: CanonicalBucket,
+  country?: string,
+  notes?: string
+): ArtistClassification {
+  initClassificationCache();
+  const cleanArtist = artist.trim();
+  const canonicalBucket = CANONICAL_BUCKETS[bucket]?.name || 'Other';
+
+  const classification: ArtistClassification = {
+    artist: cleanArtist,
+    bucket: canonicalBucket,
+    country: country?.trim() || undefined,
+    countryName: country?.trim() || undefined,
+    confidence: 'manual',
+    sourceDetails: notes?.trim() || 'Direct Manual Cache Entry',
+    timestamp: Date.now(),
+  };
+
+  const key = normalizeArtistKey(cleanArtist);
+  runtimeCache.set(key, classification);
+  saveClassificationCache();
+  return classification;
+}
+
+/**
+ * Remediate a single artist using Gemini 2.5 Flash
+ */
+export async function remediateSingleArtistWithAI(
+  artistName: string,
+  signal?: AbortSignal
+): Promise<ArtistClassification | null> {
+  if (!artistName || artistName === '<unknown>') return null;
+  const results = await batchClassifyWithLLM([artistName], signal);
+  const key = normalizeArtistKey(artistName);
+  return results.get(key) || null;
+}
+
+/**
+ * Reclassify selected cached entries using Gemini 2.5 Flash batch AI
+ */
+export async function reclassifyCachedEntriesWithAI(
+  artistNames: string[],
+  signal?: AbortSignal,
+  onProgress?: (msg: string) => void
+): Promise<number> {
+  const results = await batchClassifyWithLLM(artistNames, signal, onProgress);
+  return results.size;
+}
+

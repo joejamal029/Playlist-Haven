@@ -6617,7 +6617,62 @@ export const PRE_SEEDED_ARTIST_CACHE: Record<string, SeededArtistEntry> = {
     "artist": "White Noise",
     "bucket": "Instrumental",
     "rawGenre": "White Noise"
+  },
+  "jennie": {
+    "artist": "JENNIE",
+    "bucket": "K-Pop",
+    "rawGenre": "K-Pop"
+  },
+  "lee hyori": {
+    "artist": "Lee Hyori",
+    "bucket": "K-Pop",
+    "rawGenre": "K-Pop"
+  },
+  "the lonely island": {
+    "artist": "The Lonely Island",
+    "bucket": "English",
+    "rawGenre": "English"
+  },
+  "little richard": {
+    "artist": "Little Richard",
+    "bucket": "English",
+    "rawGenre": "English"
+  },
+  "c.a.c. good women choir ibadan": {
+    "artist": "C.A.C. Good Women Choir Ibadan",
+    "bucket": "Gospel",
+    "rawGenre": "Gospel"
+  },
+  "c.a.c. good women choir": {
+    "artist": "C.A.C. Good Women Choir",
+    "bucket": "Gospel",
+    "rawGenre": "Gospel"
+  },
+  "cac good women choir ibadan": {
+    "artist": "C.A.C. Good Women Choir Ibadan",
+    "bucket": "Gospel",
+    "rawGenre": "Gospel"
+  },
+  "zhou shen": {
+    "artist": "Zhou Shen",
+    "bucket": "C-Pop",
+    "rawGenre": "C-Pop"
+  },
+  "zhou shen (周深)": {
+    "artist": "Zhou Shen (周深)",
+    "bucket": "C-Pop",
+    "rawGenre": "C-Pop"
+  },
+  "周深": {
+    "artist": "周深",
+    "bucket": "C-Pop",
+    "rawGenre": "C-Pop"
+  },
+  "周深/郭沁": {
+    "artist": "周深/郭沁",
+    "bucket": "C-Pop",
+    "rawGenre": "C-Pop"
   }
 };
 
-export const PRE_SEEDED_COUNT = 1341;
+export const PRE_SEEDED_COUNT = 1353;

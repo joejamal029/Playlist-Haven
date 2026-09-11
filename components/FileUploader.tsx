@@ -67,6 +67,8 @@ const FileUploader: React.FC<FileUploaderProps> = ({
       case 'emerald': return 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300';
       case 'rose': return 'border-rose-500/50 bg-rose-500/10 text-rose-300';
       case 'amber': return 'border-amber-500/50 bg-amber-500/10 text-amber-300';
+      case 'cyan': return 'border-cyan-500/50 bg-cyan-500/10 text-cyan-300';
+      case 'fuchsia': return 'border-fuchsia-500/50 bg-fuchsia-500/10 text-fuchsia-300';
       default: return 'border-blue-500/50 bg-blue-500/10 text-blue-300';
     }
   };

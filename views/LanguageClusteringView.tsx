@@ -3,27 +3,41 @@ import {
   ArrowLeft, Globe, Languages, Sparkles, Filter, Search, Download, 
   Settings2, RefreshCw, XCircle, CheckCircle2, ChevronDown, ChevronRight, 
   Layers, Music2, Database, Upload, FileSpreadsheet, Archive, AlertCircle,
-  FileCode, Play, StopCircle, Edit3, Trash2, HelpCircle
+  FileCode, Play, StopCircle, Edit3, Trash2, HelpCircle, HardDrive,
+  Compass, CheckSquare, Square, Plus, Check, ExternalLink, Zap
 } from 'lucide-react';
 import FileUploader from '../components/FileUploader';
 import { downloadPlaylistFile } from '../services/downloadHelper';
 import { 
   CanonicalBucket, 
   CANONICAL_BUCKETS, 
+  BUCKET_CONSOLIDATION_MAP,
   ArtistClassification, 
   ClusteredTrack, 
   ClassificationProgress,
   classifyPlaylistTracks,
   setManualOverride,
   getCachedClassification,
+  setCachedClassification,
   importArtistCSV,
   exportCacheJSON,
   importCacheJSON,
   getAllCachedEntries,
   resetCacheToDefault,
-  saveClassificationCache
+  saveClassificationCache,
+  normalizeArtistKey,
+  updateCachedEntry,
+  deleteCachedEntry,
+  batchUpdateCachedEntries,
+  batchDeleteCachedEntries,
+  addManualCacheEntry,
+  remediateSingleArtistWithAI,
+  reclassifyCachedEntriesWithAI,
+  batchClassifyWithLLM
 } from '../services/classificationEngine';
+import { getAllEnrichedTracks } from '../services/metadataDb';
 import { getAIConfig, setAIConfig, AIConfig } from '../services/visionEngine';
+import { cleanCompositeTrack } from '../services/playlistSanitizer';
 import JSZip from 'jszip';
 
 interface LanguageClusteringViewProps {
@@ -81,16 +95,32 @@ function parseRawPlaylistContent(rawContent: string, fileName: string): { title:
 
     if (rows.length >= 2) {
       const header = rows[0].map(h => h.toLowerCase().replace(/[\s_"-]+/g, ''));
-      const artistIdx = header.findIndex(h => h.includes('artist') || h === 'singer' || h === 'performer' || h === 'colartist');
-      const titleIdx = header.findIndex(h => h.includes('title') || h.includes('track') || h.includes('song') || h === 'name' || h === 'coltitle');
-      const pathIdx = header.findIndex(h => h.includes('path') || h.includes('file') || h.includes('url') || h.includes('location') || h === 'filepath');
+      const colArtistIdx = header.findIndex(h => h === 'colartist' || h === 'artist');
+      const artistIdx = colArtistIdx !== -1 ? colArtistIdx : header.findIndex(h => h.includes('artist') || h === 'singer' || h === 'performer');
+      const colTitleIdx = header.findIndex(h => h === 'coltitle' || h === 'title');
+      const titleIdx = colTitleIdx !== -1 ? colTitleIdx : header.findIndex(h => h.includes('title') || h.includes('track') || h.includes('song') || h === 'name');
+      const pathIdx = header.findIndex(h => h === 'collogpath' || h.includes('logpath') || h === 'colpath' || h.includes('path') || h.includes('file') || h.includes('url') || h.includes('location') || h === 'filepath');
       const playIdx = header.findIndex(h => h.includes('playcount') || h.includes('plays') || h === 'play_count');
+      const bucketIdx = header.findIndex(h => h.includes('cultural') || h.includes('bucket') || h.includes('languagebucket') || h === 'genre');
 
       // If only artist column exists (e.g. an artist dump CSV like artists_and_genre.csv)
       if (artistIdx !== -1 && titleIdx === -1) {
         for (let r = 1; r < rows.length; r++) {
           const row = rows[r];
           const artist = row[artistIdx] || '<unknown>';
+          const rawBucket = bucketIdx !== -1 ? row[bucketIdx]?.trim() : '';
+          if (rawBucket && artist && artist !== '<unknown>') {
+            const canonical = (CANONICAL_BUCKETS[rawBucket as CanonicalBucket]?.name || BUCKET_CONSOLIDATION_MAP[rawBucket.toLowerCase()]) as CanonicalBucket;
+            if (canonical) {
+              setCachedClassification(artist, {
+                artist,
+                bucket: canonical,
+                confidence: 'user',
+                sourceDetails: 'Imported from CSV Cultural Bucket',
+                timestamp: Date.now(),
+              });
+            }
+          }
           if (artist && artist !== '<unknown>') {
             tracks.push({ title: `Track ${r}`, artist, originalRow: row });
           }
@@ -100,21 +130,37 @@ function parseRawPlaylistContent(rawContent: string, fileName: string): { title:
 
       for (let r = 1; r < rows.length; r++) {
         const row = rows[r];
-        let artist = artistIdx !== -1 && row[artistIdx] ? row[artistIdx] : '<unknown>';
-        let title = titleIdx !== -1 && row[titleIdx] ? row[titleIdx] : '<unknown>';
+        const rawArtist = artistIdx !== -1 && row[artistIdx] ? row[artistIdx] : '';
+        const rawTitle = titleIdx !== -1 && row[titleIdx] ? row[titleIdx] : '';
         const filePath = pathIdx !== -1 ? row[pathIdx] : undefined;
         const rawPlayCount = playIdx !== -1 && !isNaN(parseInt(row[playIdx], 10)) ? parseInt(row[playIdx], 10) : undefined;
+        const rawBucket = bucketIdx !== -1 ? row[bucketIdx]?.trim() : '';
+
+        // Clean composite track (separates YouTube titles, strips video noise, CJK brackets, etc.)
+        const cleaned = cleanCompositeTrack(rawTitle, rawArtist);
+        let artist = cleaned.artist;
+        let title = cleaned.title;
+
+        // Pre-register bucket if already enriched from Module 15 or previous export
+        if (rawBucket && artist && artist !== '<unknown>') {
+          const canonical = (CANONICAL_BUCKETS[rawBucket as CanonicalBucket]?.name || BUCKET_CONSOLIDATION_MAP[rawBucket.toLowerCase()]) as CanonicalBucket;
+          if (canonical) {
+            setCachedClassification(artist, {
+              artist,
+              bucket: canonical,
+              confidence: 'user',
+              sourceDetails: 'Imported from CSV Cultural Bucket',
+              timestamp: Date.now(),
+            });
+          }
+        }
 
         // If artist or title is missing, try inferring from path
         if ((artist === '<unknown>' || title === '<unknown>') && filePath) {
           const fileBase = filePath.split(/[\/\\]/).pop()?.replace(/\.[a-zA-Z0-9]+$/, '') || '';
-          if (fileBase.includes(' - ')) {
-            const parts = fileBase.split(' - ');
-            if (artist === '<unknown>') artist = parts[0].trim();
-            if (title === '<unknown>') title = parts.slice(1).join(' - ').trim();
-          } else if (title === '<unknown>') {
-            title = fileBase;
-          }
+          const pathCleaned = cleanCompositeTrack(fileBase, artist !== '<unknown>' ? artist : '');
+          if (artist === '<unknown>') artist = pathCleaned.artist;
+          if (title === '<unknown>') title = pathCleaned.title;
         }
 
         if (artist !== '<unknown>' || title !== '<unknown>') {
@@ -144,15 +190,27 @@ function parseRawPlaylistContent(rawContent: string, fileName: string): { title:
     const filePath = line;
 
     if (currentExtinf) {
+      const bucketMatch = currentExtinf.match(/bucket="([^"]+)"/i);
       const commaIdx = currentExtinf.indexOf(',');
       if (commaIdx !== -1) {
         const info = currentExtinf.substring(commaIdx + 1).trim();
-        if (info.includes(' - ')) {
-          const parts = info.split(' - ');
-          artist = parts[0].trim();
-          title = parts.slice(1).join(' - ').trim();
-        } else {
-          title = info;
+        const cleaned = cleanCompositeTrack(info);
+        artist = cleaned.artist;
+        title = cleaned.title;
+      }
+
+      // Check if tagged M3U8 has bucket attribute
+      if (bucketMatch && artist && artist !== '<unknown>') {
+        const rawBucket = bucketMatch[1].trim();
+        const canonical = (CANONICAL_BUCKETS[rawBucket as CanonicalBucket]?.name || BUCKET_CONSOLIDATION_MAP[rawBucket.toLowerCase()]) as CanonicalBucket;
+        if (canonical) {
+          setCachedClassification(artist, {
+            artist,
+            bucket: canonical,
+            confidence: 'user',
+            sourceDetails: 'Imported from Tagged M3U8',
+            timestamp: Date.now(),
+          });
         }
       }
       currentExtinf = '';
@@ -204,10 +262,33 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
   // AI Configuration State
   const [aiConfigState, setAiConfigState] = useState<AIConfig>(getAIConfig());
 
-  // Cache modal state
+  // Cache modal state & operability
   const [cacheList, setCacheList] = useState<ArtistClassification[]>([]);
   const [cacheSearch, setCacheSearch] = useState('');
   const [cacheSourceFilter, setCacheSourceFilter] = useState('ALL');
+  const [cacheBucketFilter, setCacheBucketFilter] = useState<string>('ALL');
+  const [cachePage, setCachePage] = useState<number>(1);
+  const [cachePageSize, setCachePageSize] = useState<number>(50);
+  const [selectedCacheKeys, setSelectedCacheKeys] = useState<Set<string>>(new Set());
+  const [batchBucketTarget, setBatchBucketTarget] = useState<CanonicalBucket>('English');
+  const [showAddArtistModal, setShowAddArtistModal] = useState<boolean>(false);
+  const [newArtistName, setNewArtistName] = useState<string>('');
+  const [newArtistBucket, setNewArtistBucket] = useState<CanonicalBucket>('English');
+  const [newArtistCountry, setNewArtistCountry] = useState<string>('');
+  const [newArtistNotes, setNewArtistNotes] = useState<string>('');
+  const [editingCacheEntry, setEditingCacheEntry] = useState<ArtistClassification | null>(null);
+
+  // AI Remediation & Workspace Toast State
+  const [isAiRemediating, setIsAiRemediating] = useState<boolean>(false);
+  const [aiRemediationProgress, setAiRemediationProgress] = useState<string>('');
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(prev => prev === msg ? null : prev);
+    }, 4000);
+  };
 
   // CSV Import State
   const [importCsvText, setImportCsvText] = useState('');
@@ -280,7 +361,7 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
 
       // Expand all non-empty buckets by default
       const initialExpanded: Record<string, boolean> = {};
-      for (const [bucket, tracks] of Object.entries(result.clusters)) {
+      for (const [bucket, tracks] of Object.entries(result.clusters) as [CanonicalBucket, ClusteredTrack[]][]) {
         if (tracks.length > 0) initialExpanded[bucket] = true;
       }
       setExpandedBuckets(initialExpanded);
@@ -317,8 +398,10 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
     setClusters(prev => {
       const nextClusters: Record<CanonicalBucket, ClusteredTrack[]> = {
         'English': [], 'J-Pop': [], 'Naija': [], 'K-Pop': [], 'C-Pop': [],
-        'Instrumental': [], 'Gospel': [], 'Filipino': [], 'I-Pop': [],
-        'African': [], 'Latina': [], 'Français': [], 'Other': []
+        'Thai': [], 'Vietnamese': [], 'Dutch': [], 'Arabic': [],
+        'German': [], 'Italian': [], 'Portuguese': [],
+        'Filipino': [], 'I-Pop': [], 'African': [], 'Latina': [],
+        'Français': [], 'Gospel': [], 'Instrumental': [], 'Other': []
       };
 
       clusteredTracks.forEach(t => {
@@ -337,7 +420,7 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
     const result: Record<string, ClusteredTrack[]> = {};
     const query = searchQuery.toLowerCase().trim();
 
-    for (const [bucket, tracks] of Object.entries(clusters)) {
+    for (const [bucket, tracks] of Object.entries(clusters) as [CanonicalBucket, ClusteredTrack[]][]) {
       if (selectedBucketFilter !== 'ALL' && selectedBucketFilter !== bucket) {
         continue;
       }
@@ -361,6 +444,298 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
 
     return result;
   }, [clusters, selectedBucketFilter, searchQuery, sourceFilter]);
+
+  // Count tracks that are unresolved or ambiguous
+  const unresolvedCount = useMemo(() => {
+    return clusteredTracks.filter(t => 
+      t.classification.confidence === 'unresolved' || 
+      (t.classification.bucket === 'Other' && t.classification.confidence !== 'manual')
+    ).length;
+  }, [clusteredTracks]);
+
+  // Filtered cache list for Cache Manager
+  const filteredCache = useMemo(() => {
+    const q = cacheSearch.toLowerCase().trim();
+    return cacheList.filter(c => {
+      const matchesQuery = !q || 
+        c.artist.toLowerCase().includes(q) || 
+        c.bucket.toLowerCase().includes(q) || 
+        (c.countryName || '').toLowerCase().includes(q) || 
+        (c.country || '').toLowerCase().includes(q) ||
+        (c.sourceDetails || '').toLowerCase().includes(q);
+
+      const matchesBucket = cacheBucketFilter === 'ALL' || c.bucket === cacheBucketFilter;
+      const matchesSource = cacheSourceFilter === 'ALL' || c.confidence === cacheSourceFilter;
+
+      return matchesQuery && matchesBucket && matchesSource;
+    });
+  }, [cacheList, cacheSearch, cacheBucketFilter, cacheSourceFilter]);
+
+  const totalCachePages = Math.max(1, Math.ceil(filteredCache.length / (cachePageSize || 50)));
+  const pagedCache = useMemo(() => {
+    if (cachePageSize >= 10000) return filteredCache;
+    const start = (cachePage - 1) * cachePageSize;
+    return filteredCache.slice(start, start + cachePageSize);
+  }, [filteredCache, cachePage, cachePageSize]);
+
+  // Load directly from Module 15 IndexedDB with strict verification guard
+  const handleLoadFromEnrichedDB = async () => {
+    try {
+      const enriched = await getAllEnrichedTracks();
+      // Strict guard: ensure only verified enriched tracks are accepted
+      const verifiedTracks = enriched.filter(t => 
+        t.resolution?.status !== 'needs_resolution' &&
+        t.resolution?.status !== 'pending' &&
+        (t.recordingMbid || t.resolution?.isAiSynthesized || t.resolution?.status === 'manual_resolved')
+      );
+
+      if (verifiedTracks.length === 0) {
+        alert('No verified enriched tracks found in local IndexedDB. Enrich tracks in Module 15 (Deep Metadata Engine) first!');
+        return;
+      }
+
+      const loadedTracks = verifiedTracks.map(t => {
+        const artist = t.artist?.name || t.queryArtist;
+        const title = t.title || t.queryTitle;
+        if (t.culturalBucket && t.culturalBucket !== 'Other' && t.resolution?.status !== 'needs_resolution') {
+          const isAi = t.resolution?.source === 'ai_synthesized_fallback' || t.resolution?.isAiSynthesized;
+          setCachedClassification(artist, {
+            artist,
+            bucket: t.culturalBucket,
+            country: t.artist?.countryCode,
+            countryName: t.artist?.countryName,
+            confidence: isAi ? 'llm' : 'musicbrainz',
+            sourceDetails: `IndexedDB: ${t.resolution?.badgeLabel || 'Enriched Record'}`,
+            mbid: t.artist?.artistMbid,
+            timestamp: Date.now(),
+          });
+        }
+        return {
+          title,
+          artist,
+          album: t.release?.albumTitle || t.queryAlbum,
+          filePath: t.queryPath,
+          rawPlayCount: undefined,
+          originalRow: t,
+        };
+      });
+
+      setParsedTracks(loadedTracks);
+      setFiles([{ name: `IndexedDB_Enriched_Library (${verifiedTracks.length} verified tracks).db`, size: verifiedTracks.length * 3500 } as any]);
+      showToast(`📥 Ingested ${verifiedTracks.length} verified tracks from Module 15 IndexedDB!`);
+    } catch (e: any) {
+      alert(`Failed to load from IndexedDB: ${e.message}`);
+    }
+  };
+
+  // Synchronize active workspace tracks against the current cache
+  const handleApplyCacheToWorkspace = () => {
+    if (clusteredTracks.length === 0 && parsedTracks.length === 0) {
+      showToast('No tracks loaded in workspace to apply cache to.');
+      return;
+    }
+
+    const sourceTracks = parsedTracks.length > 0 
+      ? parsedTracks 
+      : clusteredTracks.map(t => ({
+          title: t.title,
+          artist: t.artist,
+          album: t.album,
+          filePath: t.filePath,
+          rawPlayCount: t.rawPlayCount,
+          originalData: t.originalData,
+        }));
+
+    const newClustered: ClusteredTrack[] = [];
+    const newClusters: Record<CanonicalBucket, ClusteredTrack[]> = {
+      English: [], 'J-Pop': [], Naija: [], 'K-Pop': [], 'C-Pop': [],
+      Thai: [], Vietnamese: [], Dutch: [], Arabic: [], German: [],
+      Italian: [], Portuguese: [], Filipino: [], 'I-Pop': [], African: [],
+      Latina: [], Français: [], Gospel: [], Instrumental: [], Other: []
+    };
+
+    let updatedCount = 0;
+    sourceTracks.forEach(t => {
+      const cached = getCachedClassification(t.artist);
+      const classification: ArtistClassification = cached || {
+        artist: t.artist,
+        bucket: 'Other',
+        confidence: 'unresolved',
+        timestamp: Date.now(),
+      };
+      const ct: ClusteredTrack = {
+        id: `${t.artist}:::${t.title}`,
+        title: t.title,
+        artist: t.artist,
+        album: t.album,
+        filePath: t.filePath,
+        rawPlayCount: t.rawPlayCount,
+        classification,
+        originalData: t,
+      };
+      newClustered.push(ct);
+      newClusters[classification.bucket].push(ct);
+      if (cached) updatedCount++;
+    });
+
+    setClusteredTracks(newClustered);
+    setClusters(newClusters);
+    showToast(`⚡ Synced workspace: ${updatedCount} tracks updated from cache!`);
+  };
+
+  // On-Demand AI Remediation for Unresolved / Ambiguous Tracks
+  const handleRemediateUnresolvedWithAI = async () => {
+    const unresolvedTracks = clusteredTracks.filter(t => 
+      t.classification.confidence === 'unresolved' || 
+      (t.classification.bucket === 'Other' && t.classification.confidence !== 'manual')
+    );
+
+    if (unresolvedTracks.length === 0) {
+      showToast('All tracks are already classified! Zero unresolved tracks remaining.');
+      return;
+    }
+
+    const uniqueArtists = Array.from(new Set(unresolvedTracks.map(t => t.artist))).filter(Boolean);
+    setIsAiRemediating(true);
+    setAiRemediationProgress(`Starting AI remediation for ${uniqueArtists.length} unique artists with Gemini 2.5 Flash...`);
+
+    try {
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
+      const results = await batchClassifyWithLLM(
+        uniqueArtists,
+        controller.signal,
+        (msg) => setAiRemediationProgress(msg)
+      );
+
+      let remediatedCount = 0;
+      setClusteredTracks(prev => {
+        const updated = prev.map(track => {
+          const normKey = normalizeArtistKey(track.artist);
+          if (results.has(normKey)) {
+            remediatedCount++;
+            return {
+              ...track,
+              classification: results.get(normKey)!,
+            };
+          }
+          return track;
+        });
+
+        const newClusters: Record<CanonicalBucket, ClusteredTrack[]> = {
+          English: [], 'J-Pop': [], Naija: [], 'K-Pop': [], 'C-Pop': [],
+          Thai: [], Vietnamese: [], Dutch: [], Arabic: [], German: [],
+          Italian: [], Portuguese: [], Filipino: [], 'I-Pop': [], African: [],
+          Latina: [], Français: [], Gospel: [], Instrumental: [], Other: []
+        };
+        updated.forEach(t => {
+          newClusters[t.classification.bucket].push(t);
+        });
+        setClusters(newClusters);
+        return updated;
+      });
+
+      setCacheList(getAllCachedEntries());
+      showToast(`⚡ AI Remediation Complete! Reclassified ${remediatedCount} tracks (${results.size} artists) with Gemini 2.5 Flash.`);
+    } catch (e: any) {
+      console.error('AI Remediation error:', e);
+      showToast(`AI Remediation failed: ${e.message || 'Unknown error'}`);
+    } finally {
+      setIsAiRemediating(false);
+      setAiRemediationProgress('');
+      abortControllerRef.current = null;
+    }
+  };
+
+  // Single-Track AI Remediation
+  const handleRemediateSingleTrackWithAI = async (track: ClusteredTrack) => {
+    setIsAiRemediating(true);
+    showToast(`✨ Remediating "${track.artist}" with Gemini 2.5 Flash...`);
+
+    try {
+      const result = await remediateSingleArtistWithAI(track.artist);
+      if (result) {
+        setClusteredTracks(prev => {
+          const updated = prev.map(t => {
+            if (normalizeArtistKey(t.artist) === normalizeArtistKey(track.artist)) {
+              return { ...t, classification: result };
+            }
+            return t;
+          });
+          const newClusters: Record<CanonicalBucket, ClusteredTrack[]> = {
+            English: [], 'J-Pop': [], Naija: [], 'K-Pop': [], 'C-Pop': [],
+            Thai: [], Vietnamese: [], Dutch: [], Arabic: [], German: [],
+            Italian: [], Portuguese: [], Filipino: [], 'I-Pop': [], African: [],
+            Latina: [], Français: [], Gospel: [], Instrumental: [], Other: []
+          };
+          updated.forEach(t => {
+            newClusters[t.classification.bucket].push(t);
+          });
+          setClusters(newClusters);
+          return updated;
+        });
+
+        setCacheList(getAllCachedEntries());
+        showToast(`✨ Reclassified "${track.artist}" to ${result.bucket}!`);
+      } else {
+        showToast(`AI could not reclassify "${track.artist}".`);
+      }
+    } catch (e: any) {
+      showToast(`AI remediation failed: ${e.message}`);
+    } finally {
+      setIsAiRemediating(false);
+    }
+  };
+
+  // Forward Propagation to Discovery Triage (Module 14)
+  const handlePropagateToDiscoveryTriage = () => {
+    if (clusteredTracks.length === 0) {
+      alert('No clustered tracks available to propagate. Run clustering first!');
+      return;
+    }
+
+    const payload = clusteredTracks.map(t => ({
+      title: t.title,
+      artist: t.artist,
+      album: t.album || 'Single / Clustered Intake',
+      culturalBucket: t.classification.bucket,
+      country: t.classification.country || t.classification.countryName,
+      confidence: t.classification.confidence,
+      sourceDetails: t.classification.sourceDetails,
+      filePath: t.filePath,
+      stagedAt: new Date().toISOString(),
+    }));
+
+    try {
+      localStorage.setItem('playlist_haven_triage_intake', JSON.stringify(payload));
+      showToast(`🧭 Staged ${payload.length} tracks with cultural provenance for Discovery Triage!`);
+      alert(`Successfully propagated ${payload.length} clustered tracks to Discovery Triage!\n\nYou can now open the Discovery Triage module to review singles, magnet artists, validation ratios, and download baskets.`);
+    } catch (e: any) {
+      alert(`Failed to stage tracks for Discovery Triage: ${e.message}`);
+    }
+  };
+
+  // Export Discovery Cohort CSV
+  const handleExportDiscoveryCohortCSV = async () => {
+    if (clusteredTracks.length === 0) return;
+    const lines = ['"TITLE","ARTIST","ALBUM","CULTURAL_BUCKET","COUNTRY_CODE","COUNTRY_NAME","CONFIDENCE","SOURCE_DETAILS","FILE_PATH"'];
+    for (const t of clusteredTracks) {
+      const escape = (s: string) => `"${(s || '').replace(/"/g, '""')}"`;
+      lines.push([
+        escape(t.title),
+        escape(t.artist),
+        escape(t.album || 'Single / Clustered Intake'),
+        escape(t.classification.bucket),
+        escape(t.classification.country || ''),
+        escape(t.classification.countryName || ''),
+        escape(t.classification.confidence),
+        escape(t.classification.sourceDetails || ''),
+        escape(t.filePath || '')
+      ].join(','));
+    }
+    await downloadPlaylistFile('\ufeff' + lines.join('\n'), `Discovery_Cohort_Intake_${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv;charset=utf-8;');
+  };
 
   // Export a single bucket as M3U
   const handleExportBucketM3U = async (bucket: CanonicalBucket, tracks: ClusteredTrack[]) => {
@@ -395,7 +770,7 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
     const zip = new JSZip();
     let fileCount = 0;
 
-    for (const [bucket, tracks] of Object.entries(clusters)) {
+    for (const [bucket, tracks] of Object.entries(clusters) as [CanonicalBucket, ClusteredTrack[]][]) {
       if (tracks.length === 0) continue;
       const lines = ['#EXTM3U'];
       for (const t of tracks) {
@@ -438,7 +813,130 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
   // Open cache manager
   const handleOpenCacheManager = () => {
     setCacheList(getAllCachedEntries());
+    setCachePage(1);
+    setSelectedCacheKeys(new Set());
     setShowCacheModal(true);
+  };
+
+  // Cache Selection Handlers
+  const handleToggleCacheSelect = (key: string) => {
+    setSelectedCacheKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const handleSelectAllPage = () => {
+    setSelectedCacheKeys(prev => {
+      const next = new Set(prev);
+      pagedCache.forEach(c => next.add(normalizeArtistKey(c.artist)));
+      return next;
+    });
+  };
+
+  const handleSelectAllMatching = () => {
+    setSelectedCacheKeys(new Set(filteredCache.map(c => normalizeArtistKey(c.artist))));
+  };
+
+  const handleClearCacheSelection = () => {
+    setSelectedCacheKeys(new Set());
+  };
+
+  // Batch Reassign Bucket
+  const handleBatchReassignBucket = () => {
+    if (selectedCacheKeys.size === 0) return;
+    const count = batchUpdateCachedEntries(Array.from(selectedCacheKeys), {
+      bucket: batchBucketTarget,
+      confidence: 'manual',
+      sourceDetails: 'Batch manual reassignment',
+    });
+    setCacheList(getAllCachedEntries());
+    setSelectedCacheKeys(new Set());
+    showToast(`Reassigned ${count} artists to "${batchBucketTarget}"!`);
+  };
+
+  // Batch Delete
+  const handleBatchDelete = () => {
+    if (selectedCacheKeys.size === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedCacheKeys.size} artist mappings from cache?`)) return;
+    const count = batchDeleteCachedEntries(Array.from(selectedCacheKeys));
+    setCacheList(getAllCachedEntries());
+    setSelectedCacheKeys(new Set());
+    showToast(`Deleted ${count} artist mappings from cache.`);
+  };
+
+  // Batch AI Reclassify
+  const handleBatchReclassifyAI = async () => {
+    if (selectedCacheKeys.size === 0) return;
+    const keysArray = Array.from(selectedCacheKeys);
+    setIsAiRemediating(true);
+    setAiRemediationProgress(`Reclassifying ${keysArray.length} cached artists with Gemini 2.5 Flash...`);
+
+    try {
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
+      const count = await reclassifyCachedEntriesWithAI(
+        keysArray,
+        controller.signal,
+        (msg) => setAiRemediationProgress(msg)
+      );
+
+      setCacheList(getAllCachedEntries());
+      setSelectedCacheKeys(new Set());
+      showToast(`⚡ AI Reclassification complete: ${count} artists updated with Gemini 2.5 Flash!`);
+    } catch (e: any) {
+      showToast(`AI Reclassification error: ${e.message}`);
+    } finally {
+      setIsAiRemediating(false);
+      setAiRemediationProgress('');
+      abortControllerRef.current = null;
+    }
+  };
+
+  // Batch Export Selected
+  const handleExportSelectedCache = () => {
+    if (selectedCacheKeys.size === 0) return;
+    const selectedEntries = cacheList.filter(c => selectedCacheKeys.has(normalizeArtistKey(c.artist)));
+    const json = JSON.stringify(selectedEntries, null, 2);
+    downloadPlaylistFile(json, `selected_artist_cache_${new Date().toISOString().slice(0, 10)}.json`, 'application/json');
+  };
+
+  // Add New Manual Artist Mapping
+  const handleSaveNewArtist = () => {
+    if (!newArtistName.trim()) {
+      alert('Artist name cannot be empty.');
+      return;
+    }
+    addManualCacheEntry(newArtistName, newArtistBucket, newArtistCountry, newArtistNotes);
+    setCacheList(getAllCachedEntries());
+    setNewArtistName('');
+    setNewArtistCountry('');
+    setNewArtistNotes('');
+    setShowAddArtistModal(false);
+    showToast(`Added "${newArtistName}" to ${newArtistBucket} in cache!`);
+  };
+
+  // Delete Single Cached Entry
+  const handleDeleteSingleCache = (artist: string) => {
+    if (confirm(`Remove "${artist}" from cache?`)) {
+      deleteCachedEntry(artist);
+      setCacheList(getAllCachedEntries());
+      showToast(`Removed "${artist}" from cache.`);
+    }
+  };
+
+  // Inline Bucket Change for Single Entry
+  const handleInlineBucketChange = (artist: string, bucket: CanonicalBucket) => {
+    updateCachedEntry(artist, {
+      bucket,
+      confidence: 'manual',
+      sourceDetails: 'Manual cache edit',
+    });
+    setCacheList(getAllCachedEntries());
+    showToast(`Updated "${artist}" → ${bucket}`);
   };
 
   // Handle CSV Import
@@ -447,6 +945,7 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
     const res = importArtistCSV(importCsvText);
     setImportResult(res);
     setCacheList(getAllCachedEntries());
+    showToast(`Imported ${res.imported} mappings to cache.`);
   };
 
   const getSourceBadge = (conf: string) => {
@@ -468,6 +967,43 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8">
+      {/* Floating Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900/95 border border-cyan-500/50 text-slate-100 px-4 py-3 rounded-xl shadow-2xl backdrop-blur-md flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5">
+          <span className="text-cyan-400 font-bold">⚡</span>
+          <span className="text-xs font-semibold">{toastMessage}</span>
+          <button onClick={() => setToastMessage(null)} className="text-slate-500 hover:text-white ml-2 cursor-pointer">
+            <XCircle className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Autonomous AI Remediation Progress Banner */}
+      {isAiRemediating && (
+        <div className="max-w-7xl mx-auto mb-6 bg-purple-950/40 border border-purple-800/60 rounded-2xl p-4 flex items-center justify-between gap-4 animate-pulse">
+          <div className="flex items-center gap-3">
+            <Sparkles className="w-5 h-5 text-purple-400 animate-spin" />
+            <div>
+              <div className="text-xs font-bold text-purple-200">Gemini 2.5 Flash Autonomous Remediation Active</div>
+              <div className="text-[11px] text-purple-300/80 font-mono">{aiRemediationProgress || 'Contacting Gemini 2.5 Flash API...'}</div>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+                abortControllerRef.current = null;
+              }
+              setIsAiRemediating(false);
+              setAiRemediationProgress('');
+            }}
+            className="px-3 py-1.5 bg-purple-900/60 hover:bg-purple-800 border border-purple-700/60 text-purple-200 rounded-xl text-xs font-semibold cursor-pointer"
+          >
+            Stop AI
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="max-w-7xl mx-auto mb-8">
         <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-slate-800">
@@ -532,6 +1068,19 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
         <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 backdrop-blur-md">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             <div className="lg:col-span-8 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-0.5">
+                <span className="text-xs font-semibold text-slate-300">Playlist Files & Library Intake:</span>
+                <button
+                  type="button"
+                  onClick={handleLoadFromEnrichedDB}
+                  className="px-3 py-1.5 bg-gradient-to-r from-teal-600/30 to-cyan-600/30 hover:from-teal-600 hover:to-cyan-600 text-teal-300 hover:text-white border border-teal-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 shadow-sm cursor-pointer"
+                  title="Directly load enriched tracks from Module 15 (IndexedDB) with 0ms pre-assigned cultural buckets"
+                >
+                  <HardDrive className="w-3.5 h-3.5 text-teal-400" />
+                  <span>📥 Ingest from Module 15 (IndexedDB)</span>
+                </button>
+              </div>
+
               <FileUploader
                 files={files}
                 onFilesSelected={(newFiles) => {
@@ -778,17 +1327,65 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
+                {/* AI Remediate Button */}
+                <button
+                  onClick={handleRemediateUnresolvedWithAI}
+                  disabled={isAiRemediating || unresolvedCount === 0}
+                  className="px-3.5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-40 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-lg shadow-purple-900/20 transition cursor-pointer"
+                  title="Autonomous multi-tier remediation for unresolved or ambiguous tracks using Gemini 2.5 Flash"
+                >
+                  <Sparkles className={`w-4 h-4 text-purple-200 ${isAiRemediating ? 'animate-spin' : ''}`} />
+                  <span>⚡ AI Remediate Unresolved</span>
+                  {unresolvedCount > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full bg-purple-900/80 text-purple-200 text-[10px] font-mono font-bold">
+                      {unresolvedCount}
+                    </span>
+                  )}
+                </button>
+
+                {/* Propagate to Discovery Triage */}
+                <button
+                  onClick={handlePropagateToDiscoveryTriage}
+                  className="px-3.5 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-lg shadow-amber-900/20 transition cursor-pointer"
+                  title="Stage this clustered cohort into Discovery Triage (Module 14)"
+                >
+                  <Compass className="w-4 h-4 text-amber-200" />
+                  <span>🧭 Propagate to Discovery Triage</span>
+                </button>
+
+                {/* Export Discovery Cohort CSV */}
+                <button
+                  onClick={handleExportDiscoveryCohortCSV}
+                  className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                  title="Export Discovery Cohort CSV with cultural provenance"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-cyan-400" />
+                  <span>Export Cohort CSV</span>
+                </button>
+
+                {/* Re-sync with Cache */}
+                <button
+                  onClick={handleApplyCacheToWorkspace}
+                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                  title="Re-sync current workspace tracks against latest persistent cache"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Re-sync Cache</span>
+                </button>
+
+                {/* Export All as ZIP */}
                 <button
                   onClick={handleExportAllZip}
-                  className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-900/20 transition"
+                  className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-900/20 transition cursor-pointer"
                 >
                   <Archive className="w-4 h-4" />
                   <span>Export All as ZIP (Separate Playlists)</span>
                 </button>
 
+                {/* Export Enriched CSV */}
                 <button
                   onClick={handleExportEnrichedCSV}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-2 transition"
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-2 transition cursor-pointer"
                 >
                   <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
                   <span>Export Enriched CSV</span>
@@ -879,8 +1476,8 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
 
             {/* Clusters Accordion Grid */}
             <div className="space-y-4">
-              {Object.entries(filteredClusters).map(([bucketKey, tracks]) => {
-                const meta = CANONICAL_BUCKETS[bucketKey as CanonicalBucket] || CANONICAL_BUCKETS['Other'];
+              {(Object.entries(filteredClusters) as [CanonicalBucket, ClusteredTrack[]][]).map(([bucketKey, tracks]) => {
+                const meta = CANONICAL_BUCKETS[bucketKey] || CANONICAL_BUCKETS['Other'];
                 const isExpanded = expandedBuckets[bucketKey] ?? true;
                 const uniqueArtistsInBucket = new Set(tracks.map(t => t.artist.toLowerCase())).size;
 
@@ -970,13 +1567,23 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
                                   {track.classification.countryName || track.classification.country || '—'}
                                 </td>
                                 <td className="py-2.5 px-4 text-right">
-                                  <button
-                                    onClick={() => setEditingTrack(track)}
-                                    className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 transition"
-                                    title="Manually reassign artist to another bucket"
-                                  >
-                                    <Edit3 className="w-3.5 h-3.5" />
-                                  </button>
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <button
+                                      onClick={() => handleRemediateSingleTrackWithAI(track)}
+                                      disabled={isAiRemediating}
+                                      className="p-1.5 bg-purple-950/40 hover:bg-purple-900/60 text-purple-300 hover:text-white rounded-lg border border-purple-700/50 transition disabled:opacity-40 cursor-pointer"
+                                      title="AI Remediate this artist using Gemini 2.5 Flash"
+                                    >
+                                      <Sparkles className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() => setEditingTrack(track)}
+                                      className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 transition cursor-pointer"
+                                      title="Manually reassign artist to another bucket"
+                                    >
+                                      <Edit3 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             ))}
@@ -1055,46 +1662,315 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
         </div>
       )}
 
-      {/* Cache Manager Modal */}
+      {/* Operable Cache Manager Studio Modal */}
       {showCacheModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full p-6 space-y-4 shadow-2xl max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-5xl w-full p-6 space-y-4 shadow-2xl max-h-[92vh] flex flex-col animate-in fade-in zoom-in-95">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3 shrink-0">
               <div className="flex items-center gap-2.5">
-                <Database className="w-5 h-5 text-cyan-400" />
+                <div className="p-2 bg-cyan-500/10 border border-cyan-500/30 rounded-xl text-cyan-400">
+                  <Database className="w-5 h-5" />
+                </div>
                 <div>
-                  <h3 className="font-bold text-white text-base">Persistent Artist Cache Manager</h3>
-                  <p className="text-xs text-slate-400">{cacheList.length} cached artist classifications</p>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-white text-base">Operable Artist Classification Cache</h3>
+                    <span className="px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-mono text-xs font-bold">
+                      {cacheList.length} Verified Records
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Full CRUD studio: edit canonical buckets inline, execute batch actions, or trigger autonomous AI reclassification with Gemini 2.5 Flash
+                  </p>
                 </div>
               </div>
               <button
                 onClick={() => setShowCacheModal(false)}
-                className="text-slate-500 hover:text-white p-1 rounded-lg"
+                className="text-slate-500 hover:text-white p-1 rounded-lg transition cursor-pointer"
               >
                 <XCircle className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Cache controls */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex-1 min-w-[200px] relative">
+            {/* Filter & Search Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 shrink-0 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+              <div className="flex-1 min-w-[220px] relative">
                 <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
                 <input
                   type="text"
                   value={cacheSearch}
-                  onChange={(e) => setCacheSearch(e.target.value)}
-                  placeholder="Search cached artist or bucket..."
-                  className="w-full pl-9 pr-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                  onChange={(e) => { setCacheSearch(e.target.value); setCachePage(1); }}
+                  placeholder="Search artist, bucket, or country..."
+                  className="w-full pl-9 pr-3 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
                 />
+                {cacheSearch && (
+                  <button onClick={() => setCacheSearch('')} className="absolute right-2.5 top-2 text-slate-500 hover:text-white cursor-pointer">
+                    <XCircle className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Bucket Filter */}
+                <select
+                  value={cacheBucketFilter}
+                  onChange={(e) => { setCacheBucketFilter(e.target.value); setCachePage(1); }}
+                  className="bg-slate-900 border border-slate-800 text-xs text-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-cyan-500 cursor-pointer"
+                >
+                  <option value="ALL">All Buckets ({cacheList.length})</option>
+                  {Object.keys(CANONICAL_BUCKETS).map(b => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </select>
+
+                {/* Source Tier Filter */}
+                <select
+                  value={cacheSourceFilter}
+                  onChange={(e) => { setCacheSourceFilter(e.target.value); setCachePage(1); }}
+                  className="bg-slate-900 border border-slate-800 text-xs text-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-cyan-500 cursor-pointer"
+                >
+                  <option value="ALL">All Tiers</option>
+                  <option value="user">Tier 0 (Pre-seeded / User)</option>
+                  <option value="script">Tier 1 (Script Regex)</option>
+                  <option value="musicbrainz">Tier 2 (MusicBrainz)</option>
+                  <option value="llm">Tier 3 (Gemini AI)</option>
+                  <option value="manual">Tier 4 (Manual Override)</option>
+                </select>
+
+                {/* Page Size */}
+                <select
+                  value={cachePageSize}
+                  onChange={(e) => { setCachePageSize(Number(e.target.value)); setCachePage(1); }}
+                  className="bg-slate-900 border border-slate-800 text-xs text-slate-300 rounded-lg px-2 py-1.5 focus:outline-none focus:border-cyan-500 cursor-pointer"
+                >
+                  <option value="25">25 / page</option>
+                  <option value="50">50 / page</option>
+                  <option value="100">100 / page</option>
+                  <option value="250">250 / page</option>
+                  <option value="10000">View All</option>
+                </select>
+
+                <button
+                  onClick={() => setShowAddArtistModal(true)}
+                  className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Add Artist</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Batch Action Toolbar (Appears when items are selected) */}
+            {selectedCacheKeys.size > 0 && (
+              <div className="bg-cyan-950/40 border border-cyan-500/40 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 animate-in fade-in shrink-0">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-lg bg-cyan-500 text-slate-950 font-black text-xs">
+                    {selectedCacheKeys.size} Selected
+                  </span>
+                  <span className="text-xs text-cyan-200">Batch Operations:</span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Batch Reassign Bucket */}
+                  <div className="flex items-center gap-1.5">
+                    <select
+                      value={batchBucketTarget}
+                      onChange={(e) => setBatchBucketTarget(e.target.value as CanonicalBucket)}
+                      className="bg-slate-900 border border-cyan-500/50 text-xs text-cyan-200 rounded-lg px-2.5 py-1.5 focus:outline-none cursor-pointer"
+                    >
+                      {Object.keys(CANONICAL_BUCKETS).map(b => (
+                        <option key={b} value={b}>{b}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={handleBatchReassignBucket}
+                      className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-lg transition cursor-pointer"
+                    >
+                      Reassign
+                    </button>
+                  </div>
+
+                  {/* Batch AI Reclassify */}
+                  <button
+                    onClick={handleBatchReclassifyAI}
+                    disabled={isAiRemediating}
+                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer"
+                    title="Batch reclassify selected artists with Gemini 2.5 Flash"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>AI Reclassify (Gemini 2.5 Flash)</span>
+                  </button>
+
+                  {/* Export Selected */}
+                  <button
+                    onClick={handleExportSelectedCache}
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Export Selected</span>
+                  </button>
+
+                  {/* Batch Delete */}
+                  <button
+                    onClick={handleBatchDelete}
+                    className="px-3 py-1.5 bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
+                  </button>
+
+                  {/* Clear Selection */}
+                  <button
+                    onClick={handleClearCacheSelection}
+                    className="text-xs text-slate-400 hover:text-white underline ml-1 cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Quick Select Helpers */}
+            <div className="flex items-center justify-between text-[11px] text-slate-400 px-1 shrink-0">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleSelectAllPage}
+                  className="hover:text-cyan-400 underline transition cursor-pointer"
+                >
+                  Select all on page ({pagedCache.length})
+                </button>
+                <button
+                  onClick={handleSelectAllMatching}
+                  className="hover:text-cyan-400 underline transition cursor-pointer"
+                >
+                  Select all matching filter ({filteredCache.length})
+                </button>
+              </div>
+              <div>
+                Showing {filteredCache.length === 0 ? 0 : (cachePage - 1) * cachePageSize + 1} - {Math.min(cachePage * cachePageSize, filteredCache.length)} of {filteredCache.length}
+              </div>
+            </div>
+
+            {/* Cache table */}
+            <div className="flex-1 overflow-y-auto border border-slate-800 rounded-xl">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-950 text-slate-400 sticky top-0 border-b border-slate-800 z-10">
+                  <tr>
+                    <th className="py-2.5 px-3 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={pagedCache.length > 0 && pagedCache.every(c => selectedCacheKeys.has(normalizeArtistKey(c.artist)))}
+                        onChange={(e) => {
+                          if (e.target.checked) handleSelectAllPage();
+                          else handleClearCacheSelection();
+                        }}
+                        className="rounded border-slate-700 bg-slate-900 text-cyan-500 focus:ring-0 cursor-pointer"
+                      />
+                    </th>
+                    <th className="py-2.5 px-4 font-semibold">Artist</th>
+                    <th className="py-2.5 px-4 font-semibold">Canonical Bucket (Editable)</th>
+                    <th className="py-2.5 px-4 font-semibold">Confidence Tier</th>
+                    <th className="py-2.5 px-4 font-semibold">Details / Origin</th>
+                    <th className="py-2.5 px-4 font-semibold text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/50">
+                  {pagedCache.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-12 text-center text-slate-500 text-xs">
+                        No cached artist records matching your filter criteria.
+                      </td>
+                    </tr>
+                  ) : (
+                    pagedCache.map((item, idx) => {
+                      const normKey = normalizeArtistKey(item.artist);
+                      const isSelected = selectedCacheKeys.has(normKey);
+
+                      return (
+                        <tr key={normKey || idx} className={`hover:bg-slate-800/40 transition ${isSelected ? 'bg-cyan-950/20' : ''}`}>
+                          <td className="py-2.5 px-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleToggleCacheSelect(normKey)}
+                              className="rounded border-slate-700 bg-slate-900 text-cyan-500 focus:ring-0 cursor-pointer"
+                            />
+                          </td>
+                          <td className="py-2.5 px-4 text-white font-medium max-w-[200px] truncate" title={item.artist}>
+                            {item.artist}
+                          </td>
+                          <td className="py-2.5 px-4">
+                            <select
+                              value={item.bucket}
+                              onChange={(e) => handleInlineBucketChange(item.artist, e.target.value as CanonicalBucket)}
+                              className="bg-slate-950 border border-slate-800 hover:border-slate-700 text-xs text-slate-200 rounded-lg px-2 py-1 focus:outline-none focus:border-cyan-500 font-semibold cursor-pointer"
+                            >
+                              {Object.keys(CANONICAL_BUCKETS).map(b => (
+                                <option key={b} value={b}>{b}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="py-2.5 px-4">
+                            {getSourceBadge(item.confidence)}
+                          </td>
+                          <td className="py-2.5 px-4 text-slate-400 truncate max-w-xs text-[11px]" title={item.sourceDetails || item.countryName || item.country || ''}>
+                            {item.sourceDetails || item.countryName || item.country || '—'}
+                          </td>
+                          <td className="py-2.5 px-4 text-right">
+                            <button
+                              onClick={() => handleDeleteSingleCache(item.artist)}
+                              className="p-1.5 bg-slate-800 hover:bg-rose-900/60 text-slate-400 hover:text-rose-300 rounded-lg border border-slate-700 hover:border-rose-700 transition cursor-pointer"
+                              title="Delete from cache"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls & Footer */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1 shrink-0 border-t border-slate-800">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCachePage(prev => Math.max(1, prev - 1))}
+                  disabled={cachePage <= 1}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 text-xs font-semibold rounded-lg transition cursor-pointer"
+                >
+                  Previous
+                </button>
+                <span className="text-xs text-slate-400">
+                  Page <span className="text-white font-bold">{cachePage}</span> of <span className="text-white font-bold">{totalCachePages}</span>
+                </span>
+                <button
+                  onClick={() => setCachePage(prev => Math.min(totalCachePages, prev + 1))}
+                  disabled={cachePage >= totalCachePages}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 text-xs font-semibold rounded-lg transition cursor-pointer"
+                >
+                  Next
+                </button>
               </div>
 
               <div className="flex items-center gap-2">
+                <button
+                  onClick={handleApplyCacheToWorkspace}
+                  className="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/40 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  title="Apply updated cache mappings directly into the active clustered workspace"
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>⚡ Apply Cache to Workspace</span>
+                </button>
+
                 <button
                   onClick={() => {
                     const json = exportCacheJSON();
                     downloadPlaylistFile(json, `artist_language_cache_${new Date().toISOString().slice(0, 10)}.json`, 'application/json');
                   }}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5"
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
                 >
                   <Download className="w-3.5 h-3.5 text-cyan-400" />
                   <span>Export JSON</span>
@@ -1105,56 +1981,104 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
                     if (confirm('Reset cache to the pre-seeded default (1,341 verified artists)? All custom manual overrides will be cleared.')) {
                       resetCacheToDefault();
                       setCacheList(getAllCachedEntries());
+                      showToast('Cache reset to 1,341 verified default mappings.');
                     }
                   }}
-                  className="px-3 py-1.5 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/60 rounded-lg text-xs font-semibold flex items-center gap-1.5"
+                  className="px-3 py-1.5 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/60 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  <span>Reset to Default</span>
+                  <span>Reset Default</span>
+                </button>
+
+                <button
+                  onClick={() => setShowCacheModal(false)}
+                  className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl cursor-pointer"
+                >
+                  Close
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
 
-            {/* Cache table */}
-            <div className="flex-1 overflow-y-auto border border-slate-800 rounded-xl">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-950 text-slate-400 sticky top-0 border-b border-slate-800">
-                  <tr>
-                    <th className="py-2.5 px-4">Artist</th>
-                    <th className="py-2.5 px-4">Canonical Bucket</th>
-                    <th className="py-2.5 px-4">Confidence Tier</th>
-                    <th className="py-2.5 px-4">Details / Country</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/50">
-                  {cacheList
-                    .filter(c => {
-                      const q = cacheSearch.toLowerCase();
-                      return !q || c.artist.toLowerCase().includes(q) || c.bucket.toLowerCase().includes(q) || (c.countryName || '').toLowerCase().includes(q);
-                    })
-                    .slice(0, 100)
-                    .map((item, idx) => (
-                      <tr key={idx} className="hover:bg-slate-800/40">
-                        <td className="py-2 px-4 text-white font-medium">{item.artist}</td>
-                        <td className="py-2 px-4">
-                          <span className={`px-2 py-0.5 rounded font-bold ${CANONICAL_BUCKETS[item.bucket]?.badgeBg || ''}`}>
-                            {item.bucket}
-                          </span>
-                        </td>
-                        <td className="py-2 px-4">{getSourceBadge(item.confidence)}</td>
-                        <td className="py-2 px-4 text-slate-400 truncate max-w-xs">{item.sourceDetails || item.countryName || item.country || '—'}</td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
+      {/* Add Manual Artist Modal */}
+      {showAddArtistModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <Plus className="w-5 h-5 text-cyan-400" />
+                <h3 className="font-bold text-white text-base">Add Artist Mapping to Cache</h3>
+              </div>
+              <button
+                onClick={() => setShowAddArtistModal(false)}
+                className="text-slate-500 hover:text-white p-1 rounded-lg cursor-pointer"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
             </div>
 
-            <div className="text-right pt-2">
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="text-slate-300 font-semibold mb-1 block">Artist Name *</label>
+                <input
+                  type="text"
+                  value={newArtistName}
+                  onChange={(e) => setNewArtistName(e.target.value)}
+                  placeholder="e.g. Hikaru Utada, Burna Boy, Bad Bunny..."
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold mb-1 block">Canonical Cultural Bucket *</label>
+                <select
+                  value={newArtistBucket}
+                  onChange={(e) => setNewArtistBucket(e.target.value as CanonicalBucket)}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-cyan-500 font-semibold cursor-pointer"
+                >
+                  {Object.keys(CANONICAL_BUCKETS).map(b => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold mb-1 block">Country / Origin (Optional)</label>
+                <input
+                  type="text"
+                  value={newArtistCountry}
+                  onChange={(e) => setNewArtistCountry(e.target.value)}
+                  placeholder="e.g. Japan, Nigeria, Brazil..."
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold mb-1 block">Curation Notes / Provenance (Optional)</label>
+                <input
+                  type="text"
+                  value={newArtistNotes}
+                  onChange={(e) => setNewArtistNotes(e.target.value)}
+                  placeholder="e.g. Manual verified entry"
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2">
               <button
-                onClick={() => setShowCacheModal(false)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl"
+                onClick={() => setShowAddArtistModal(false)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl cursor-pointer"
               >
-                Close
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveNewArtist}
+                className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-cyan-900/20 cursor-pointer"
+              >
+                Save to Cache
               </button>
             </div>
           </div>
@@ -1273,7 +2197,7 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
                 
                 {/* Quick Model Pills */}
                 <div className="flex flex-wrap gap-1.5 mb-2">
-                  {['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-1.5-flash'].map((m) => (
+                  {['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-pro'].map((m) => (
                     <button
                       key={m}
                       type="button"
@@ -1284,7 +2208,7 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
                           : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700 hover:text-slate-200'
                       }`}
                     >
-                      {m} {m === 'gemini-2.5-flash' && '★'}
+                      {m} {m === 'gemini-2.5-flash' ? '★ Primary' : m === 'gemini-2.0-flash' ? '(Secondary)' : ''}
                     </button>
                   ))}
                 </div>

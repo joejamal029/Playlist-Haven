@@ -431,11 +431,11 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
       badge: 'Module #13 Flagship',
       badgeColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
       summary: 'Automatically group hundreds or thousands of tracks into authentic regional/language buckets in seconds.',
-      tags: ['language', 'nationality', 'clustering', 'waterfall', 'musicbrainz', 'gemini', 'c-pop', 'j-pop', 'naija', 'k-pop', 'module 13'],
+      tags: ['language', 'nationality', 'clustering', 'waterfall', 'musicbrainz', 'gemini', 'c-pop', 'j-pop', 'naija', 'k-pop', 'thai', 'vietnamese', 'dutch', 'arabic', 'german', 'italian', 'portuguese', 'module 13'],
       content: (
         <div className="space-y-2 text-xs text-slate-300 text-[11px]">
           <p>
-            Traditional genre systems fail to reflect cultural roots. Module 13 partitions your music into 13 canonical buckets (English, J-Pop, Naija, K-Pop, C-Pop, Instrumental, Gospel, Filipino, I-Pop, African, Latina, Français, Other):
+            Traditional genre systems fail to reflect cultural roots. Module 13 partitions your music into <strong>20 canonical language & cultural buckets</strong> (English, J-Pop, Naija, K-Pop, C-Pop, Thai, Vietnamese, Dutch, Arabic, German, Italian, Portuguese / Brazilian, Filipino, I-Pop, African, Latina, Français, Gospel, Instrumental, Other):
           </p>
           <ol className="space-y-1.5 list-decimal list-inside">
             <li>Open <strong>Language & Nationality Clustering</strong> (Module 13).</li>
@@ -443,13 +443,37 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
             <li>The 5-Tier Waterfall executes instantly:
               <ul className="list-disc list-inside pl-4 space-y-0.5 text-slate-400">
                 <li><strong className="text-emerald-300">Tier 0:</strong> 1,341 pre-seeded baseline artists resolve in &lt;100ms.</li>
-                <li><strong className="text-cyan-300">Tier 1:</strong> Unicode Script Histogram instantly classifies non-Latin Han (CJK), Kana, Hangul, and Devanagari titles.</li>
-                <li><strong className="text-blue-300">Tier 2:</strong> MusicBrainz API maps ISO country codes to canonical regions.</li>
-                <li><strong className="text-purple-300">Tier 3:</strong> Free-tier Gemini AI (2.5 Flash) batch-classifies any remaining ambiguous artists. (Click <em>⚡ Skip to AI</em> for instant batch processing).</li>
+                <li><strong className="text-cyan-300">Tier 1:</strong> Unicode Script Histogram instantly classifies non-Latin Han (CJK), Kana, Hangul, Devanagari, Thai, and Arabic titles.</li>
+                <li><strong className="text-blue-300">Tier 2:</strong> MusicBrainz API maps ISO country codes and primary areas to canonical regions.</li>
+                <li><strong className="text-purple-300">Tier 3:</strong> Free-tier Gemini AI (2.5 Flash) batch-classifies any remaining ambiguous artists.</li>
                 <li><strong className="text-amber-300">Tier 4:</strong> 1-click manual reassignment badges permanently saved to your cache.</li>
               </ul>
             </li>
             <li>Click <strong>Export All as ZIP</strong> to get clean separate playlists for every language group, or <strong>Export Enriched CSV</strong> with UTF-8 BOM.</li>
+          </ol>
+        </div>
+      )
+    },
+    {
+      id: 'workflow-metadata-enrichment-engine',
+      category: 'workflows',
+      title: 'Workflow 7: Deep Musicological Enrichment & 0ms Offline Caching (Module #15)',
+      badge: 'Tier 2 Musicology',
+      badgeColor: 'bg-teal-500/20 text-teal-300 border-teal-500/30',
+      summary: 'Extract maximum data from MusicBrainz, Cover Art Archive, and Wikidata into browser IndexedDB with intelligent dirty-tag retries.',
+      tags: ['enrichment', 'musicbrainz', 'coverart', 'wikidata', 'indexeddb', 'dossier', '38-col csv', 'module 15'],
+      content: (
+        <div className="space-y-2 text-xs text-slate-300 text-[11px]">
+          <p>
+            Mainstream metadata scrapers give you surface-level ID3 tags. <strong>Module 15</strong> turns your music files into a deep, structured musicological archive stored locally in <strong>IndexedDB</strong>:
+          </p>
+          <ol className="space-y-1.5 list-decimal list-inside">
+            <li>Open <strong>Deep Metadata Enrichment Engine</strong> (Module 15).</li>
+            <li>Choose your ingestion mode: <strong>⚡ Fast: Skip Cached</strong> (0ms instant lookup) or <strong>🔄 Update: Force Refresh</strong>.</li>
+            <li>Drop any playlist (.m3u, .csv, .tsv, .txt, .json). Tracks are matched against MusicBrainz with rate-limiting safety (&ge;1.1s).</li>
+            <li><strong>Dual Intelligent Retries:</strong> If tags are dirty, click <em>⚡ AI Precision Re-Search</em> to use Gemini to diagnose canonical terms and re-query MusicBrainz. If a track is a true leak/unreleased demo, synthesize structured metadata clearly flagged as <em>⚠️ AI Fallback (Not on MusicBrainz)</em>.</li>
+            <li>Click any song to open the <strong>Slide-Over Musicological Dossier</strong> (high-res cover art, songwriter/composer credits, catalog numbers, native aliases, Wikidata IDs, streaming URLs).</li>
+            <li>Export to <strong>38-Column CSV (UTF-8 BOM)</strong>, <strong>Master Dataset JSON</strong>, or <strong>Tagged M3U8</strong>.</li>
           </ol>
         </div>
       )
@@ -586,6 +610,84 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
           </div>
           <p className="text-[11px] text-slate-400">
             <strong>Exports:</strong> Export individual bucket playlists (.m3u / .csv), export all 13 buckets bundled as a ZIP archive, or export enriched CSVs with full country and source metadata.
+          </p>
+        </div>
+      )
+    },
+    {
+      id: 'tool-triage',
+      category: 'tools',
+      title: '🧭 Module 14: Discovery Triage & Honing Engine',
+      badge: 'Immersion Bridge',
+      badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+      summary: 'Bridge the gap between raw streaming discovery and offline immersion across Singles, Artists, and Albums with AI intelligence.',
+      tags: ['triage', 'honing', 'immersion', 'singles', 'artists', 'albums', 'basket', 'module 14', 'downloader', 'gemini'],
+      content: (
+        <div className="space-y-3 text-xs text-slate-300">
+          <p>
+            Streaming platforms are discovery engines that flood your library with hundreds of raw tracks over months. The <strong>Discovery Triage & Honing Engine</strong> provides the missing bridge to offline immersion through three core philosophies:
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-[11px]">
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <span className="font-bold text-amber-300">1. Singles (The Probe)</span>
+              <p className="text-slate-400">Isolate lone sparks and one-off discoveries. Quickly stage them into download baskets, keep them as curated lone singles, or jump directly to deeper artist exploration.</p>
+            </div>
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <span className="font-bold text-orange-300">2. Artists (Resonance Tiers)</span>
+              <p className="text-slate-400">Tracks are clustered by artist to reveal <strong>Magnet Artists (&ge;4 tracks)</strong> and <strong>Emerging Sparks (2-3 tracks)</strong>. 1-click stage entire discography subsets.</p>
+            </div>
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <span className="font-bold text-emerald-300">3. Albums (Validation Gate)</span>
+              <p className="text-slate-400">Albums are not impulse-downloaded—they are trusted. Cluster tracks sharing an album and validate high-density candidates (&ge;2 or 3 tracks) for full immersion.</p>
+            </div>
+          </div>
+          <div className="p-3 bg-purple-950/30 border border-purple-500/30 rounded-xl space-y-1.5 text-[11px]">
+            <span className="font-bold text-purple-300 flex items-center gap-1.5">
+              🔮 AI Taste Intelligence & Discography Scout
+            </span>
+            <p className="text-slate-300">
+              Run batch synthesis with Gemini 2.5 Flash or local Ollama/LM Studio to map cohort micro-scenes, uncover landmark album dives, and scout whether an artist is best appreciated as a "Curated Singles Artist" or an "Album Artist".
+            </p>
+          </div>
+          <p className="text-[11px] text-slate-400">
+            <strong>Immersion Staging Basket:</strong> Prioritize tracks (Immediate vs Secondary Wave) and export directly to Downloader Query Lists (.txt for yt-dlp/SpotDL), TuneMyMusic / Spotify Sync (.csv), or playable Musicolet (.m3u).
+          </p>
+        </div>
+      )
+    },
+    {
+      id: 'tool-enrichment',
+      category: 'tools',
+      title: '🧬 Module 15: Deep Metadata Enrichment Engine',
+      badge: 'Musicology & Offline DB',
+      badgeColor: 'bg-teal-500/20 text-teal-300 border-teal-500/30',
+      summary: 'Extract maximum musicological data from MusicBrainz, Cover Art Archive, and Wikidata into local IndexedDB with 0ms preloading and dual intelligent retry.',
+      tags: ['enrichment', 'musicbrainz', 'coverart', 'wikidata', 'indexeddb', 'dossier', '38-col csv', 'module 15', 'offline'],
+      content: (
+        <div className="space-y-3 text-xs text-slate-300">
+          <p>
+            Mainstream tools only view audio files through the lens of basic artist and title tags. <strong>Module 15</strong> unlocks Tier 2 deep musicological data from MusicBrainz, Cover Art Archive, and Wikidata, transforming your library into an academic-grade musicological dataset:
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <span className="font-bold text-teal-300">⚡ 0ms IndexedDB Preload & Caching</span>
+              <p className="text-slate-400">All enriched records, artists, and releases are persisted in browser IndexedDB. Preload datasets for instant 0ms retrieval with zero redundant network requests.</p>
+            </div>
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <span className="font-bold text-cyan-300">🔄 Ingestion Modes: Fast vs Update</span>
+              <p className="text-slate-400">Choose between <em>⚡ Fast Mode</em> (skips cached tracks) and <em>🔄 Update Mode</em> (forces fresh re-queries of MusicBrainz to update existing records).</p>
+            </div>
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <span className="font-bold text-purple-300">⚡ AI Precision Query Surgeon</span>
+              <p className="text-slate-400">When dirty tags fail exact matching, Gemini diagnoses noise, isolates canonical terms, and automatically re-queries MusicBrainz.</p>
+            </div>
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <span className="font-bold text-rose-300">⚠️ AI Fallback (Not on MusicBrainz)</span>
+              <p className="text-slate-400">Strictly a last resort for unreleased demos and leaks. Synthesizes structured musicological metadata clearly badged as <code>⚠️ AI Fallback (Not on MusicBrainz)</code>.</p>
+            </div>
+          </div>
+          <p className="text-[11px] text-slate-400">
+            <strong>Dense Multi-Format Exports:</strong> Export a 38-column UTF-8 BOM CSV (with composers, lyricists, ISWC, original year, begin-area, catalog numbers, barcodes, and native script aliases), a Master JSON backup, or tagged M3U8 playlists.
           </p>
         </div>
       )

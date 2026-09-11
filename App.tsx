@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layers, Merge, Music, Settings, Github, Activity, Scissors, Shuffle, Eraser, Type, BarChart3, Eye, Filter, SlidersHorizontal, Wand2, HelpCircle, Sparkles, BookOpen, GitCompare, Globe } from 'lucide-react';
+import { Layers, Merge, Music, Settings, Github, Activity, Scissors, Shuffle, Eraser, Type, BarChart3, Eye, Filter, SlidersHorizontal, Wand2, HelpCircle, Sparkles, BookOpen, GitCompare, Globe, Compass, Database, ArrowUpDown } from 'lucide-react';
 import SonicSieveView from './views/SonicSieveView';
 import PlaylistMergerView from './views/PlaylistMergerView';
 import PlaylistSplitterView from './views/PlaylistSplitterView';
@@ -13,9 +13,13 @@ import TierFilteringView from './views/TierFilteringView';
 import PlaylistMatcherView from './views/PlaylistMatcherView';
 import ScrapeStripperView from './views/ScrapeStripperView';
 import LanguageClusteringView from './views/LanguageClusteringView';
+import DiscoveryTriageView from './views/DiscoveryTriageView';
+import DeepMetadataEnrichmentView from './views/DeepMetadataEnrichmentView';
+import PlaylistResequencerView from './views/PlaylistResequencerView';
 import HelpGuideModal from './components/HelpGuideModal';
+import ErrorBoundary from './components/ErrorBoundary';
 
-type AppView = 'dashboard' | 'sieve' | 'merger' | 'splitter' | 'randomizer' | 'pruner' | 'renamer' | 'appearance' | 'vision' | 'tier' | 'manipulator' | 'matcher' | 'stripper' | 'clustering';
+type AppView = 'dashboard' | 'sieve' | 'merger' | 'splitter' | 'randomizer' | 'pruner' | 'renamer' | 'appearance' | 'vision' | 'tier' | 'manipulator' | 'matcher' | 'stripper' | 'clustering' | 'triage' | 'enrichment' | 'resequencer';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<AppView>('dashboard');
@@ -66,6 +70,12 @@ export default function App() {
         return <ScrapeStripperView onBack={() => setCurrentView('dashboard')} />;
       case 'clustering':
         return <LanguageClusteringView onBack={() => setCurrentView('dashboard')} />;
+      case 'triage':
+        return <DiscoveryTriageView onBack={() => setCurrentView('dashboard')} onOpenHelp={() => setIsHelpModalOpen(true)} />;
+      case 'enrichment':
+        return <DeepMetadataEnrichmentView onBack={() => setCurrentView('dashboard')} />;
+      case 'resequencer':
+        return <PlaylistResequencerView onBack={() => setCurrentView('dashboard')} onOpenHelp={() => setIsHelpModalOpen(true)} />;
       default:
         return <Dashboard onViewSelect={setCurrentView} onOpenHelp={() => setIsHelpModalOpen(true)} />;
     }
@@ -73,7 +83,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200">
-      {renderView()}
+      <ErrorBoundary 
+        fallbackTitle="Module Render Error" 
+        onReset={() => setCurrentView('dashboard')}
+      >
+        {renderView()}
+      </ErrorBoundary>
       
       {/* Universal Searchable Help & Guidance Modal (?) */}
       <HelpGuideModal 
@@ -145,6 +160,78 @@ const Dashboard = ({
 
         {/* Unified, Balanced & Fully Responsive Tools Grid */}
         <div className="grid grid-cols-2 gap-4">
+
+          {/* Discovery Triage & Honing Card - Featured (Module 14) */}
+          <button 
+            onClick={() => onViewSelect('triage')}
+            className="group relative overflow-hidden p-6 bg-slate-900 border border-amber-500/30 rounded-2xl text-left transition-all hover:border-amber-500/60 hover:shadow-2xl hover:shadow-amber-900/20 active:scale-[0.98] col-span-2"
+          >
+            <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Compass size={80} className="text-amber-400" />
+            </div>
+            <div className="relative z-10">
+              <div className="w-10 h-10 bg-amber-500/20 text-amber-400 rounded-xl flex items-center justify-center mb-4 group-hover:bg-amber-500 group-hover:text-slate-950 transition-colors">
+                <Compass size={20} />
+              </div>
+              <div className="flex items-center space-x-2">
+                <h2 className="text-xl font-bold text-slate-100 mb-1">Discovery Triage & Honing Engine</h2>
+                <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono">
+                  Module 14
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed font-medium">
+                Bridge the gap between discovery and immersion. Triage multi-month intake cohorts across Singles (Probes), Artists (Resonance), and Albums (Validation Gate). Stage offline download baskets and uncover taste micro-scenes with AI.
+              </p>
+            </div>
+          </button>
+          
+          {/* Deep Metadata Enrichment Engine Card - Featured (Module 15) */}
+          <button 
+            onClick={() => onViewSelect('enrichment')}
+            className="group relative overflow-hidden p-6 bg-slate-900 border border-teal-500/30 rounded-2xl text-left transition-all hover:border-teal-500/60 hover:shadow-2xl hover:shadow-teal-900/20 active:scale-[0.98] col-span-2"
+          >
+            <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Database size={80} className="text-teal-400" />
+            </div>
+            <div className="relative z-10">
+              <div className="w-10 h-10 bg-teal-500/20 text-teal-400 rounded-xl flex items-center justify-center mb-4 group-hover:bg-teal-500 group-hover:text-slate-950 transition-colors">
+                <Database size={20} />
+              </div>
+              <div className="flex items-center space-x-2">
+                <h2 className="text-xl font-bold text-slate-100 mb-1">Deep Metadata Enrichment Engine</h2>
+                <span className="text-[9px] bg-teal-500/20 text-teal-300 border border-teal-500/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono">
+                  Module 15
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed font-medium">
+                Tier 2 Deep Musicological Cataloging. Extract maximum metadata from MusicBrainz, Cover Art Archive, and Wikidata into local IndexedDB. Features intelligent dirty-tag AI surgeon, manual disambiguation drawer, 20 cultural buckets, and 38-column CSV / Master JSON exports.
+              </p>
+            </div>
+          </button>
+          
+          {/* Playlist Resequencer & Chronology Restorer Card - Featured (Module 16) */}
+          <button 
+            onClick={() => onViewSelect('resequencer')}
+            className="group relative overflow-hidden p-6 bg-slate-900 border border-orange-500/30 rounded-2xl text-left transition-all hover:border-orange-500/60 hover:shadow-2xl hover:shadow-orange-900/20 active:scale-[0.98] col-span-2"
+          >
+            <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+              <ArrowUpDown size={80} className="text-orange-400" />
+            </div>
+            <div className="relative z-10">
+              <div className="w-10 h-10 bg-orange-500/20 text-orange-400 rounded-xl flex items-center justify-center mb-4 group-hover:bg-orange-500 group-hover:text-slate-950 transition-colors">
+                <ArrowUpDown size={20} />
+              </div>
+              <div className="flex items-center space-x-2">
+                <h2 className="text-xl font-bold text-slate-100 mb-1">Playlist Resequencer & Chronology Restorer</h2>
+                <span className="text-[9px] bg-orange-500/20 text-orange-300 border border-orange-500/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono">
+                  Module 16
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed font-medium">
+                Repair playlist chronology disrupted by cross-platform conversion (YouTube ➔ Spotify). Reorder appended corrections back to their original discovery positions, omit failed conversions, and tag with YouTube provenance for downstream Module 14 Triage & downloaders.
+              </p>
+            </div>
+          </button>
           
           {/* Sonic Sieve Card - Featured */}
           <button 

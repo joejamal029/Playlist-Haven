@@ -399,7 +399,7 @@ export default function PlaylistMatcherView({ onBack }: PlaylistMatcherViewProps
 
     setIsAIRunning(true);
     const config = getAIConfig();
-    const apiKey = config.apiKey || (import.meta.env?.VITE_GEMINI_API_KEY || import.meta.env?.VITE_API_KEY) || "";
+    const apiKey = config.apiKey || ((import.meta as any).env?.VITE_GEMINI_API_KEY || (import.meta as any).env?.VITE_API_KEY) || "";
 
     if (!apiKey) {
       alert("Gemini API key is missing. Please configure it in Settings or Vision-to-Playlist.");

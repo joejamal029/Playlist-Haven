@@ -7,21 +7,46 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies & Build
 node_modules
 dist
 dist-ssr
 *.local
 
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# OS Generated Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary, Backup & Dump files
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+*.dump
 
 # Agent Artifacts, Brain, Scratch & VibeCode
 .vibecode/
@@ -32,4 +57,19 @@ dist-ssr
 brain/
 scratch/
 .agents/
+
+# Demonstration, Sample Data & Local Instruction Files
+*.csv
+*.xlsx
+*.tsv
+*.txt
+!docs/**
+CLAUDE.md
+corss-module_integration.md
+artifacts/
+language_clustering/
+scrapper/
+Resequencer/
+
+
 
