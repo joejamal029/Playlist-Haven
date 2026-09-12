@@ -67,7 +67,7 @@ graph TD
 * **Layer 1: The Discovery Layer (Pure Unencountered Exploration)**
   * **Enabling Data Capture**: Systematic logging of listening activity provides the foundational data that makes the DAESO loop possible.
   * **Anti-Repeat Purity Guard**: To prevent algorithmic recycling, the **Playlist Matcher / Reconciler (Module 8)** and **Manipulator (Module 4)** actively subtract all historically played tracks and existing offline library files from new discovery queues before listening begins.
-  * **Total Curatorial Freedom**: Full multi-source aggregation, deduplication, CJK inversion, and cross-format `.m3u` $\leftrightarrow$ `.csv` transformations.
+  * **Total Curatorial Sovereignty (Breaking the '1-Song / 1-Playlist' Cage)**: Powered by the **Playlist Manipulator (Module 4)**—the foundational genesis of Playlist Haven. Delivers desktop-grade multi-pane workspaces (1, 2, or 4 simultaneous viewports), range selection, conditional filtering, mathematical set operations (Union, Intersect, Difference), and seamless `.m3u` $\leftrightarrow$ `.csv` format independence.
 * **Layer 2: The Ingestion Layer (The Decision Bridge & Intake Floodgate)**
   * **The Intake Problem**: When total discovery freedom is unlocked, curators inevitably hit the "Intake Wall"—an overwhelming influx of new music causing severe decision paralysis.
   * **The Bridge**: Personified by **Discovery Triage (Module 14)**, **Language Clustering (Module 13)**, **Deep Enrichment (Module 15)**, and **Playlist Resequencer (Module 16)**.
