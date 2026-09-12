@@ -226,11 +226,11 @@ graph TD
   * Custom reproducible seeds.
 
 ### Module 11: 👁️ Vision-to-Playlist AI Digitizer (`VisionToPlaylistView.tsx`)
-* **Purpose**: Digitizes playlist screenshots, DJ tracklists, and flyer images into playable files.
+* **Purpose**: Rescues trapped playlists from screenshots (offline music player libraries, social media shares, DJ flyers) and creates clean CSV/M3U files ready for local playback or streaming migration via **TuneMyMusic** / **Soundiiz**.
 * **Architecture & Features**:
   * Cloud: **Gemini 2.5 Flash** (Primary) with automatic **Gemini 2.0 Flash** failover.
   * Local-First: 100% offline local vision models via OpenAI-compatible endpoints (Ollama / LM Studio with `llama3.2-vision`).
-  * Deduplicates OCR results and exports clean `.m3u` / `.csv`.
+  * Deduplicates OCR results and exports clean `.m3u` / `.csv` formatted for direct TuneMyMusic upload or offline player queues.
   * **Consensus Aggregator (Integrated Mode)**: Ingests multiple community 'Best Of' playlists or screenshots for an artist, cross-tabulating song recurrence to identify true consensus hits. Slated for future decoupling into a dedicated standalone module.
 
 ### Module 12: 🪄 Scrape Stripper & Formatter (`ScrapeStripperView.tsx`)
