@@ -18,7 +18,7 @@
 ### The 3-Tier Musical Lifecycle Pipeline
 $$\text{Layer 1: Discovery (Pure Exploration)} \xrightarrow{\text{Intake Cohorts}} \text{Layer 2: Ingestion (Decision Bridge)} \xrightarrow{\text{Immersion Baskets}} \text{Layer 3: Experience (Art on the Wall)}$$
 
-* **Layer 1: Discovery (Pure Exploration & Crate Digging)**: Powered by the **Playlist Manipulator (M4)** to break the '1-song / 1-playlist' cage of streaming via 1/2/4-pane quad organization, set math, and format conversion; coupled with the **Playlist Matcher / Reconciler (M8)** & **Randomizer (M10)** to subtract past history, purge repeats, and enforce artist separation, alongside **Vision AI (M11)** for zero-typing setlist digitization.
+* **Layer 1: Discovery (Pure Exploration & Crate Digging)**: Powered by the **Playlist Manipulator (M4)** to break the '1-song / 1-playlist' cage of streaming via 1/2/4-pane multi-list organizing, merging, comparing, and duplicate pruning; coupled with the **Playlist Matcher / Reconciler (M8)** & **Randomizer (M10)** to subtract known tracks, purge repeats, and deliver true shuffle without artist clumping or re-queueing played songs; alongside **Vision AI (M11)** for zero-typing setlist digitization.
 * **Layer 2: Ingestion (The Decision Bridge & Intake Floodgate)**: Resolves the "Intake Problem" when limitless discovery causes decision fatigue. Powered by **Discovery Triage (M14)**, **Language Clustering (M13)**, **Deep Enrichment (M15)**, and **Resequencer (M16)** to classify singles, magnet artists ($\ge 4$), and validated albums ($\ge 2$).
 * **Layer 3: Experience (Living with Art on the Wall)**: Long-term listening depth where songs achieve peak resonance. Driven by **Sonic Sieve (M1)** rotations with spatial skeleton anchors (enabled by data-capable apps like Musicolet or Last.fm exports), **Tier Filtering & Appearance Counter (M3, M5)** habit analytics, complete library hygiene via **Merger, Splitter, Renamer & Pruner (M6, M7, M9, M4)**, and **Offline Matcher (M8)** physical drive playback.
 
@@ -37,13 +37,13 @@ $$\text{Layer 1: Discovery (Pure Exploration)} \xrightarrow{\text{Intake Cohorts
 | **1** | **Sonic Sieve Engine** | **L3: Experience** | Engineer | Quantitative play threshold ($\ge 2$) + **Skeleton Anchor** + Penalty Lists | `Most played Songs • Week X (Count).csv` |
 | **2** | **Sonic Sieve 2 (Dual Input)** | **L3: Experience** | Engineer | Comparative library differential calculation & capacity matching | Differential rotation M3U / CSV |
 | **3** | **Tier Filtering Workbench** | **L3: Experience** | Systemize | Statistical play-count distribution slicing (Tiers 1, 2, 3) | Partitioned tier sub-playlists |
-| **4** | **Playlist Manipulator (Quad)** | **L1: Discovery** | Engineer | Multi-pane workspace (1/2/4 panes) + Jaro-Winkler cross-pruner + Set Math | Unified / Deduplicated M3U / CSV |
+| **4** | **Playlist Manipulator (Quad)** | **L1: Discovery** | Engineer | Multi-pane workspace (1/2/4 panes) + Jaro-Winkler cross-pruner + Merge & Subtract | Unified / Deduplicated M3U / CSV |
 | **5** | **Appearance Counter** | **L3: Experience** | Analyze | Longitudinal multi-file frequency audit (Recurrence Histogram) | Favorite frequency analytics & CSV |
 | **6** | **Playlist Merger & Grouping** | **L3: Experience** | Systemize | Temporal consolidation (Weekly $\rightarrow$ Monthly $\rightarrow$ Yearly) | Consolidated chronological archives |
 | **7** | **Playlist Splitter** | **L3: Experience** | Systemize | Capacity slicing by track count, target duration, or artist chunks | Sequential chapter playlists (`Part N`) |
 | **8** | **Playlist Matcher / Reconciler**| **L1 / L3 Bridge** | Optimize | Anti-repeat discovery subtraction + Offline disk bigram matcher | Filtered queues / Playable local `.m3u` |
 | **9** | **Smart Renamer & Tag Editor** | **L1: Discovery** | Engineer | Batch regex noise stripping + Smart Title Case with acronym preservation | Sanitized metadata files |
-| **10**| **Playlist Randomizer** | **L1: Discovery** | Engineer | Cryptographic shuffle with **Artist Separation Spacing** constraints | True artist-spaced random M3U |
+| **10**| **Playlist Randomizer** | **L1: Discovery** | Engineer | Genuine shuffle with **Artist Separation Spacing** (no clumping or repeat queueing) | True artist-spaced random M3U |
 | **11**| **Vision-to-Playlist AI** | **L1: Discovery** | Data | Cloud Gemini 2.5 Flash / Local Ollama OCR vision digitizer | Extracted `.m3u` / `.csv` from screenshots |
 | **12**| **Scrape Stripper & Formatter** | **L1: Discovery** | Data | Centralized regex cleaner + CJK inverter + sidebar recommendation filter | Clean UTF-8 BOM CSV / TSV / TXT |
 | **13**| **Language & Cultural Engine** | **L2: Ingestion** | Analyze | **5-Tier Waterfall** (Cache $\rightarrow$ Regex $\rightarrow$ MusicBrainz $\rightarrow$ Gemini $\rightarrow$ Manual) | 20-Bucket playlists & All-in-One ZIP |

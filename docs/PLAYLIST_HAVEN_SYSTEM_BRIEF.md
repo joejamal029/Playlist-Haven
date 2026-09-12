@@ -45,7 +45,7 @@ graph TD
     subgraph L1["1. THE DISCOVERY LAYER (Pure Unencountered Exploration)"]
         D1["Continuous Play History Capture"]
         D2["Anti-Repeat Subtraction via Matcher"]
-        D3["Total Curation Freedom (Merge/Split/Convert)"]
+        D3["Multi-List Curation & Organization"]
     end
 
     subgraph L2["2. THE INGESTION LAYER (Decision Bridge & Intake Floodgate)"]
