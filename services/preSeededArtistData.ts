@@ -6672,6 +6672,26 @@ export const PRE_SEEDED_ARTIST_CACHE: Record<string, SeededArtistEntry> = {
     "artist": "周深/郭沁",
     "bucket": "C-Pop",
     "rawGenre": "C-Pop"
+  },
+  "bek hyunjin": {
+    "artist": "Bek Hyunjin",
+    "bucket": "K-Pop",
+    "rawGenre": "K-Indie / K-Pop"
+  },
+  "the choir of cherubim and seraphim movement church, surulere": {
+    "artist": "The Choir of Cherubim and Seraphim Movement Church, Surulere",
+    "bucket": "Gospel",
+    "rawGenre": "Gospel / Worship"
+  },
+  "c&s church movement": {
+    "artist": "C&S Church Movement",
+    "bucket": "Gospel",
+    "rawGenre": "Gospel / Worship"
+  },
+  "seraph voices": {
+    "artist": "Seraph Voices",
+    "bucket": "Gospel",
+    "rawGenre": "Gospel / Worship"
   }
 };
 

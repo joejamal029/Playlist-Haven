@@ -47,8 +47,8 @@ $$\text{Layer 1: Discovery (Pure Exploration)} \xrightarrow{\text{Intake Cohorts
 | **11**| **Vision-to-Playlist AI** | **L1: Discovery** | Data | AI screenshot extraction for trapped local/online lists & TuneMyMusic imports | Clean `.csv` / `.m3u` from screenshots |
 | **12**| **Scrape Stripper & Formatter** | **L1: Discovery** | Data | Centralized regex cleaner + CJK inverter + sidebar recommendation filter | Clean UTF-8 BOM CSV / TSV / TXT |
 | **13**| **Language & Cultural Engine** | **L2: Ingestion** | Analyze | **5-Tier Waterfall** (Cache $\rightarrow$ Regex $\rightarrow$ MusicBrainz $\rightarrow$ Gemini $\rightarrow$ Manual) | 20-Bucket playlists & All-in-One ZIP |
-| **14**| **Discovery Triage & Honing** | **L2: Ingestion** | Triage | Tri-Philosophy (Singles / Artists / Albums) + High-Agency Decision Hub | Immersion Basket (TXT, CSV, M3U) |
-| **15**| **Deep Metadata Enrichment** | **L2: Ingestion** | Musicology | MusicBrainz WS v2 + Cover Art + Work entity credits + Decoupled AI | 38-Column Master CSV + IndexedDB store |
+| **14**| **Discovery Triage & Honing** | **L2: Ingestion** | Triage | Tri-Philosophy (Singles / Artists / Albums) + In-App Audio Decision Hub | Immersion Basket (TXT, CSV, M3U) |
+| **15**| **Deep Metadata Enrichment** | **L2: Ingestion** | Musicology | MusicBrainz WS v2 + Apple iTunes zero-key fallback + CAA 404 sanitation + 30s Audio Preview | 38-Column Master CSV + IndexedDB store |
 | **16**| **Playlist Resequencer** | **L2: Ingestion** | Repair | 2-Tier matching (Clean baseline + 10-category AI) + Chronology restorer | Restored Spotify CSV with Provenance |
 
 ---
@@ -71,12 +71,16 @@ $$\text{Layer 1: Discovery (Pure Exploration)} \xrightarrow{\text{Intake Cohorts
 ### 3. 🧭 Discovery Triage & Honing Engine (Module 14)
 * The essential filter between ephemeral discovery and deep offline immersion:
   * **Tri-Philosophy Division**: Isolates **Singles (The Probe)**, clusters **Artists (The Resonance: Magnet $\ge 4$ vs Emerging 2–3)**, and validates **Albums ($\ge 2$ tracks)**.
+  * **In-App Decision Audio Previews**: 30-second Apple iTunes previews embedded directly on Singles Decision table/card rows and Artist cluster tracklists, enabling instant zero-tab listening evaluation before committing triage decisions.
   * **High-Agency Decision Hub**: 1-Click Promote to Album (`Album_Intake_[Artist].csv`), In-Card Singlesification (`Singlesified_[Artist].csv`), or 1-Click Deferral (`Deferred_[Artist].csv`).
   * **Multi-Artist Batch Action Bar**: Bulk promotions (`👑`), bulk staging (`🛒 Stage Selected to Basket`), and bulk deferral (`⏳`).
   * **Chronological Fidelity**: Retains independent 1-based discovery sequence numbers (`#1..#N`) across distinct sources.
 
 ### 4. 🧬 Deep Metadata Enrichment Engine (Module 15)
-* Connects personal collections directly to open music knowledge graphs (MusicBrainz, Cover Art Archive, Wikidata):
+* Connects personal collections directly to open music knowledge graphs (MusicBrainz, Cover Art Archive, Wikidata) and commercial catalogs (Apple iTunes):
+  * **Dual-Source Catalog Architecture**: Primary MusicBrainz Knowledge Graph lookup with automatic, zero-key **Apple iTunes API** secondary fallback for uncataloged releases (`🍎 iTunes Verified`).
+  * **Smart Cover Art Archive 404 Sanitation**: Detects dead speculative CAA links and missing release dates, allowing 1-click batch and single-track supplementation from Apple iTunes without overwriting valid MusicBrainz data.
+  * **Universal 30s In-App Audio Preview & Downloader**: Global HTML5 audio player subsystem with floating bottom dock (scrubber, volume, in-browser `.m4a` download), backed by reusable components across the app.
   * **Decoupled 2-Stage High-Throughput Pipeline**: Non-blocking primary ingestion at 1 req/sec directly to 100% completion; queued Stage 2 AI Remediation.
   * **Two-Fold AI Remediation**: Fold 1 (AI Precision Query Surgeon + MusicBrainz retry) and Fold 2 (AI Musicological Fallback Synthesis for true 0-result items).
   * **Work Entity Traversal & AI Songwriting**: Pulls composer/lyricist credits stored on linked Work entities; invokes Gemini AI when uncataloged.
@@ -97,6 +101,7 @@ $$\text{Layer 1: Discovery (Pure Exploration)} \xrightarrow{\text{Intake Cohorts
 | **Runtime** | 100% Client-Side SPA (React 18 + Vite + Tailwind CSS) | Zero server dependencies, zero database costs, static Vercel hosting |
 | **Fault Isolation**| Root `ErrorBoundary` Layer (`components/ErrorBoundary.tsx`) | Prevents blank-screen unmounts; offers collapsible stack diagnostics and 1-click recovery |
 | **Null Safety** | Universal Defensive Null-Coalescing | Protected multi-criteria comparators (`sourceOrder ?? 0`, `sources?.[0] || ''`, safe bucket lookups) |
+| **Audio Subsystem**| Global Audio Context + Reusable Component Pipeline | Permanently mounted HTML5 audio element with zero-tab `.m4a` blob downloader and persistent playback across views |
 | **AI Hierarchy** | `gemini-2.5-flash` (★) $\rightarrow$ `gemini-2.0-flash` $\rightarrow$ `gemini-1.5-flash` | Automatic failover on HTTP 429 / network errors; 25-second `Promise.race` safety ceiling |
 | **Local-First AI** | OpenAI-Compatible Endpoints (Ollama / LM Studio) | 100% offline privacy for both vision OCR and text classification |
 | **Client Storage** | `localStorage` (settings) + `IndexedDB` (metadata cache) | Scalable to hundreds of thousands of songs with 0ms preloaded offline JSON dumps |

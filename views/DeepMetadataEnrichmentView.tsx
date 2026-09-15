@@ -40,6 +40,9 @@ import {
   SlidersHorizontal,
   X,
   Key,
+  Volume2,
+  VolumeX,
+  Image as ImageIcon,
 } from 'lucide-react';
 import {
   EnrichedSongRecord,
@@ -82,6 +85,11 @@ import {
   purgeUnresolvedTracks,
   normalizeSongKey,
 } from '../services/metadataDb';
+import {
+  queryITunesRecording,
+  supplementTrackFromITunes,
+  resolveTrackAudioPreview,
+} from '../services/itunesApi';
 import {
   CANONICAL_BUCKETS,
   CanonicalBucket,
@@ -429,6 +437,28 @@ export default function DeepMetadataEnrichmentView({ onBack }: DeepMetadataEnric
   const [showExportModal, setShowExportModal] = useState(false);
   const [copiedNotification, setCopiedNotification] = useState(false);
 
+  // Audio Player State (Universal 30s In-App Preview & Downloader)
+  const [activeAudio, setActiveAudio] = useState<{
+    trackId: string;
+    url: string;
+    title: string;
+    artist: string;
+    coverArt?: string;
+  } | null>(null);
+  const [isPlayingAudio, setIsPlayingAudio] = useState<boolean>(false);
+  const [audioLoadingTrackId, setAudioLoadingTrackId] = useState<string | null>(null);
+  const [audioCurrentTime, setAudioCurrentTime] = useState<number>(0);
+  const [audioDuration, setAudioDuration] = useState<number>(30);
+  const [audioVolume, setAudioVolume] = useState<number>(0.85);
+  const [isAudioMuted, setIsAudioMuted] = useState<boolean>(false);
+  const [isDownloadingAudio, setIsDownloadingAudio] = useState<boolean>(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Field Supplement State (iTunes Artwork & Release Year Sanitizer)
+  const [supplementingTrackId, setSupplementingTrackId] = useState<string | null>(null);
+  const [isSupplementingAll, setIsSupplementingAll] = useState<boolean>(false);
+  const [failedArtIds, setFailedArtIds] = useState<Set<string>>(new Set());
+
   // AI Settings Modal State
   const [aiConfigModalOpen, setAiConfigModalOpen] = useState(false);
   const [aiConfigForm, setAiConfigForm] = useState<AIConfig>(() => getAIConfig());
@@ -546,24 +576,45 @@ export default function DeepMetadataEnrichmentView({ onBack }: DeepMetadataEnric
   const tableStats = useMemo(() => {
     let cacheHits = 0;
     let mbEnriched = 0;
+    let itunesEnriched = 0;
     let needsResolution = 0;
     let aiSynthesized = 0;
+    let missingArtOrYear = 0;
 
     for (const r of records) {
       if (r.resolution?.status === 'cached') cacheHits++;
       else if (r.resolution?.status === 'enriched' || r.resolution?.status === 'ai_search_resolved') mbEnriched++;
+      else if (r.resolution?.status === 'itunes_enriched') itunesEnriched++;
       else if (r.resolution?.status === 'needs_resolution') needsResolution++;
       else if (r.resolution?.status === 'ai_synthesized_fallback') aiSynthesized++;
+
+      const thumb = r.release?.coverArtThumbUrl || '';
+      const full = r.release?.coverArtFullUrl || '';
+      const isArtFailed = failedArtIds.has(r.id);
+      const hasNoArt = !thumb && !full;
+      const needsArt = isArtFailed || hasNoArt;
+
+      const rawYear = r.release?.originalReleaseYear;
+      const rawDate = r.release?.releaseDate;
+      const hasYear = (typeof rawYear === 'number' && rawYear > 0 && !isNaN(rawYear)) ||
+                      (typeof rawDate === 'string' && rawDate.trim() !== '' && rawDate !== '—');
+      const needsYear = !hasYear;
+
+      if (needsArt || needsYear) {
+        missingArtOrYear++;
+      }
     }
 
     return {
       total: records.length,
       cacheHits,
       mbEnriched,
+      itunesEnriched,
       needsResolution,
       aiSynthesized,
+      missingArtOrYear,
     };
-  }, [records]);
+  }, [records, failedArtIds]);
 
   // Handle Universal File Selection & Ingestion
   const handleFilesSelected = async (newFiles: File[]) => {
@@ -841,7 +892,7 @@ export default function DeepMetadataEnrichmentView({ onBack }: DeepMetadataEnric
 
         if (isCacheHit) {
           stats.cacheHits++;
-        } else if (record.resolution.status === 'enriched' || record.resolution.status === 'ai_search_resolved') {
+        } else if (record.resolution.status === 'enriched' || record.resolution.status === 'ai_search_resolved' || record.resolution.status === 'itunes_enriched') {
           stats.mbEnriched++;
         } else if (record.resolution.status === 'needs_resolution') {
           stats.needsResolution++;
@@ -1194,6 +1245,345 @@ export default function DeepMetadataEnrichmentView({ onBack }: DeepMetadataEnric
     }
   };
 
+  // -------------------------------------------------------------
+  // Universal 30s Audio Preview Player & In-Browser Downloader
+  // -------------------------------------------------------------
+  const formatAudioTime = (seconds: number): string => {
+    if (isNaN(seconds) || seconds < 0) return '0:00';
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  const togglePlayAudio = () => {
+    if (!audioRef.current || !activeAudio) return;
+    if (audioRef.current.paused) {
+      audioRef.current.play().then(() => setIsPlayingAudio(true)).catch(console.warn);
+    } else {
+      audioRef.current.pause();
+      setIsPlayingAudio(false);
+    }
+  };
+
+  const handleSeekAudio = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newTime = parseFloat(e.target.value);
+    setAudioCurrentTime(newTime);
+    if (audioRef.current) {
+      audioRef.current.currentTime = newTime;
+    }
+  };
+
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = parseFloat(e.target.value);
+    setAudioVolume(val);
+    if (isAudioMuted && val > 0) setIsAudioMuted(false);
+    if (audioRef.current) {
+      audioRef.current.volume = val;
+    }
+  };
+
+  const toggleMuteAudio = () => {
+    if (!audioRef.current) return;
+    if (isAudioMuted) {
+      audioRef.current.volume = audioVolume;
+      setIsAudioMuted(false);
+    } else {
+      audioRef.current.volume = 0;
+      setIsAudioMuted(true);
+    }
+  };
+
+  const handleCloseAudio = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current.removeAttribute('src');
+      audioRef.current.load();
+    }
+    setActiveAudio(null);
+    setIsPlayingAudio(false);
+    setAudioCurrentTime(0);
+  };
+
+  const handlePlayTrackPreview = async (track: EnrichedSongRecord) => {
+    if (activeAudio?.trackId === track.id) {
+      togglePlayAudio();
+      return;
+    }
+
+    const artistName = track.artist?.name || track.queryArtist;
+    const trackTitle = track.title || track.queryTitle;
+    const coverArt = track.release?.coverArtThumbUrl || track.release?.coverArtFullUrl;
+
+    let previewUrl = track.artist?.externalLinks?.audioPreviewUrl;
+
+    if (!previewUrl) {
+      setAudioLoadingTrackId(track.id);
+      try {
+        previewUrl = await resolveTrackAudioPreview(track);
+        if (previewUrl) {
+          // Update in-memory records
+          setRecords(prev => prev.map(r => r.id === track.id ? { ...track } : r));
+          if (activeDossier?.id === track.id) {
+            setActiveDossier({ ...track });
+          }
+        }
+      } catch (err: any) {
+        console.warn('Failed to resolve preview:', err);
+      } finally {
+        setAudioLoadingTrackId(null);
+      }
+    }
+
+    if (!previewUrl) {
+      alert(`No 30-second audio preview found on Apple iTunes for "${artistName} - ${trackTitle}".`);
+      return;
+    }
+
+    setActiveAudio({
+      trackId: track.id,
+      url: previewUrl,
+      title: trackTitle,
+      artist: artistName,
+      coverArt,
+    });
+    setAudioCurrentTime(0);
+
+    // Play immediately on persistently mounted audioRef
+    if (audioRef.current) {
+      audioRef.current.src = previewUrl;
+      audioRef.current.currentTime = 0;
+      audioRef.current.volume = isAudioMuted ? 0 : audioVolume;
+      audioRef.current.play()
+        .then(() => setIsPlayingAudio(true))
+        .catch(e => {
+          console.warn('[Audio Player] Playback error:', e);
+          setIsPlayingAudio(false);
+        });
+    }
+  };
+
+  const handleDownloadAudioPreview = async (url: string, artist: string, title: string) => {
+    try {
+      setIsDownloadingAudio(true);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const safeFilename = `${artist} - ${title} (30s Preview).m4a`.replace(/[/\\?%*:|"<>]/g, '_');
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = safeFilename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch (err: any) {
+      alert(`Could not download audio preview directly: ${err.message}`);
+    } finally {
+      setIsDownloadingAudio(false);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // iTunes Album Art & Release Year Sanitizer / Supplement
+  // -------------------------------------------------------------
+  const handleSupplementSingleTrack = async (track: EnrichedSongRecord) => {
+    setSupplementingTrackId(track.id);
+    try {
+      const forceArt = failedArtIds.has(track.id);
+      const res = await supplementTrackFromITunes(track, undefined, { forceArt });
+      if (res && res.supplementedFields.length > 0) {
+        setRecords(prev => prev.map(r => r.id === track.id ? res.updatedRecord : r));
+        if (activeDossier?.id === track.id) {
+          setActiveDossier(res.updatedRecord);
+        }
+        if (failedArtIds.has(track.id)) {
+          setFailedArtIds(prev => {
+            const next = new Set(prev);
+            next.delete(track.id);
+            return next;
+          });
+        }
+        alert(`Successfully supplemented: ${res.supplementedFields.join(', ')} for "${track.title || track.queryTitle}"!`);
+      } else {
+        alert(`No additional metadata found on Apple iTunes for "${track.title || track.queryTitle}".`);
+      }
+    } catch (e: any) {
+      alert(`Supplement error: ${e.message}`);
+    } finally {
+      setSupplementingTrackId(null);
+    }
+  };
+
+  const handleSupplementMissingArtAndYear = async () => {
+    const targets = records.filter(r => {
+      const thumb = r.release?.coverArtThumbUrl || '';
+      const full = r.release?.coverArtFullUrl || '';
+      const isArtFailed = failedArtIds.has(r.id);
+      const hasNoArt = !thumb && !full;
+      const needsArt = isArtFailed || hasNoArt;
+
+      const rawYear = r.release?.originalReleaseYear;
+      const rawDate = r.release?.releaseDate;
+      const hasYear = (typeof rawYear === 'number' && rawYear > 0 && !isNaN(rawYear)) ||
+                      (typeof rawDate === 'string' && rawDate.trim() !== '' && rawDate !== '—');
+      const needsYear = !hasYear;
+
+      return needsArt || needsYear;
+    });
+
+    if (targets.length === 0) {
+      alert('All tracks in your library already have cover art and release dates!');
+      return;
+    }
+
+    setIsProcessing(true);
+    setIsSupplementingAll(true);
+    setIsPaused(false);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    let supplementedCount = 0;
+    const updatedMap = new Map<string, EnrichedSongRecord>();
+    for (const r of records) updatedMap.set(r.id, r);
+
+    for (let i = 0; i < targets.length; i++) {
+      if (controller.signal.aborted) break;
+      const t = targets[i];
+      const artist = t.artist?.name || t.queryArtist;
+      const title = t.title || t.queryTitle;
+
+      setCurrentProgress({
+        index: i + 1,
+        total: targets.length,
+        currentTrackName: `🖼️ Sanitizing Art & Year: ${artist} - ${title}...`,
+        stats: {
+          totalProcessed: i + 1,
+          cacheHits: tableStats.cacheHits,
+          mbEnriched: tableStats.mbEnriched,
+          itunesEnriched: (tableStats.itunesEnriched || 0) + supplementedCount,
+          needsResolution: tableStats.needsResolution,
+          aiSynthesized: tableStats.aiSynthesized,
+          manualResolved: tableStats.manualResolved,
+        },
+      });
+
+      try {
+        const forceArt = failedArtIds.has(t.id);
+        const res = await supplementTrackFromITunes(t, controller.signal, { forceArt });
+        if (res && res.supplementedFields.length > 0) {
+          supplementedCount++;
+          updatedMap.set(t.id, res.updatedRecord);
+          if (failedArtIds.has(t.id)) {
+            setFailedArtIds(prev => {
+              const next = new Set(prev);
+              next.delete(t.id);
+              return next;
+            });
+          }
+        }
+      } catch (err: any) {
+        if (err.name === 'AbortError') break;
+        console.warn(`[Supplement] Error for ${artist} - ${title}:`, err);
+      }
+    }
+
+    setRecords(Array.from(updatedMap.values()));
+    setIsProcessing(false);
+    setIsSupplementingAll(false);
+    await refreshDatabaseState();
+
+    if (!controller.signal.aborted) {
+      alert(`Sanitization complete! Successfully supplemented missing artwork / release year for ${supplementedCount} of ${targets.length} tracks from Apple iTunes.`);
+    }
+  };
+
+  // Dedicated one-click: Re-query all "Not on MB" tracks directly against Apple iTunes
+  const handleRetryNotOnMbWithItunes = async () => {
+    const targets = records.filter(r => 
+      r.resolution?.status === 'ai_synthesized_fallback' ||
+      r.resolution?.source === 'ai_synthesized_fallback' ||
+      r.resolution?.isAiSynthesized ||
+      (r.resolution?.status === 'needs_resolution' && r.resolution?.failureReason === 'PURGED_FOR_RETRY')
+    );
+
+    if (targets.length === 0) {
+      alert('No "Not on MB" fallback tracks found to retry.');
+      return;
+    }
+
+    setIsProcessing(true);
+    setIsPaused(false);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    // First delete their cached entries from IndexedDB so they never load stale cache
+    for (const t of targets) {
+      if (t.id) await deleteEnrichedTrack(t.id);
+    }
+
+    let itunesFound = 0;
+    let stillUnresolved = 0;
+    const updatedMap = new Map<string, EnrichedSongRecord>();
+    for (const r of records) updatedMap.set(r.id, r);
+
+    for (let i = 0; i < targets.length; i++) {
+      if (controller.signal.aborted) break;
+      const t = targets[i];
+      const artist = t.artist?.name || t.queryArtist;
+      const title = t.title || t.queryTitle;
+      const album = t.release?.albumTitle || t.queryAlbum;
+
+      setCurrentProgress({
+        index: i + 1,
+        total: targets.length,
+        currentTrackName: `🍎 iTunes Query: ${artist} - ${title}...`,
+        stats: {
+          totalProcessed: i + 1,
+          cacheHits: tableStats.cacheHits,
+          mbEnriched: tableStats.mbEnriched,
+          itunesEnriched: (tableStats.itunesEnriched || 0) + itunesFound,
+          needsResolution: stillUnresolved,
+          aiSynthesized: targets.length - i - 1,
+          manualResolved: tableStats.manualResolved,
+        },
+      });
+
+      try {
+        const itunesRecord = await queryITunesRecording(artist, title, album, t.queryPath, controller.signal);
+        if (itunesRecord) {
+          itunesRecord.id = t.id;
+          itunesRecord.queryArtist = t.queryArtist;
+          itunesRecord.queryTitle = t.queryTitle;
+          await saveEnrichedTrack(itunesRecord, true);
+          updatedMap.set(t.id, itunesRecord);
+          itunesFound++;
+        } else {
+          // If iTunes also misses, mark as needs_resolution
+          t.resolution.status = 'needs_resolution';
+          t.resolution.badgeLabel = '⚠️ Needs Resolution';
+          t.resolution.source = 'manual';
+          t.resolution.isAiSynthesized = false;
+          updatedMap.set(t.id, t);
+          stillUnresolved++;
+        }
+      } catch (err: any) {
+        if (err.name === 'AbortError') break;
+        console.warn(`Error querying iTunes for ${artist} - ${title}:`, err);
+      }
+
+      if (i % 3 === 0 || i === targets.length - 1) {
+        setRecords(Array.from(updatedMap.values()));
+      }
+    }
+
+    setIsProcessing(false);
+    abortControllerRef.current = null;
+    await refreshDatabaseState();
+    alert(`🍎 iTunes Retry Completed!\n\n✓ ${itunesFound} tracks matched & verified on Apple iTunes (600×600 artwork loaded)\n⚠️ ${stillUnresolved} tracks remain uncataloged on iTunes`);
+  };
+
   // Filtered Records
   const filteredRecords = useMemo(() => {
     return records.filter(r => {
@@ -1203,7 +1593,8 @@ export default function DeepMetadataEnrichmentView({ onBack }: DeepMetadataEnric
       }
       // 2. Status
       if (selectedStatus !== 'ALL') {
-        if (selectedStatus === 'verified' && r.resolution.status !== 'enriched' && r.resolution.status !== 'ai_search_resolved') return false;
+        if (selectedStatus === 'verified' && r.resolution.status !== 'enriched' && r.resolution.status !== 'ai_search_resolved' && r.resolution.status !== 'itunes_enriched') return false;
+        if (selectedStatus === 'itunes_enriched' && r.resolution.status !== 'itunes_enriched') return false;
         if (selectedStatus === 'needs_resolution' && r.resolution.status !== 'needs_resolution') return false;
         if (selectedStatus === 'not_on_mb' && r.resolution.status !== 'ai_synthesized_fallback') return false;
         if (selectedStatus === 'cached' && r.resolution.status !== 'cached') return false;
@@ -1321,9 +1712,9 @@ export default function DeepMetadataEnrichmentView({ onBack }: DeepMetadataEnric
       </header>
 
       {/* 2. Main Studio Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
+      <main className={`flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6 ${activeAudio ? 'pb-24' : ''}`}>
         {/* Metric Cards Row */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
           <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total in Workspace</span>
             <div className="text-2xl sm:text-3xl font-black text-white mt-2 font-mono">
@@ -1343,7 +1734,13 @@ export default function DeepMetadataEnrichmentView({ onBack }: DeepMetadataEnric
             <span className="text-[11px] text-emerald-500/80 mt-1">IndexedDB instant reuse</span>
           </div>
 
-          <div className="bg-cyan-950/20 border border-cyan-500/30 rounded-2xl p-4 flex flex-col justify-between">
+          <div 
+            onClick={() => setSelectedStatus(prev => prev === 'verified' ? 'ALL' : 'verified')}
+            className={`bg-cyan-950/20 border rounded-2xl p-4 flex flex-col justify-between cursor-pointer transition ${
+              selectedStatus === 'verified' ? 'border-cyan-400 bg-cyan-950/40 ring-1 ring-cyan-400 shadow-md' : 'border-cyan-500/30 hover:border-cyan-400/60'
+            }`}
+            title="Click to filter table by verified tracks"
+          >
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-cyan-400 uppercase tracking-wider">MB Verified</span>
               <ShieldCheck className="w-4 h-4 text-cyan-400" />
@@ -1351,10 +1748,33 @@ export default function DeepMetadataEnrichmentView({ onBack }: DeepMetadataEnric
             <div className="text-2xl sm:text-3xl font-black text-cyan-300 mt-2 font-mono">
               {tableStats.mbEnriched}
             </div>
-            <span className="text-[11px] text-cyan-500/80 mt-1">MusicBrainz verified records</span>
+            <span className="text-[11px] text-cyan-500/80 mt-1">MusicBrainz verified</span>
           </div>
 
-          <div className="bg-amber-950/20 border border-amber-500/30 rounded-2xl p-4 flex flex-col justify-between">
+          <div 
+            onClick={() => setSelectedStatus(prev => prev === 'itunes_enriched' ? 'ALL' : 'itunes_enriched')}
+            className={`bg-pink-950/20 border rounded-2xl p-4 flex flex-col justify-between cursor-pointer transition ${
+              selectedStatus === 'itunes_enriched' ? 'border-pink-400 bg-pink-950/40 ring-1 ring-pink-400 shadow-md' : 'border-pink-500/30 hover:border-pink-400/60'
+            }`}
+            title="Click to filter table by iTunes Verified tracks"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-pink-400 uppercase tracking-wider">iTunes Verified</span>
+              <span className="text-sm">🍎</span>
+            </div>
+            <div className="text-2xl sm:text-3xl font-black text-pink-300 mt-2 font-mono">
+              {tableStats.itunesEnriched}
+            </div>
+            <span className="text-[11px] text-pink-500/80 mt-1">Apple iTunes Catalog</span>
+          </div>
+
+          <div 
+            onClick={() => setSelectedStatus(prev => prev === 'needs_resolution' ? 'ALL' : 'needs_resolution')}
+            className={`bg-amber-950/20 border rounded-2xl p-4 flex flex-col justify-between cursor-pointer transition ${
+              selectedStatus === 'needs_resolution' ? 'border-amber-400 bg-amber-950/40 ring-1 ring-amber-400 shadow-md' : 'border-amber-500/30 hover:border-amber-400/60'
+            }`}
+            title="Click to filter table by tracks needing resolution"
+          >
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-amber-400 uppercase tracking-wider">Needs Resolution</span>
               <AlertTriangle className="w-4 h-4 text-amber-400" />
@@ -1365,7 +1785,13 @@ export default function DeepMetadataEnrichmentView({ onBack }: DeepMetadataEnric
             <span className="text-[11px] text-amber-500/80 mt-1">Dirty tags or ambiguous</span>
           </div>
 
-          <div className="bg-purple-950/20 border border-purple-500/30 rounded-2xl p-4 flex flex-col justify-between col-span-2 sm:col-span-1">
+          <div 
+            onClick={() => setSelectedStatus(prev => prev === 'not_on_mb' ? 'ALL' : 'not_on_mb')}
+            className={`bg-purple-950/20 border rounded-2xl p-4 flex flex-col justify-between col-span-2 sm:col-span-1 lg:col-span-1 cursor-pointer transition ${
+              selectedStatus === 'not_on_mb' ? 'border-purple-400 bg-purple-950/40 ring-1 ring-purple-400 shadow-md' : 'border-purple-500/30 hover:border-purple-400/60'
+            }`}
+            title="Click to filter table by 'Not on MB' fallback tracks"
+          >
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-purple-400 uppercase tracking-wider">Not on MB</span>
               <Sparkles className="w-4 h-4 text-purple-400" />
@@ -1373,7 +1799,7 @@ export default function DeepMetadataEnrichmentView({ onBack }: DeepMetadataEnric
             <div className="text-2xl sm:text-3xl font-black text-purple-300 mt-2 font-mono">
               {tableStats.aiSynthesized}
             </div>
-            <span className="text-[11px] text-purple-400/80 mt-1">⚠️ AI Fallback (Uncataloged)</span>
+            <span className="text-[11px] text-purple-400/80 mt-1">⚠️ AI Fallback</span>
           </div>
         </div>
 
@@ -1434,6 +1860,20 @@ export default function DeepMetadataEnrichmentView({ onBack }: DeepMetadataEnric
                 <Sparkles className="w-3.5 h-3.5 text-purple-400" />
                 <span>Auto AI Surgeon</span>
               </button>
+
+              {/* One-Click Retry Not on MB with iTunes */}
+              {tableStats.aiSynthesized > 0 && (
+                <button
+                  type="button"
+                  onClick={handleRetryNotOnMbWithItunes}
+                  disabled={isProcessing}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold border border-pink-500/50 bg-pink-950/60 hover:bg-pink-900/80 text-pink-200 transition flex items-center space-x-1.5 shadow-md active:scale-95 cursor-pointer animate-pulse hover:animate-none"
+                  title="Purge cached entries for fallback tracks and query Apple iTunes Search API directly"
+                >
+                  <span className="text-sm">🍎</span>
+                  <span>Retry Not on MB with iTunes ({tableStats.aiSynthesized})</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1660,18 +2100,29 @@ export default function DeepMetadataEnrichmentView({ onBack }: DeepMetadataEnric
                 className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
               >
                 <option value="ALL">All Statuses</option>
-                <option value="verified">✓ MusicBrainz Verified</option>
+                <option value="verified">✓ Verified (MusicBrainz & iTunes)</option>
+                <option value="itunes_enriched">🍎 iTunes Verified</option>
                 <option value="needs_resolution">⚠️ Needs Resolution</option>
                 <option value="not_on_mb">⚠️ Not on MusicBrainz (AI Fallback)</option>
                 <option value="cached">⚡ 0ms Cached</option>
               </select>
             </div>
 
-            {/* Export Actions Dropdown Trigger */}
+            {/* Export & Supplement Actions */}
             <div className="flex items-center space-x-2">
               <button
+                onClick={handleSupplementMissingArtAndYear}
+                disabled={isProcessing || isSupplementingAll}
+                className="px-3 py-2 bg-gradient-to-r from-emerald-600/30 to-teal-600/30 hover:from-emerald-600/50 hover:to-teal-600/50 text-emerald-300 hover:text-white border border-emerald-500/40 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition active:scale-95 shadow-sm cursor-pointer disabled:opacity-50"
+                title="Sanitize empty album art and release year fields across all tracks using Apple iTunes"
+              >
+                <ImageIcon className="w-4 h-4 text-emerald-400" />
+                <span>🖼️ Supplement Missing Art & Year {tableStats.missingArtOrYear > 0 ? `(${tableStats.missingArtOrYear})` : ''}</span>
+              </button>
+
+              <button
                 onClick={handleExportCsv}
-                className="px-3 py-2 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition active:scale-95"
+                className="px-3 py-2 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition active:scale-95 cursor-pointer"
                 title="Export 38-Column CSV with UTF-8 BOM"
               >
                 <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
@@ -1680,7 +2131,7 @@ export default function DeepMetadataEnrichmentView({ onBack }: DeepMetadataEnric
 
               <button
                 onClick={handleExportJson}
-                className="px-3 py-2 bg-cyan-600/20 hover:bg-cyan-600 text-cyan-300 hover:text-white border border-cyan-500/30 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition active:scale-95"
+                className="px-3 py-2 bg-cyan-600/20 hover:bg-cyan-600 text-cyan-300 hover:text-white border border-cyan-500/30 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition active:scale-95 cursor-pointer"
                 title="Export Master Dataset JSON"
               >
                 <Database className="w-4 h-4 text-cyan-400" />
@@ -1689,7 +2140,7 @@ export default function DeepMetadataEnrichmentView({ onBack }: DeepMetadataEnric
 
               <button
                 onClick={handleExportM3u8}
-                className="px-3 py-2 bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/30 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition active:scale-95"
+                className="px-3 py-2 bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white border border-purple-500/30 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition active:scale-95 cursor-pointer"
                 title="Export Tagged M3U8 Playlist"
               >
                 <FileCode className="w-4 h-4 text-purple-400" />
@@ -1698,7 +2149,7 @@ export default function DeepMetadataEnrichmentView({ onBack }: DeepMetadataEnric
 
               <button
                 onClick={handleExportDownloaderTxt}
-                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition active:scale-95"
+                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition active:scale-95 cursor-pointer"
                 title="Export clean list for spotdl / yt-dlp"
               >
                 <FileText className="w-4 h-4 text-slate-400" />
@@ -1723,6 +2174,24 @@ export default function DeepMetadataEnrichmentView({ onBack }: DeepMetadataEnric
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>AI Precision on Selected</span>
+                </button>
+
+                <button
+                  onClick={async () => {
+                    const sel = records.filter(r => selectedIds.has(r.id));
+                    let count = 0;
+                    for (const t of sel) {
+                      const res = await supplementTrackFromITunes(t);
+                      if (res && res.supplementedFields.length > 0) count++;
+                    }
+                    await refreshDatabaseState();
+                    alert(`Supplemented iTunes metadata for ${count} of ${sel.length} selected tracks.`);
+                  }}
+                  className="px-2.5 py-1 bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200 rounded-lg text-xs font-medium flex items-center space-x-1 cursor-pointer"
+                  title="Supplement missing art/year for selected tracks via iTunes"
+                >
+                  <ImageIcon className="w-3.5 h-3.5" />
+                  <span>Supplement Selected</span>
                 </button>
 
                 <button
@@ -1815,14 +2284,13 @@ export default function DeepMetadataEnrichmentView({ onBack }: DeepMetadataEnric
                             className="w-10 h-10 rounded-lg bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center mx-auto shadow cursor-pointer group"
                             title="Click to view full dossier"
                           >
-                            {track.release?.coverArtThumbUrl ? (
+                            {track.release?.coverArtThumbUrl && !failedArtIds.has(track.id) ? (
                               <img
                                 src={track.release.coverArtThumbUrl}
                                 alt={track.title}
                                 className="w-full h-full object-cover group-hover:scale-110 transition"
-                                onError={e => {
-                                  // Fallback to Disc SVG on 404
-                                  (e.target as HTMLElement).style.display = 'none';
+                                onError={() => {
+                                  setFailedArtIds(prev => new Set(prev).add(track.id));
                                 }}
                               />
                             ) : (
@@ -1887,6 +2355,11 @@ export default function DeepMetadataEnrichmentView({ onBack }: DeepMetadataEnric
                               <ShieldCheck className="w-3 h-3 text-cyan-400" />
                               <span>MB Verified</span>
                             </span>
+                          ) : track.resolution?.status === 'itunes_enriched' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-pink-950/80 text-pink-300 border border-pink-700/80" title="Verified via Apple iTunes Search API">
+                              <span>🍎</span>
+                              <span>iTunes Verified</span>
+                            </span>
                           ) : track.resolution?.status === 'ai_search_resolved' ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-purple-950 text-purple-300 border border-purple-800/80">
                               <Zap className="w-3 h-3 text-purple-400" />
@@ -1917,6 +2390,45 @@ export default function DeepMetadataEnrichmentView({ onBack }: DeepMetadataEnric
 
                         {/* Action Buttons */}
                         <td className="p-3 text-right space-x-1" onClick={e => e.stopPropagation()}>
+                          {/* In-App 30s Audio Preview */}
+                          <button
+                            onClick={() => handlePlayTrackPreview(track)}
+                            disabled={audioLoadingTrackId === track.id}
+                            className={`p-1.5 rounded-lg transition cursor-pointer ${
+                              activeAudio?.trackId === track.id && isPlayingAudio
+                                ? 'bg-pink-600 text-white shadow-lg shadow-pink-600/50'
+                                : 'bg-slate-800 hover:bg-pink-950/60 hover:text-pink-300 text-slate-300'
+                            }`}
+                            title={
+                              activeAudio?.trackId === track.id && isPlayingAudio
+                                ? 'Pause in-app 30s audio preview'
+                                : track.artist?.externalLinks?.audioPreviewUrl
+                                  ? 'Play in-app 30s audio preview'
+                                  : 'Fetch from iTunes & play 30s preview'
+                            }
+                          >
+                            {audioLoadingTrackId === track.id ? (
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin text-pink-400" />
+                            ) : activeAudio?.trackId === track.id && isPlayingAudio ? (
+                              <Pause className="w-3.5 h-3.5" />
+                            ) : (
+                              <Play className="w-3.5 h-3.5 text-pink-400" />
+                            )}
+                          </button>
+
+                          {/* Supplement Missing Art & Year button */}
+                          {(((!track.release?.coverArtFullUrl && !track.release?.coverArtThumbUrl) || failedArtIds.has(track.id)) ||
+                            (!track.release?.originalReleaseYear && (!track.release?.releaseDate || track.release?.releaseDate === '—'))) && (
+                            <button
+                              onClick={() => handleSupplementSingleTrack(track)}
+                              disabled={supplementingTrackId === track.id}
+                              className="p-1.5 bg-slate-800 hover:bg-emerald-950/60 hover:text-emerald-300 text-slate-300 rounded-lg transition cursor-pointer"
+                              title="Sanitize empty art / release year via Apple iTunes"
+                            >
+                              <Sparkles className={`w-3.5 h-3.5 ${supplementingTrackId === track.id ? 'animate-spin text-emerald-400' : 'text-emerald-400'}`} />
+                            </button>
+                          )}
+
                           <button
                             onClick={() => setActiveDossier(track)}
                             className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition"
@@ -2276,6 +2788,62 @@ export default function DeepMetadataEnrichmentView({ onBack }: DeepMetadataEnric
                       <ExternalLink className="w-3.5 h-3.5" />
                       <span>Apple Music</span>
                     </a>
+                  )}
+
+                  {/* In-App 30s Audio Preview Play Button */}
+                  <button
+                    onClick={() => handlePlayTrackPreview(activeDossier)}
+                    disabled={audioLoadingTrackId === activeDossier.id}
+                    className="px-3 py-1.5 bg-gradient-to-r from-pink-950/60 to-rose-950/60 hover:from-pink-900/80 hover:to-rose-900/80 border border-pink-500/40 text-pink-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow"
+                    title="Play 30s Audio Preview directly in-app"
+                  >
+                    {audioLoadingTrackId === activeDossier.id ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-pink-400" />
+                    ) : activeAudio?.trackId === activeDossier.id && isPlayingAudio ? (
+                      <Pause className="w-3.5 h-3.5 text-pink-400" />
+                    ) : (
+                      <Play className="w-3.5 h-3.5 text-pink-400" />
+                    )}
+                    <span>
+                      {activeAudio?.trackId === activeDossier.id && isPlayingAudio
+                        ? 'Pause 30s Preview'
+                        : 'Play 30s Preview (In-App)'}
+                    </span>
+                  </button>
+
+                  {/* Direct In-Browser Preview Download */}
+                  {activeDossier.artist?.externalLinks?.audioPreviewUrl && (
+                    <button
+                      onClick={() => handleDownloadAudioPreview(
+                        activeDossier.artist!.externalLinks!.audioPreviewUrl!,
+                        activeDossier.artist?.name || activeDossier.queryArtist,
+                        activeDossier.title || activeDossier.queryTitle
+                      )}
+                      disabled={isDownloadingAudio}
+                      className="px-3 py-1.5 bg-pink-950/40 hover:bg-pink-900/60 border border-pink-500/30 text-pink-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
+                      title="Download 30s audio preview (.m4a) locally to browser"
+                    >
+                      {isDownloadingAudio ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin text-pink-400" />
+                      ) : (
+                        <Download className="w-3.5 h-3.5 text-pink-400" />
+                      )}
+                      <span>Download .m4a</span>
+                    </button>
+                  )}
+
+                  {/* Sanitize / Supplement Empty Art & Year */}
+                  {((!activeDossier.release?.coverArtFullUrl && !activeDossier.release?.coverArtThumbUrl) ||
+                    (!activeDossier.release?.originalReleaseYear && !activeDossier.release?.releaseDate)) && (
+                    <button
+                      onClick={() => handleSupplementSingleTrack(activeDossier)}
+                      disabled={supplementingTrackId === activeDossier.id}
+                      className="px-3 py-1.5 bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/40 text-emerald-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
+                      title="Supplement missing cover artwork and release year from Apple iTunes"
+                    >
+                      <Sparkles className={`w-3.5 h-3.5 ${supplementingTrackId === activeDossier.id ? 'animate-spin text-emerald-400' : 'text-emerald-400'}`} />
+                      <span>Sanitize Art & Year (iTunes)</span>
+                    </button>
                   )}
 
                   {activeDossier.artist?.externalLinks?.wikidataUrl && (
@@ -3059,6 +3627,126 @@ export default function DeepMetadataEnrichmentView({ onBack }: DeepMetadataEnric
                   </a>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 10. Universal In-App 30s Audio Preview Player & In-Browser Downloader */}
+      {/* Persistent Native Audio Engine (Always Mounted for Immediate Playback) */}
+      <audio
+        ref={audioRef}
+        preload="auto"
+        onPlay={() => setIsPlayingAudio(true)}
+        onPause={() => setIsPlayingAudio(false)}
+        onTimeUpdate={() => {
+          if (audioRef.current) setAudioCurrentTime(audioRef.current.currentTime);
+        }}
+        onLoadedMetadata={() => {
+          if (audioRef.current) setAudioDuration(audioRef.current.duration || 30);
+        }}
+        onEnded={() => {
+          setIsPlayingAudio(false);
+          setAudioCurrentTime(0);
+        }}
+      />
+
+      {activeAudio && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800 shadow-2xl px-4 py-2.5 transition-all duration-300 animate-in slide-in-from-bottom">
+          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+            {/* Left: Track Info & Artwork */}
+            <div className="flex items-center space-x-3 min-w-[200px] max-w-xs">
+              <div className="w-10 h-10 rounded-lg bg-slate-900 border border-slate-800 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                {activeAudio.coverArt ? (
+                  <img src={activeAudio.coverArt} alt={activeAudio.title} className="w-full h-full object-cover" />
+                ) : (
+                  <Music2 className="w-5 h-5 text-pink-400" />
+                )}
+              </div>
+              <div className="truncate">
+                <div className="text-xs font-bold text-white truncate" title={activeAudio.title}>
+                  {activeAudio.title}
+                </div>
+                <div className="text-[11px] text-slate-400 truncate" title={activeAudio.artist}>
+                  {activeAudio.artist}
+                </div>
+              </div>
+            </div>
+
+            {/* Center: Controls & Scrubber */}
+            <div className="flex-1 max-w-xl flex flex-col items-center space-y-1">
+              <div className="flex items-center space-x-4">
+                {/* Play/Pause Button */}
+                <button
+                  onClick={togglePlayAudio}
+                  className="p-2 rounded-full bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white shadow-lg shadow-pink-900/40 active:scale-95 transition cursor-pointer"
+                  title={isPlayingAudio ? 'Pause' : 'Play'}
+                >
+                  {isPlayingAudio ? (
+                    <Pause className="w-4 h-4 fill-white" />
+                  ) : (
+                    <Play className="w-4 h-4 fill-white translate-x-0.5" />
+                  )}
+                </button>
+              </div>
+
+              {/* Progress Scrubber & Times */}
+              <div className="w-full flex items-center space-x-2 text-[10px] font-mono text-slate-400">
+                <span>{formatAudioTime(audioCurrentTime)}</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={audioDuration || 30}
+                  step={0.1}
+                  value={audioCurrentTime}
+                  onChange={handleSeekAudio}
+                  className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-pink-500"
+                />
+                <span>{formatAudioTime(audioDuration || 30)}</span>
+              </div>
+            </div>
+
+            {/* Right: Volume & In-Browser Download & Close */}
+            <div className="flex items-center space-x-3">
+              {/* Volume Controls */}
+              <div className="hidden sm:flex items-center space-x-1.5">
+                <button onClick={toggleMuteAudio} className="text-slate-400 hover:text-white transition cursor-pointer">
+                  {isAudioMuted || audioVolume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                </button>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={isAudioMuted ? 0 : audioVolume}
+                  onChange={handleVolumeChange}
+                  className="w-16 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-pink-500"
+                />
+              </div>
+
+              {/* Direct In-Browser Download (.m4a) */}
+              <button
+                onClick={() => handleDownloadAudioPreview(activeAudio.url, activeAudio.artist, activeAudio.title)}
+                disabled={isDownloadingAudio}
+                className="px-3 py-1.5 bg-pink-950/60 hover:bg-pink-900/80 text-pink-300 border border-pink-700/60 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition active:scale-95 cursor-pointer"
+                title="Download 30s Audio Preview (.m4a) directly into browser without external tabs"
+              >
+                {isDownloadingAudio ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-pink-400" />
+                ) : (
+                  <Download className="w-3.5 h-3.5 text-pink-400" />
+                )}
+                <span>Download .m4a</span>
+              </button>
+
+              {/* Dismiss Player */}
+              <button
+                onClick={handleCloseAudio}
+                className="p-1.5 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition cursor-pointer"
+                title="Dismiss audio player"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           </div>
         </div>

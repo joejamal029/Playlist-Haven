@@ -99,10 +99,10 @@ Instead of getting lost in technical jargon, here is how Playlist Haven solves r
 ### 🌉 Layer 2: Ingestion Jobs (Taming the Intake Floodgate & Decision Bridge)
 | Real-World Role / Curation Challenge | How Playlist Haven Solves It | Core Engine |
 | :--- | :--- | :--- |
-| **The Floodgate Tamer (Decision Fatigue):**<br/>*"I discovered 150 songs this month and feel total decision paralysis (The Intake Problem)."* | Tri-Philosophy intake engine: isolates **Singles (The Probe)**, clusters **Artists (Magnet $\ge 4$ vs. Emerging 2–3)**, and validates **Albums ($\ge 2$)** with 1-click batch promotion, singlesification, and deferral. | **14. Discovery Triage** |
+| **The Floodgate Tamer (Decision Fatigue):**<br/>*"I discovered 150 songs this month and feel total decision paralysis (The Intake Problem)."* | Tri-Philosophy intake engine: isolates **Singles (The Probe)**, clusters **Artists (Magnet $\ge 4$ vs. Emerging 2–3)**, and validates **Albums ($\ge 2$)** with instant in-app 30s audio previews on decision rows, 1-click batch promotion, singlesification, and deferral. | **14. Discovery Triage** |
 | **The Global & Diaspora Curator:**<br/>*"Streaming algorithms shove all non-Western music into lazy 'World' or generic 'Pop' buckets."* | Partitions thousands of tracks into **20 authentic cultural and linguistic cohorts** (Naija, J-Pop, K-Pop, Français, C-Pop, etc.) via a 5-tier waterfall engine. | **13. Language Clustering** |
 | **The Cross-Platform Migrator:**<br/>*"I converted my YouTube discovery queue to Spotify, and the chronological discovery order got completely scrambled."* | Restores authentic chronological discovery sequence using title-guarded matching and a 10-category AI musicological resolver. | **16. Playlist Resequencer** |
-| **The Musicologist & Metadata Purist:**<br/>*"I want real songwriting credits, true release dates, and high-res cover art."* | Links your library directly to MusicBrainz, Cover Art Archive, and Wikidata with full Work entity traversal and decoupled AI remediation. | **15. Deep Metadata Enrichment** |
+| **The Musicologist & Metadata Purist:**<br/>*"I want real songwriting credits, true release dates, high-res cover art, and in-app previews."* | Dual-source catalog linking: queries **MusicBrainz** with zero-key **Apple iTunes** fallback for uncataloged tracks; smart Cover Art Archive 404 sanitation; full Work songwriting traversal; decoupled AI remediation; and universal 30-second audio previews with direct `.m4a` downloads. | **15. Deep Metadata Enrichment** |
 
 ### 🖼️ Layer 3: Experience Jobs (Living with Art on the Wall)
 | Real-World Role / Curation Challenge | How Playlist Haven Solves It | Core Engine |
@@ -125,10 +125,10 @@ Instead of getting lost in technical jargon, here is how Playlist Haven solves r
 * **Playlist Randomizer** (`PlaylistRandomizerView.tsx`): Cryptographic shuffle enforcing artist separation spacing.
 
 #### Layer 2: Ingestion & Cultural Bridge Modules
-* **Discovery Triage & Honing** (`DiscoveryTriageView.tsx`): High-agency intake hub for singles, resonance artists, and validated albums.
+* **Discovery Triage & Honing** (`DiscoveryTriageView.tsx`): High-agency intake hub for singles, resonance artists, and validated albums with instant in-app audio decision previews.
 * **Language & Cultural Clustering** (`LanguageClusteringView.tsx`): 5-tier waterfall engine partitioning libraries into 20 canonical cultural buckets.
 * **Playlist Resequencer & Chronology Restorer** (`PlaylistResequencerView.tsx`): Repairs scrambled track order from cross-platform conversions.
-* **Deep Metadata Enrichment** (`DeepMetadataEnrichmentView.tsx`): MusicBrainz knowledge graph integration with Work entity songwriting traversal.
+* **Deep Metadata Enrichment** (`DeepMetadataEnrichmentView.tsx`): Dual-source MusicBrainz + Apple iTunes knowledge graph integration with Work songwriting traversal, smart cover art sanitation, and in-app 30s audio preview downloads.
 
 #### Layer 3: Experience, Rotation & Archival Modules
 * **Sonic Sieve Engine** (`SonicSieveView.tsx`): Weekly listening rotation generator with play-count sieving, skeleton anchors, and penalty lists.

@@ -26,6 +26,7 @@ import {
 } from './classificationEngine';
 import { getAIConfig } from './visionEngine';
 import { GoogleGenAI, Type } from '@google/genai';
+import { queryITunesRecording, supplementTrackFromITunes } from './itunesApi';
 
 // MusicBrainz Rate Limit: strict minimum 1150ms between network calls
 const MUSICBRAINZ_MIN_INTERVAL_MS = 1150;
@@ -131,110 +132,7 @@ export function formatDuration(ms?: number): string {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-/**
- * Pre-query sanitizer: Cleans dirty tags, removes YouTube suffixes, track numbers, file extensions,
- * bare hyphen remasters, and trailing ellipses.
- */
-export function sanitizeSongQuery(rawArtist: string, rawTitle: string, rawAlbum?: string) {
-  let artist = (rawArtist || '').trim();
-  let title = (rawTitle || '').trim();
-  let album = (rawAlbum || '').trim();
-
-  // If artist is unknown or empty, but title contains "Artist - Title"
-  if ((!artist || artist.toLowerCase() === '<unknown>' || artist.toLowerCase() === 'unknown artist') && title.includes(' - ')) {
-    const parts = title.split(' - ');
-    artist = parts[0].trim();
-    title = parts.slice(1).join(' - ').trim();
-  }
-
-  // Strip file extensions (.mp3, .flac, .m4a, .wav, .aac, .ogg, .opus, .wma)
-  title = title.replace(/\.(mp3|flac|m4a|wav|aac|ogg|opus|wma|alac|aiff)$/i, '').trim();
-
-  // Strip common track number prefixes (e.g. "01. ", "01 - ", "1-01 ", "A1. ")
-  title = title.replace(/^(?:\d{1,3}[.\-_\s]+|[a-d]\d{1,2}[.\-_\s]+)/i, '').trim();
-
-  // Strip YouTube Topic artifacts
-  artist = artist.replace(/\s*-\s*topic$/i, '').trim();
-
-  // Strip trailing ellipses (e.g. "Take Me Home, Country Roads Instru...")
-  title = title.replace(/\s*(?:\.{3}|…)\s*$/, '').trim();
-
-  // Extract featured artists from title to avoid breaking MusicBrainz exact title matches
-  // e.g. "Essence (feat. Tems)" -> Title: "Essence", Featured: "Tems"
-  const featMatch = title.match(/\s*[\(\[](?:feat\.?|ft\.?|featuring)\s+([^\)\]]+)[\)\]]/i);
-  let featuredArtist = '';
-  if (featMatch) {
-    featuredArtist = featMatch[1].trim();
-    title = title.replace(featMatch[0], '').trim();
-  }
-
-  // Strip common bracketed noise tags
-  const noisePatterns = [
-    /\s*[\(\[](?:official\s+)?(?:music\s+)?(?:video|mv)[\)\]]/gi,
-    /\s*[\(\[](?:official\s+)?(?:audio|visualizer)[\)\]]/gi,
-    /\s*[\(\[](?:lyric\s+video|lyrics)[\)\]]/gi,
-    /\s*[\(\[](?:hd|4k|1080p|720p|hq|uhd)[\)\]]/gi,
-    /\s*[\(\[](?:remastered|remaster\s*\d*)[\)\]]/gi,
-    /\s*[\(\[](?:explicit|clean)[\)\]]/gi,
-    /\s*[\(\[](?:live[^\)\]]*)[\)\]]/gi,
-    /\s*[\(\[](?:acoustic[^\)\]]*)[\)\]]/gi,
-    /\s*[\(\[](?:performance[^\)\]]*)[\)\]]/gi,
-    /\s*[\(\[](?:original\s+mix|radio\s+edit)[\)\]]/gi,
-    /\s*[\(\[](?:deluxe\s+edition|deluxe\s+version)[\)\]]/gi,
-    /\s*[\(\[](?:instrumental[^\)\]]*)[\)\]]/gi,
-    /\s*[\(\[][^\)\]]*\bremix\b[^\)\]]*[\)\]]/gi,
-    /\s*[\(\[][^\)\]]*\bbootleg\b[^\)\]]*[\)\]]/gi,
-    /\s*[\(\[][^\)\]]*\bflip\b[^\)\]]*[\)\]]/gi,
-    /\s*[\(\[][^\)\]]*\btheme\b[^\)\]]*[\)\]]/gi,
-    /\s*[\(\[]from\s+[^\)\]]+[\)\]]/gi,
-    /\s*[\(\[][^\)\]]*\bcover\b[^\)\]]*[\)\]]/gi,
-    /\s*[\(\[][^\)\]]*\b(?:short|rap)\s+(?:version|ver)\b[^\)\]]*[\)\]]/gi,
-    /\s*[\(\[][^\)\]]*\b(?:ost|soundtrack)\b[^\)\]]*[\)\]]/gi,
-  ];
-
-  for (const pattern of noisePatterns) {
-    title = title.replace(pattern, '').trim();
-  }
-
-  // Strip bare hyphen remaster, remix, and edition suffixes (e.g. "Warm - Remix", "In The Air Tonight - 2015 Remastered")
-  const bareHyphenPatterns = [
-    /\s*-\s*(?:\d{4}\s+)?(?:digital\s+)?remaster(?:ed)?(?:\s+\d{4})?$/i,
-    /\s*-\s*deluxe\s+(?:edition|version)$/i,
-    /\s*-\s*(?:remix|vip|instrumental|radio\s+edit|club\s+mix|extended\s+mix|single\s+version|acoustic|live)$/i,
-    /\s*-\s*(?:original\s+mix|album\s+version)$/i,
-    /\s*-\s*official\s+(?:music\s+)?(?:video|audio)$/i,
-    /\s*-\s*survival\s+mode$/i, // e.g. "Verdansk - Survival Mode"
-  ];
-
-  for (const pattern of bareHyphenPatterns) {
-    title = title.replace(pattern, '').trim();
-  }
-
-  // Strip bracketed CJK / mojibake translations: [アンコール], [窓], [走馬燈], [ã‚¢ãƒ³ã‚³ãƒ¼ãƒ«]
-  title = title.replace(/\s*\[[^\[\]]*[^\x00-\x7F][^\[\]]*\]/g, '').trim();
-  // Strip round-bracket content that is predominantly non-ASCII (CJK translations)
-  title = title.replace(/\s*\([^()]*[^\x00-\x7F]{2,}[^()]*\)/g, '').trim();
-  // Strip fullwidth brackets: 【...】『...』（...）
-  title = title.replace(/\s*[【『][^】』]*[】』]/g, '').trim();
-  title = title.replace(/\s*（[^）]*）/g, '').trim();
-  // Strip trailing non-ASCII blocks appended directly to Latin titles (e.g. "Marigold マリーゴールド")
-  // Only if title starts with ASCII and has trailing non-ASCII block
-  if (/^[\x00-\x7F]/.test(title) && /[^\x00-\x7F]{2,}$/.test(title)) {
-    title = title.replace(/\s*[^\x00-\x7F]{2,}$/, '').trim();
-  }
-
-  // Collapse excess whitespace
-  artist = artist.replace(/\s+/g, ' ').trim();
-  title = title.replace(/\s+/g, ' ').trim();
-  album = album.replace(/\s+/g, ' ').trim();
-
-  return {
-    cleanArtist: artist,
-    cleanTitle: title,
-    cleanAlbum: album,
-    featuredArtist,
-  };
-}
+export { sanitizeSongQuery } from './songQuerySanitizer';
 
 /**
  * Calculate string similarity score (0 - 100) using Levenshtein distance
@@ -324,11 +222,20 @@ export function resolveCulturalBucket(
   tags: { name: string }[],
   title: string
 ): CanonicalBucket {
-  // 0. Check if user already manually classified or cached this artist in Module 13
+  // 0. The Module 13 Language Clustering cache is superior: prioritize any valid cached bucket
   if (artist.name) {
     const cached = getCachedClassification(artist.name);
-    if (cached && (cached.confidence === 'manual' || cached.confidence === 'user')) {
+    if (cached && cached.bucket && cached.bucket !== 'Other') {
       return cached.bucket;
+    }
+  }
+  if (artist.aliases && Array.isArray(artist.aliases)) {
+    for (const a of artist.aliases) {
+      const aName = typeof a === 'string' ? a : (a as any)?.name;
+      if (aName) {
+        const cached = getCachedClassification(aName);
+        if (cached && cached.bucket && cached.bucket !== 'Other') return cached.bucket;
+      }
     }
   }
 
@@ -807,8 +714,8 @@ async function parseMusicBrainzRecording(
 
   const id = normalizeSongKey(queryArtist, queryTitle);
 
-  // Sync with Module 13 Language & Nationality Classification cache
-  if (artistBio.name) {
+  // Sync with Module 13 Language & Nationality Classification cache (never cache 'Other')
+  if (artistBio.name && culturalBucket && culturalBucket !== 'Other') {
     setCachedClassification(artistBio.name, {
       artist: artistBio.name,
       bucket: culturalBucket,
@@ -1421,8 +1328,21 @@ Respond ONLY with valid JSON matching this schema:
     if (!cleanArtist || !cleanTitle) return null;
 
     // Now re-query MusicBrainz with the AI-cleaned terms!
-    const enriched = await queryMusicBrainzRecording(cleanArtist, cleanTitle, cleanAlbum, dirtyPath, signal);
+    let enriched = await queryMusicBrainzRecording(cleanArtist, cleanTitle, cleanAlbum, dirtyPath, signal);
     if (enriched) {
+      // Automatically supplement missing art, year, or preview from iTunes if needed
+      const needsArt = !enriched.release?.coverArtFullUrl && !enriched.release?.coverArtThumbUrl;
+      const needsYear = !enriched.release?.originalReleaseYear && !enriched.release?.releaseDate;
+      const needsPreview = !enriched.artist?.externalLinks?.audioPreviewUrl;
+      if (needsArt || needsYear || needsPreview) {
+        try {
+          const supp = await supplementTrackFromITunes(enriched, signal);
+          if (supp) enriched = supp.updatedRecord;
+        } catch (e) {
+          // Non-blocking
+        }
+      }
+
       // Mark with AI resolution status
       enriched.resolution.status = 'ai_search_resolved';
       enriched.resolution.source = 'musicbrainz';
@@ -1595,9 +1515,22 @@ Respond ONLY with valid JSON array containing one object per input track matchin
       const cleanTitle = aiCleaned?.cleanTitle?.trim() || orig.title;
       const cleanAlbum = aiCleaned?.cleanAlbum?.trim() || orig.album;
 
-      const enriched = await queryMusicBrainzRecording(cleanArtist, cleanTitle, cleanAlbum, orig.path, signal);
+      let enriched = await queryMusicBrainzRecording(cleanArtist, cleanTitle, cleanAlbum, orig.path, signal);
 
       if (enriched) {
+        // Automatically supplement missing art, year, or preview from iTunes if needed
+        const needsArt = !enriched.release?.coverArtFullUrl && !enriched.release?.coverArtThumbUrl;
+        const needsYear = !enriched.release?.originalReleaseYear && !enriched.release?.releaseDate;
+        const needsPreview = !enriched.artist?.externalLinks?.audioPreviewUrl;
+        if (needsArt || needsYear || needsPreview) {
+          try {
+            const supp = await supplementTrackFromITunes(enriched, signal);
+            if (supp) enriched = supp.updatedRecord;
+          } catch (e) {
+            // Non-blocking
+          }
+        }
+
         // Tag with AI resolution metadata
         enriched.resolution.status = 'ai_search_resolved';
         enriched.resolution.source = 'musicbrainz';
@@ -1611,16 +1544,31 @@ Respond ONLY with valid JSON array containing one object per input track matchin
         await saveEnrichedTrack(enriched, true);
         result.resolved.set(orig.id, enriched);
       } else {
-        result.unresolved.push({
-          id: orig.id,
-          artist: orig.artist,
-          title: orig.title,
-          album: orig.album,
-          path: orig.path,
-          cleanArtist,
-          cleanTitle,
-          cleanAlbum,
-        });
+        // Secondary fallback: Query Apple iTunes Search API (zero API key)
+        const itunesEnriched = await queryITunesRecording(cleanArtist, cleanTitle, cleanAlbum, orig.path, signal)
+          || (orig.artist !== cleanArtist || orig.title !== cleanTitle
+              ? await queryITunesRecording(orig.artist, orig.title, orig.album, orig.path, signal)
+              : null);
+
+        if (itunesEnriched) {
+          itunesEnriched.id = orig.id;
+          itunesEnriched.queryArtist = orig.artist;
+          itunesEnriched.queryTitle = orig.title;
+          itunesEnriched.resolution.cleanTerms = { artist: cleanArtist, title: cleanTitle, album: cleanAlbum };
+          await saveEnrichedTrack(itunesEnriched, true);
+          result.resolved.set(orig.id, itunesEnriched);
+        } else {
+          result.unresolved.push({
+            id: orig.id,
+            artist: orig.artist,
+            title: orig.title,
+            album: orig.album,
+            path: orig.path,
+            cleanArtist,
+            cleanTitle,
+            cleanAlbum,
+          });
+        }
       }
     }
   } catch (e: any) {
@@ -1731,8 +1679,11 @@ Respond ONLY with valid JSON array containing one object per input track matchin
     const effectiveTitle = t.cleanTitle || t.title;
     const aiData = aiMetadataMap.get(t.id) || fallbackList[idx];
 
+    const cachedCls = getCachedClassification(effectiveArtist) || getCachedClassification(t.artist);
     const scriptSig = detectScriptSignature(`${effectiveTitle} ${effectiveArtist}`);
-    let fallbackBucket: CanonicalBucket = aiData?.culturalBucket || (scriptSig ? scriptSig.bucket : 'Other');
+    let fallbackBucket: CanonicalBucket = (cachedCls && cachedCls.bucket && cachedCls.bucket !== 'Other')
+      ? cachedCls.bucket
+      : (aiData?.culturalBucket || (scriptSig ? scriptSig.bucket : 'Other'));
     let countryCode = aiData?.countryCode || '';
     let countryName = aiData?.countryName || '';
     let genreList = Array.isArray(aiData?.genres) ? aiData.genres : ['Music'];
@@ -1797,15 +1748,17 @@ Respond ONLY with valid JSON array containing one object per input track matchin
       updatedAt: now,
     };
 
-    setCachedClassification(effectiveArtist, {
-      artist: effectiveArtist,
-      bucket: fallbackBucket,
-      country: countryCode,
-      countryName: countryName,
-      confidence: 'llm',
-      sourceDetails: 'Deep Metadata Engine: AI Fallback Synthesis',
-      timestamp: now,
-    });
+    if (effectiveArtist && fallbackBucket && fallbackBucket !== 'Other') {
+      setCachedClassification(effectiveArtist, {
+        artist: effectiveArtist,
+        bucket: fallbackBucket,
+        country: countryCode,
+        countryName: countryName,
+        confidence: 'llm',
+        sourceDetails: 'Deep Metadata Engine: AI Fallback Synthesis',
+        timestamp: now,
+      });
+    }
 
     await saveEnrichedTrack(record, true);
     resolved.set(t.id, record);
@@ -1830,9 +1783,12 @@ export async function aiSynthesizedFallback(
   const now = Date.now();
   const id = normalizeSongKey(artist, title);
 
-  // Heuristic baseline in case AI fails or is offline
+  // Prioritize superior Module 13 Language Clustering cache
+  const cachedCls = getCachedClassification(cleanArtist) || getCachedClassification(artist);
   const scriptSig = detectScriptSignature(`${cleanTitle} ${cleanArtist}`);
-  let fallbackBucket: CanonicalBucket = scriptSig ? scriptSig.bucket : 'Other';
+  let fallbackBucket: CanonicalBucket = (cachedCls && cachedCls.bucket && cachedCls.bucket !== 'Other')
+    ? cachedCls.bucket
+    : (scriptSig ? scriptSig.bucket : 'Other');
 
   let genreList = ['Music'];
   let countryCode = '';
@@ -1892,7 +1848,9 @@ Return valid JSON with:
       if (jsonText) {
         const parsed = cleanAndParseJson<any>(jsonText, null);
         if (parsed) {
-          if (parsed.culturalBucket) fallbackBucket = parsed.culturalBucket as CanonicalBucket;
+          if (parsed.culturalBucket && (!cachedCls || !cachedCls.bucket || cachedCls.bucket === 'Other')) {
+            fallbackBucket = parsed.culturalBucket as CanonicalBucket;
+          }
           if (parsed.countryCode) countryCode = parsed.countryCode;
           if (parsed.countryName) countryName = parsed.countryName;
           if (Array.isArray(parsed.genres)) genreList = parsed.genres;
@@ -1963,16 +1921,18 @@ Return valid JSON with:
     updatedAt: now,
   };
 
-  // Sync fallback classification with Module 13 cache
-  setCachedClassification(cleanArtist, {
-    artist: cleanArtist,
-    bucket: fallbackBucket,
-    country: countryCode,
-    countryName: countryName,
-    confidence: 'llm',
-    sourceDetails: 'Deep Metadata Engine: AI Fallback Synthesis',
-    timestamp: now,
-  });
+  // Sync fallback classification with Module 13 cache (never cache 'Other')
+  if (cleanArtist && fallbackBucket && fallbackBucket !== 'Other') {
+    setCachedClassification(cleanArtist, {
+      artist: cleanArtist,
+      bucket: fallbackBucket,
+      country: countryCode,
+      countryName: countryName,
+      confidence: 'llm',
+      sourceDetails: 'Deep Metadata Engine: AI Fallback Synthesis',
+      timestamp: now,
+    });
+  }
 
   return record;
 }
@@ -2005,15 +1965,37 @@ export async function processTrackEnrichment(
 
   // 3. If found on MusicBrainz, persist to IndexedDB
   if (enriched) {
+    // Supplement missing cover art, release year/date, or audio preview from iTunes
+    const needsArt = !enriched.release?.coverArtFullUrl && !enriched.release?.coverArtThumbUrl;
+    const needsYear = !enriched.release?.originalReleaseYear && !enriched.release?.releaseDate;
+    const needsPreview = !enriched.artist?.externalLinks?.audioPreviewUrl;
+    if (needsArt || needsYear || needsPreview) {
+      try {
+        const supp = await supplementTrackFromITunes(enriched, signal);
+        if (supp) enriched = supp.updatedRecord;
+      } catch (e) {
+        // Non-blocking iTunes supplement
+      }
+    }
     await saveEnrichedTrack(enriched, true);
     return { record: enriched, isCacheHit: false };
+  }
+
+  // 3b. Direct Apple iTunes Search API fallback (zero API key, instant catalog)
+  const itunesEnriched = await queryITunesRecording(artist, title, album, path, signal);
+  if (itunesEnriched) {
+    await saveEnrichedTrack(itunesEnriched, true);
+    return { record: itunesEnriched, isCacheHit: false };
   }
 
   // 4. If not found on MusicBrainz, construct a structured "needs_resolution" record
   // (AI precision surgeon and fallback are decoupled into batched remediation queue)
   const { cleanArtist, cleanTitle, cleanAlbum } = sanitizeSongQuery(artist, title, album);
+  const cachedCls = getCachedClassification(cleanArtist) || getCachedClassification(artist);
   const scriptSig = detectScriptSignature(`${cleanTitle} ${cleanArtist}`);
-  const culturalBucket: CanonicalBucket = scriptSig ? scriptSig.bucket : 'Other';
+  const culturalBucket: CanonicalBucket = (cachedCls && cachedCls.bucket && cachedCls.bucket !== 'Other')
+    ? cachedCls.bucket
+    : (scriptSig ? scriptSig.bucket : 'Other');
   const now = Date.now();
 
   enriched = {
@@ -2115,6 +2097,9 @@ export async function runBatchEnrichment(
         stats.cacheHits++;
       } else if (record.resolution.status === 'enriched' || record.resolution.status === 'ai_search_resolved') {
         stats.mbEnriched++;
+      } else if (record.resolution.status === 'itunes_enriched') {
+        stats.mbEnriched++;
+        if (stats.itunesEnriched !== undefined) stats.itunesEnriched++;
       } else if (record.resolution.status === 'ai_synthesized_fallback') {
         stats.aiSynthesized++;
       } else if (record.resolution.status === 'needs_resolution') {
@@ -2301,6 +2286,29 @@ export async function hydrateTrackDossier(
       }
     } catch (e) {
       console.warn('[hydrateTrackDossier] Failed to resolve AI songwriting credits:', e);
+    }
+  }
+
+  // 4. Auto-supplement missing artwork, release year, or audio preview via Apple iTunes
+  const currentThumb = updated.release?.coverArtThumbUrl || '';
+  const currentFull = updated.release?.coverArtFullUrl || '';
+  const hasEmptyArt = !currentThumb && !currentFull;
+  const rawYear = updated.release?.originalReleaseYear;
+  const rawDate = updated.release?.releaseDate;
+  const hasYear = (typeof rawYear === 'number' && rawYear > 0 && !isNaN(rawYear)) ||
+                  (typeof rawDate === 'string' && rawDate.trim() !== '' && rawDate !== '—');
+  const hasNoYear = !hasYear;
+  const hasNoPreview = !updated.artist?.externalLinks?.audioPreviewUrl;
+
+  if (hasEmptyArt || hasNoYear || hasNoPreview) {
+    try {
+      const supp = await supplementTrackFromITunes(updated, signal);
+      if (supp && supp.supplementedFields.length > 0) {
+        Object.assign(updated, supp.updatedRecord);
+        modified = true;
+      }
+    } catch (e) {
+      console.warn('[hydrateTrackDossier] Failed to supplement iTunes metadata:', e);
     }
   }
 

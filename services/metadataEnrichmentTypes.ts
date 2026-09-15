@@ -7,10 +7,12 @@ export type EnrichmentStatus =
   | 'needs_resolution'
   | 'manual_resolved'
   | 'ai_search_resolved'
+  | 'itunes_enriched'
   | 'ai_synthesized_fallback';
 
 export type EnrichmentSource = 
   | 'musicbrainz'
+  | 'itunes'
   | 'cache'
   | 'ai_synthesized_fallback'
   | 'manual';
@@ -21,6 +23,8 @@ export interface ExternalLinks {
   wikipediaUrl?: string;
   spotifyUrl?: string;
   appleMusicUrl?: string;
+  itunesArtistUrl?: string;
+  audioPreviewUrl?: string;
   discogsUrl?: string;
   allmusicUrl?: string;
   officialWebsite?: string;
@@ -147,6 +151,7 @@ export interface EnrichmentStats {
   totalProcessed: number;
   cacheHits: number;
   mbEnriched: number;
+  itunesEnriched?: number;
   needsResolution: number;
   aiSynthesized: number;
   manualResolved: number;

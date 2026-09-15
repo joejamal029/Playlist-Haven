@@ -27,7 +27,7 @@ graph LR
     E --> A
 ```
 
-1. **Data (Capture & Storage)**: Raw play-history CSVs, YouTube text dumps, screenshot digitizations, MusicBrainz Web Service v2 cataloging, and local IndexedDB database stores.
+1. **Data (Capture & Storage)**: Raw play-history CSVs, YouTube text dumps, screenshot digitizations, MusicBrainz Web Service v2 & Apple iTunes cataloging, and local IndexedDB database stores.
 2. **Analyze**: Frequency counters, missing-track reconciliations, 20-bucket language clustering, and AI precision query diagnosis.
 3. **Engineer**: Dynamic play-count sieving, skeleton anchors, smart randomizers, metadata normalization, and disambiguation candidate linking.
 4. **Systemize**: Chronological week/month/year archives, multi-part sub-playlist splitters, tagged M3U8 exports, and 38-column CSV master schemas.
@@ -51,7 +51,7 @@ graph TD
     subgraph L2["2. THE INGESTION LAYER (Decision Bridge & Intake Floodgate)"]
         I1["Discovery Triage: Singles vs. Magnet Artists vs. Albums"]
         I2["20 Canonical Cultural & Language Partitions"]
-        I3["Deep MusicBrainz Knowledge Traversal & Chronology Repair"]
+        I3["Deep MusicBrainz / iTunes Knowledge Traversal & Chronology Repair"]
     end
 
     subgraph L3["3. THE EXPERIENCE LAYER (Living with Art on the Wall)"]
@@ -255,8 +255,8 @@ graph TD
 * **Purpose**: The architectural bridge between ephemeral streaming discovery and deep, multi-month offline immersion.
 * **Tri-Philosophy Framework**:
   * **Language & Cultural Bucket Intake View**: Groups cohorts into the 20 canonical cultural buckets to guarantee a balanced global audio diet.
-  * **Singles (The Probe)**: Isolates lone sparks and one-off discoveries.
-  * **Artists (The Resonance & High-Agency Decision Hub)**: Clusters tracks into **Magnet Artists ($\ge 4$ tracks)** and **Emerging Sparks (2–3 tracks)**, backed by a conflict-resolution suite:
+  * **Singles (The Probe)**: Isolates lone sparks and one-off discoveries. Features direct **In-App Decision Audio Previews** (30s `.m4a` streams) across table rows and card grids for zero-tab listening evaluation before staging.
+  * **Artists (The Resonance & High-Agency Decision Hub)**: Clusters tracks into **Magnet Artists ($\ge 4$ tracks)** and **Emerging Sparks (2–3 tracks)**, backed by a conflict-resolution suite and in-app audio preview triggers on individual tracks and cluster headers:
     * **Promote to Album / Compilation**: Real-time export of `Album_Intake_[Artist].csv` and dismissal from active view.
     * **Singlesification Mode**: In-card track selection picking probe singles (`Keep as Single`), exporting `Singlesified_[Artist].csv`, marking unselected as deferred, and clearing the artist from view.
     * **1-Click Deferral**: Exports `Deferred_[Artist].csv` and clears from view.
@@ -264,13 +264,25 @@ graph TD
     * **Master Compiled CSV Exports**: 1-click downloads for `Compiled_Promoted_Albums.csv`, `Compiled_Singlesified_Tracks.csv`, and `Compiled_Deferred_Tracks.csv`.
     * **Non-Destructive View Scopes**: Switch between `Active`, `Promoted`, `Singlesified`, `Deferred`, and `All` with 1-click individual or global restore.
   * **Albums (The Validation Gate)**: Clusters tracks by album, validating high-trust candidates ($\ge 2$ or 3 tracks).
+* **In-App Decision Audio Previews**: Replaces external redirect links with embedded `<AudioPreviewButton />` components on all triage decision rows (Singles table, Singles cards, Artist cluster tracklists, and cluster headers). Curators can audit 30-second audio clips directly in-context without disrupting curation flow or spawning browser tabs. Deep external verification links (YouTube, Spotify, MusicBrainz) remain accessible in the Song Metadata Inspector modal footer.
+* **Song Deep Metadata Dossier Upgrade**: Header integrates `<AudioPreviewButton variant="pill" />` for instantaneous preview playback alongside cover art, release details, and full songwriting credits.
 * **Strict Chronological Sequence Preservation**: Preserves 1-based discovery sequence numbers (`#1..#N`) independently per source list (e.g. YouTube `#1..#95` alongside Spotify `#1..#64`).
 * **Immersion Download Basket & Defensive Sorting**: Staging launchpad with priority queuing (Immediate vs Secondary Wave) and multi-format exporters (Downloader TXT, TuneMyMusic CSV, Musicolet M3U, Markdown Dossier), backed by zero-crash defensive null-safe comparators.
 * **AI Taste Intelligence Console**: Gemini 2.5 Flash / local LLMs for cohort taste synthesis and 1-click Artist Discography Scouts.
 
 ### Module 15: 🧬 Deep Metadata Enrichment Engine (`DeepMetadataEnrichmentView.tsx`)
-* **Purpose**: Connects personal music libraries to the global open music knowledge graph (MusicBrainz Web Service v2, Cover Art Archive, and Wikidata) with strict rate-limiting ($\ge 1150\text{ms}$).
+* **Purpose**: Connects personal music libraries to global music catalogs (MusicBrainz Web Service v2, Cover Art Archive, Apple iTunes API, and Wikidata) with strict rate-limiting ($\ge 1150\text{ms}$) and client-side database persistence.
 * **Key Architecture & Features**:
+  * **Dual-Source Catalog Architecture (MusicBrainz + Apple iTunes Fallback)**:
+    * Primary: MusicBrainz Web Service v2 with deterministic query normalization.
+    * Secondary: Automatic, zero-key **Apple iTunes Search API** fallback (`services/itunesApi.ts`). When MusicBrainz yields no recording matches, queries iTunes to backfill track title, primary artist, album name, release year, genre, 600x600/1200x1200 artwork, and 30-second audio preview URLs. Enriched tracks receive the `🍎 iTunes Verified` status badge.
+  * **Cover Art & Release Year Sanitation Suite**:
+    * Specifically addresses metadata failure modes where MusicBrainz matches a recording but lacks release year or has broken/dead Cover Art Archive links (HTTP 404s).
+    * Browser-level image `onError` handler registers broken CAA links (`failedArtIds`) dynamically.
+    * **"Sanitize Missing Art / Year"** feature queries IndexedDB for tracks lacking artwork or release year, fetching high-resolution Apple artwork and release dates via `supplementTrackFromITunes` without overwriting existing MusicBrainz MBIDs or verified songwriting credits.
+  * **Universal In-App 30-Second Audio Previews & Direct Download**:
+    * Integrated with the global `AudioPreviewContext`. Resolves 30-second `.m4a` preview streams on-demand across all tracks (both MusicBrainz-verified and iTunes-verified) via `resolveAudioPreviewForTrack`.
+    * Floating bottom audio dock features live waveform/scrubber, volume control, and direct in-app `.m4a` audio file download (`downloadPreviewAudio`).
   * **Enhanced Pre-Query Sanitizer**: Deep CJK bracket stripping, remix tag cleaning, and anime/soundtrack annotation stripping.
   * **Deep Work Entity Traversal & AI Songwriting Fallback**: Secondary lookup on MusicBrainz Work entity (`/ws/2/work/{workId}?inc=artist-rels`) to extract complete songwriting credits; automatically invokes Gemini AI (`resolveAiSongwritingCredits`) when no Work entity is registered.
   * **Country Pseudo-Code Resolution**: Resolves authentic country of origin from artist area ISO codes, bypassing release pseudo-codes (`XW` $\rightarrow$ `US`).
@@ -278,7 +290,7 @@ graph TD
   * **Two-Fold AI Remediation**: Fold 1 (AI Precision Query Surgeon + MusicBrainz Retry) and Fold 2 (AI Musicological Fallback Synthesis with `⚠️ AI Fallback` badge).
   * **In-App High-Resolution Lightbox**: Direct image endpoints resolving Cover Art Archive URLs to high-res JPEGs with in-app cinema lightbox and 1-click image download.
   * **Persistent IndexedDB Architecture**: Browser database (`PlaylistHavenMetadataDB` v1) with compound key normalization (`artist:::title`). Failed/unresolved tracks are strictly barred from IndexedDB.
-  * **Interactive Slide-Over Dossier**: Comprehensive inspection drawer with artwork, MBID hyperlinks, songwriting credits, artist bio, and streaming links.
+  * **Interactive Slide-Over Dossier**: Comprehensive inspection drawer with artwork, MBID hyperlinks, songwriting credits, artist bio, audio preview pill, and streaming links.
   * **38-Column UTF-8 BOM CSV Export**: Industry-grade metadata spreadsheet.
 
 ### Module 16: 🔄 Playlist Resequencer & Chronology Restorer (`PlaylistResequencerView.tsx`)
@@ -315,6 +327,18 @@ graph TD
 * **Universal UTF-8 Byte Order Mark (`\uFEFF`)**: Injected into all CSV/TSV exports to guarantee Excel, Google Sheets, and Windows render CJK and accented characters without mojibake.
 * **Standard Formats**: `#EXTM3U` / `#EXTINF`, Musicolet `Songs.csv`, TSV, and plain text.
 * **Mobile Compilation**: Integrated with **Capacitor 8** for native Android APK compilation (`npm run android:build`).
+
+### 4.5 Universal Audio Subsystem & Reusable Component Pipeline
+* **Global `AudioPreviewContext` & Provider (`components/AudioPreviewContext.tsx`)**:
+  * Manages global audio playback state (`currentTrack`, `isPlaying`, `currentTime`, `duration`, `volume`, `isLoadingPreview`).
+  * Maintains an internal `HTMLAudioElement` singleton with hardware synchronization.
+  * Eliminates browser autoplay stalls and double-click stutter via synchronous unlock and transparent loading states.
+* **Persistent Floating Dock (`components/AudioPlayerBar.tsx`)**:
+  * Mounted at application root (`App.tsx`), persisting seamlessly across module transitions.
+  * Features track thumbnail, title, artist, play/pause controls, interactive seek scrubber, volume control, direct `.m4a` audio file download button (`downloadPreviewAudio`), and dismiss button.
+* **Universal Audio Preview Button (`components/AudioPreviewButton.tsx`)**:
+  * Reusable UI trigger supporting 3 polymorphic variants: `icon` (compact table/card action), `pill` (modal dossier headers), and `text` (contextual menus).
+  * Automatic visual state management: loading spinner during iTunes stream resolution, pulsing equalizer waves during active playback, paused state, and idle play trigger.
 
 ---
 

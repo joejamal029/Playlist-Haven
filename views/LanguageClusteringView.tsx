@@ -19,6 +19,7 @@ import {
   setManualOverride,
   getCachedClassification,
   setCachedClassification,
+  detectScriptSignature,
   importArtistCSV,
   exportCacheJSON,
   importCacheJSON,
@@ -33,9 +34,15 @@ import {
   addManualCacheEntry,
   remediateSingleArtistWithAI,
   reclassifyCachedEntriesWithAI,
-  batchClassifyWithLLM
+  batchClassifyWithLLM,
+  initClassificationCache
 } from '../services/classificationEngine';
-import { getAllEnrichedTracks } from '../services/metadataDb';
+import { 
+  getAllEnrichedTracks, 
+  overwriteArtistCulturalBucketInDB, 
+  overwriteDatabaseCulturalBucketsFromCache 
+} from '../services/metadataDb';
+import { resolveTrackCulturalBucket } from '../services/triageEngine';
 import { getAIConfig, setAIConfig, AIConfig } from '../services/visionEngine';
 import { cleanCompositeTrack } from '../services/playlistSanitizer';
 import JSZip from 'jszip';
@@ -280,6 +287,7 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
 
   // AI Remediation & Workspace Toast State
   const [isAiRemediating, setIsAiRemediating] = useState<boolean>(false);
+  const [isOverwritingDB, setIsOverwritingDB] = useState<boolean>(false);
   const [aiRemediationProgress, setAiRemediationProgress] = useState<string>('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -310,12 +318,160 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
     return !!key || aiConfigState.provider === 'openai-compatible';
   }, [aiConfigState]);
 
+  // Apply Superior Local Cache Instantly (Tier 0 & Script Detection & Heuristics)
+  const applyDefaultCacheToTracks = (sourceTracks: any[], silent = false) => {
+    if (!sourceTracks || sourceTracks.length === 0) return;
+
+    // Force-clean cache to purge any poisoned 'Other' entries
+    initClassificationCache(true);
+
+    const newClustered: ClusteredTrack[] = [];
+    const newClusters: Record<CanonicalBucket, ClusteredTrack[]> = {
+      English: [], 'J-Pop': [], Naija: [], 'K-Pop': [], 'C-Pop': [],
+      Thai: [], Vietnamese: [], Dutch: [], Arabic: [], German: [],
+      Italian: [], Portuguese: [], Filipino: [], 'I-Pop': [], African: [],
+      Latina: [], Français: [], Gospel: [], Instrumental: [], Other: []
+    };
+
+    let cacheCount = 0;
+    let manualCount = 0;
+    let unresolvedCount = 0;
+    const uniqueArtists = new Set<string>();
+
+    sourceTracks.forEach(t => {
+      const rawArtist = t.artist || '';
+      uniqueArtists.add(normalizeArtistKey(rawArtist));
+      const cached = getCachedClassification(rawArtist);
+      
+      let classification: ArtistClassification;
+      if (cached && cached.bucket && cached.bucket !== 'Other') {
+        classification = cached;
+        if (cached.confidence === 'manual') manualCount++;
+        else cacheCount++;
+      } else {
+        const scriptSig = detectScriptSignature(rawArtist) || (t.title ? detectScriptSignature(t.title) : null);
+        if (scriptSig && scriptSig.bucket && scriptSig.bucket !== 'Other') {
+          classification = {
+            artist: rawArtist,
+            bucket: scriptSig.bucket,
+            confidence: 'script',
+            sourceDetails: `Script detection: ${scriptSig.scriptName}`,
+            timestamp: Date.now(),
+          };
+          setCachedClassification(rawArtist, classification);
+          cacheCount++;
+        } else {
+          // Heuristic patterns check for Gospel, Instrumental, Naija, Filipino, I-Pop, etc.
+          const heuristic = resolveTrackCulturalBucket(rawArtist, t.title || '');
+          if (heuristic && heuristic.bucket && heuristic.bucket !== 'Other' && heuristic.confidence !== 'default') {
+            classification = {
+              artist: rawArtist,
+              bucket: heuristic.bucket,
+              country: heuristic.country,
+              confidence: 'heuristic',
+              sourceDetails: heuristic.sourceDetails || 'Heuristic Signature',
+              timestamp: Date.now(),
+            };
+            setCachedClassification(rawArtist, classification);
+            cacheCount++;
+          } else if (t.originalRow?.culturalBucket && t.originalRow.culturalBucket !== 'Other') {
+            // Respect database record cultural bucket if valid and not Other
+            classification = {
+              artist: rawArtist,
+              bucket: t.originalRow.culturalBucket,
+              country: t.originalRow.artist?.countryCode,
+              countryName: t.originalRow.artist?.countryName,
+              confidence: 'user',
+              sourceDetails: `Database Record: ${t.originalRow.resolution?.badgeLabel || 'Verified'}`,
+              timestamp: Date.now(),
+            };
+            setCachedClassification(rawArtist, classification);
+            cacheCount++;
+          } else {
+            classification = {
+              artist: rawArtist,
+              bucket: 'Other',
+              confidence: 'unresolved',
+              timestamp: Date.now(),
+            };
+            unresolvedCount++;
+          }
+        }
+      }
+
+      const ct: ClusteredTrack = {
+        id: `${t.artist}:::${t.title}`,
+        title: t.title,
+        artist: t.artist,
+        album: t.album,
+        filePath: t.filePath,
+        rawPlayCount: t.rawPlayCount,
+        classification,
+        originalData: t,
+      };
+
+      newClustered.push(ct);
+      newClusters[classification.bucket].push(ct);
+    });
+
+    setClusteredTracks(newClustered);
+    setClusters(newClusters);
+
+    const initialExpanded: Record<string, boolean> = {};
+    for (const [bucket, trks] of Object.entries(newClusters) as [CanonicalBucket, ClusteredTrack[]][]) {
+      if (trks.length > 0) initialExpanded[bucket] = true;
+    }
+    setExpandedBuckets(initialExpanded);
+
+    setProgress({
+      totalTracks: sourceTracks.length,
+      totalUniqueArtists: uniqueArtists.size,
+      resolvedArtists: uniqueArtists.size - unresolvedCount,
+      currentTier: 'Defaulted to Local Cache (0ms)',
+      tierCounts: {
+        user: cacheCount,
+        script: 0,
+        musicbrainz: 0,
+        llm: 0,
+        manual: manualCount,
+        unresolved: unresolvedCount,
+      },
+      isCancelled: false,
+      isProcessing: false,
+    });
+
+    if (!silent) {
+      showToast(`⚡ Defaulted to Cache: ${cacheCount + manualCount}/${sourceTracks.length} tracks clustered from cache!`);
+    }
+    // Asynchronously synchronize IndexedDB with the superior cache
+    overwriteDatabaseCulturalBucketsFromCache(getCachedClassification, newClustered).catch(console.warn);
+  };
+
+  // Overwrite Deep Metadata DB culturalBucket from superior Language Clustering Cache
+  const handleOverwriteDBFromCache = async () => {
+    setIsOverwritingDB(true);
+    showToast('🗃 Overwriting database language fields from Language Clustering cache...');
+    try {
+      initClassificationCache(true); // Ensure all 'Other' entries are purged
+      const result = await overwriteDatabaseCulturalBucketsFromCache(getCachedClassification, clusteredTracks);
+      if (result.updatedCount > 0) {
+        showToast(`🗃 Database Updated: ${result.updatedCount} track(s) updated across ${result.totalTracks} total database tracks using Language Clustering cache!`);
+        // Re-read tracks into workspace to reflect the updated database
+        handleApplyCacheToWorkspace();
+      } else {
+        showToast(`✅ All ${result.totalTracks} database tracks are already in sync with Language Clustering cache!`);
+      }
+    } catch (e: any) {
+      console.error('Failed to overwrite DB from cache:', e);
+      showToast(`❌ Database overwrite failed: ${e.message || 'Unknown error'}`);
+    } finally {
+      setIsOverwritingDB(false);
+    }
+  };
+
   // Load files when selected
   useEffect(() => {
     if (files.length === 0) {
-      setParsedTracks([]);
-      setClusteredTracks([]);
-      setClusters({} as any);
       return;
     }
 
@@ -323,14 +479,22 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
       let allTracks: any[] = [];
       for (const file of files) {
         try {
-          const text = await file.text();
-          const parsed = parseRawPlaylistContent(text, file.name);
-          allTracks = allTracks.concat(parsed);
+          if (file && typeof file.text === 'function') {
+            const text = await file.text();
+            if (text && text.trim().length > 0) {
+              const parsed = parseRawPlaylistContent(text, file.name);
+              allTracks = allTracks.concat(parsed);
+            }
+          }
         } catch (e) {
           console.error('Failed to read playlist file:', file.name, e);
         }
       }
-      setParsedTracks(allTracks);
+      if (allTracks.length > 0) {
+        setParsedTracks(allTracks);
+        // Auto-default to cache: instantly cluster all recognized tracks
+        applyDefaultCacheToTracks(allTracks, false);
+      }
     };
 
     loadAllFiles();
@@ -385,6 +549,11 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
   // Handle Manual Override
   const handleAssignBucket = (artist: string, newBucket: CanonicalBucket) => {
     const updated = setManualOverride(artist, newBucket);
+    
+    // Automatically overwrite culturalBucket in IndexedDB for this artist
+    overwriteArtistCulturalBucketInDB(artist, newBucket).catch(err => {
+      console.warn('Failed to sync manual override to IndexedDB:', err);
+    });
     
     // Update local clustered tracks state
     setClusteredTracks(prev => prev.map(t => {
@@ -479,25 +648,28 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
   }, [filteredCache, cachePage, cachePageSize]);
 
   // Load directly from Module 15 IndexedDB with strict verification guard
-  const handleLoadFromEnrichedDB = async () => {
+  const handleLoadFromEnrichedDB = async (silent = false) => {
     try {
       const enriched = await getAllEnrichedTracks();
       // Strict guard: ensure only verified enriched tracks are accepted
       const verifiedTracks = enriched.filter(t => 
         t.resolution?.status !== 'needs_resolution' &&
         t.resolution?.status !== 'pending' &&
-        (t.recordingMbid || t.resolution?.isAiSynthesized || t.resolution?.status === 'manual_resolved')
+        (t.recordingMbid || t.resolution?.isAiSynthesized || t.resolution?.status === 'manual_resolved' || t.resolution?.status === 'itunes_enriched')
       );
 
       if (verifiedTracks.length === 0) {
-        alert('No verified enriched tracks found in local IndexedDB. Enrich tracks in Module 15 (Deep Metadata Engine) first!');
+        if (!silent) {
+          alert('No verified enriched tracks found in local IndexedDB. Enrich tracks in Module 15 (Deep Metadata Engine) first!');
+        }
         return;
       }
 
       const loadedTracks = verifiedTracks.map(t => {
-        const artist = t.artist?.name || t.queryArtist;
-        const title = t.title || t.queryTitle;
-        if (t.culturalBucket && t.culturalBucket !== 'Other' && t.resolution?.status !== 'needs_resolution') {
+        const artist = t.artist?.name || t.queryArtist || '<unknown>';
+        const title = t.title || t.queryTitle || 'Untitled';
+        const existing = getCachedClassification(artist);
+        if (!existing && t.culturalBucket && t.culturalBucket !== 'Other' && t.resolution?.status !== 'needs_resolution') {
           const isAi = t.resolution?.source === 'ai_synthesized_fallback' || t.resolution?.isAiSynthesized;
           setCachedClassification(artist, {
             artist,
@@ -513,20 +685,25 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
         return {
           title,
           artist,
-          album: t.release?.albumTitle || t.queryAlbum,
-          filePath: t.queryPath,
+          album: t.release?.albumTitle || t.queryAlbum || '',
+          filePath: t.queryPath || '',
           rawPlayCount: undefined,
           originalRow: t,
         };
       });
 
       setParsedTracks(loadedTracks);
-      setFiles([{ name: `IndexedDB_Enriched_Library (${verifiedTracks.length} verified tracks).db`, size: verifiedTracks.length * 3500 } as any]);
-      showToast(`📥 Ingested ${verifiedTracks.length} verified tracks from Module 15 IndexedDB!`);
+      applyDefaultCacheToTracks(loadedTracks, silent);
+      if (!silent) {
+        showToast(`📥 Ingested ${verifiedTracks.length} verified tracks from Module 15 IndexedDB!`);
+      }
     } catch (e: any) {
-      alert(`Failed to load from IndexedDB: ${e.message}`);
+      if (!silent) {
+        alert(`Failed to load from IndexedDB: ${e.message}`);
+      }
     }
   };
+
 
   // Synchronize active workspace tracks against the current cache
   const handleApplyCacheToWorkspace = () => {
@@ -546,41 +723,7 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
           originalData: t.originalData,
         }));
 
-    const newClustered: ClusteredTrack[] = [];
-    const newClusters: Record<CanonicalBucket, ClusteredTrack[]> = {
-      English: [], 'J-Pop': [], Naija: [], 'K-Pop': [], 'C-Pop': [],
-      Thai: [], Vietnamese: [], Dutch: [], Arabic: [], German: [],
-      Italian: [], Portuguese: [], Filipino: [], 'I-Pop': [], African: [],
-      Latina: [], Français: [], Gospel: [], Instrumental: [], Other: []
-    };
-
-    let updatedCount = 0;
-    sourceTracks.forEach(t => {
-      const cached = getCachedClassification(t.artist);
-      const classification: ArtistClassification = cached || {
-        artist: t.artist,
-        bucket: 'Other',
-        confidence: 'unresolved',
-        timestamp: Date.now(),
-      };
-      const ct: ClusteredTrack = {
-        id: `${t.artist}:::${t.title}`,
-        title: t.title,
-        artist: t.artist,
-        album: t.album,
-        filePath: t.filePath,
-        rawPlayCount: t.rawPlayCount,
-        classification,
-        originalData: t,
-      };
-      newClustered.push(ct);
-      newClusters[classification.bucket].push(ct);
-      if (cached) updatedCount++;
-    });
-
-    setClusteredTracks(newClustered);
-    setClusters(newClusters);
-    showToast(`⚡ Synced workspace: ${updatedCount} tracks updated from cache!`);
+    applyDefaultCacheToTracks(sourceTracks, false);
   };
 
   // On-Demand AI Remediation for Unresolved / Ambiguous Tracks
@@ -610,6 +753,7 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
       );
 
       let remediatedCount = 0;
+      let nextTracks: ClusteredTrack[] = [];
       setClusteredTracks(prev => {
         const updated = prev.map(track => {
           const normKey = normalizeArtistKey(track.artist);
@@ -622,6 +766,7 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
           }
           return track;
         });
+        nextTracks = updated;
 
         const newClusters: Record<CanonicalBucket, ClusteredTrack[]> = {
           English: [], 'J-Pop': [], Naija: [], 'K-Pop': [], 'C-Pop': [],
@@ -637,6 +782,8 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
       });
 
       setCacheList(getAllCachedEntries());
+      // Automatically sync all newly remediated artists to IndexedDB
+      overwriteDatabaseCulturalBucketsFromCache(getCachedClassification, nextTracks).catch(console.warn);
       showToast(`⚡ AI Remediation Complete! Reclassified ${remediatedCount} tracks (${results.size} artists) with Gemini 2.5 Flash.`);
     } catch (e: any) {
       console.error('AI Remediation error:', e);
@@ -677,6 +824,9 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
         });
 
         setCacheList(getAllCachedEntries());
+        if (result.bucket && result.bucket !== 'Other') {
+          overwriteArtistCulturalBucketInDB(result.artist || track.artist, result.bucket).catch(console.warn);
+        }
         showToast(`✨ Reclassified "${track.artist}" to ${result.bucket}!`);
       } else {
         showToast(`AI could not reclassify "${track.artist}".`);
@@ -689,10 +839,17 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
   };
 
   // Forward Propagation to Discovery Triage (Module 14)
-  const handlePropagateToDiscoveryTriage = () => {
+  const handlePropagateToDiscoveryTriage = async () => {
     if (clusteredTracks.length === 0) {
       alert('No clustered tracks available to propagate. Run clustering first!');
       return;
+    }
+
+    // Ensure database records are 100% updated with superior cache classifications
+    try {
+      await overwriteDatabaseCulturalBucketsFromCache(getCachedClassification, clusteredTracks);
+    } catch (e) {
+      console.warn('Pre-propagation DB sync warning:', e);
     }
 
     const payload = clusteredTracks.map(t => ({
@@ -847,14 +1004,50 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
   // Batch Reassign Bucket
   const handleBatchReassignBucket = () => {
     if (selectedCacheKeys.size === 0) return;
-    const count = batchUpdateCachedEntries(Array.from(selectedCacheKeys), {
+    const keysArray = Array.from(selectedCacheKeys);
+    const count = batchUpdateCachedEntries(keysArray, {
       bucket: batchBucketTarget,
       confidence: 'manual',
       sourceDetails: 'Batch manual reassignment',
     });
     setCacheList(getAllCachedEntries());
     setSelectedCacheKeys(new Set());
-    showToast(`Reassigned ${count} artists to "${batchBucketTarget}"!`);
+
+    // Synchronize to current clustered tracks view
+    let nextClusteredTracks: ClusteredTrack[] = [];
+    setClusteredTracks(prev => {
+      if (prev.length === 0) return prev;
+      const keySet = new Set(keysArray);
+      const updated = prev.map(t => {
+        if (keySet.has(normalizeArtistKey(t.artist))) {
+          return {
+            ...t,
+            classification: {
+              ...t.classification,
+              bucket: batchBucketTarget,
+              confidence: 'manual',
+              sourceDetails: 'Batch manual reassignment'
+            }
+          };
+        }
+        return t;
+      });
+      nextClusteredTracks = updated;
+      const nextClusters: Record<CanonicalBucket, ClusteredTrack[]> = {
+        English: [], 'J-Pop': [], Naija: [], 'K-Pop': [], 'C-Pop': [],
+        Thai: [], Vietnamese: [], Dutch: [], Arabic: [], German: [],
+        Italian: [], Portuguese: [], Filipino: [], 'I-Pop': [], African: [],
+        Latina: [], Français: [], Gospel: [], Instrumental: [], Other: []
+      };
+      updated.forEach(t => nextClusters[t.classification.bucket].push(t));
+      setClusters(nextClusters);
+      return updated;
+    });
+
+    // Immediately synchronize to IndexedDB with updated tracks
+    overwriteDatabaseCulturalBucketsFromCache(getCachedClassification, nextClusteredTracks.length > 0 ? nextClusteredTracks : clusteredTracks).catch(console.warn);
+
+    showToast(`Reassigned ${count} artists to "${batchBucketTarget}" (Synced to View & DB)!`);
   };
 
   // Batch Delete
@@ -886,7 +1079,9 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
 
       setCacheList(getAllCachedEntries());
       setSelectedCacheKeys(new Set());
-      showToast(`⚡ AI Reclassification complete: ${count} artists updated with Gemini 2.5 Flash!`);
+      // Immediately sync to IndexedDB
+      overwriteDatabaseCulturalBucketsFromCache(getCachedClassification, clusteredTracks).catch(console.warn);
+      showToast(`⚡ AI Reclassification complete: ${count} artists updated with Gemini 2.5 Flash (DB synced)!`);
     } catch (e: any) {
       showToast(`AI Reclassification error: ${e.message}`);
     } finally {
@@ -912,11 +1107,13 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
     }
     addManualCacheEntry(newArtistName, newArtistBucket, newArtistCountry, newArtistNotes);
     setCacheList(getAllCachedEntries());
+    // Immediately overwrite in IndexedDB
+    overwriteArtistCulturalBucketInDB(newArtistName, newArtistBucket).catch(console.warn);
     setNewArtistName('');
     setNewArtistCountry('');
     setNewArtistNotes('');
     setShowAddArtistModal(false);
-    showToast(`Added "${newArtistName}" to ${newArtistBucket} in cache!`);
+    showToast(`Added "${newArtistName}" to ${newArtistBucket} in cache & DB!`);
   };
 
   // Delete Single Cached Entry
@@ -936,7 +1133,39 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
       sourceDetails: 'Manual cache edit',
     });
     setCacheList(getAllCachedEntries());
-    showToast(`Updated "${artist}" → ${bucket}`);
+    // Immediately overwrite in IndexedDB
+    overwriteArtistCulturalBucketInDB(artist, bucket).catch(console.warn);
+
+    // Synchronize to current clustered tracks view
+    setClusteredTracks(prev => {
+      if (prev.length === 0) return prev;
+      const targetKey = normalizeArtistKey(artist);
+      const updated = prev.map(t => {
+        if (normalizeArtistKey(t.artist) === targetKey) {
+          return {
+            ...t,
+            classification: {
+              ...t.classification,
+              bucket,
+              confidence: 'manual',
+              sourceDetails: 'Manual cache edit'
+            }
+          };
+        }
+        return t;
+      });
+      const nextClusters: Record<CanonicalBucket, ClusteredTrack[]> = {
+        English: [], 'J-Pop': [], Naija: [], 'K-Pop': [], 'C-Pop': [],
+        Thai: [], Vietnamese: [], Dutch: [], Arabic: [], German: [],
+        Italian: [], Portuguese: [], Filipino: [], 'I-Pop': [], African: [],
+        Latina: [], Français: [], Gospel: [], Instrumental: [], Other: []
+      };
+      updated.forEach(t => nextClusters[t.classification.bucket].push(t));
+      setClusters(nextClusters);
+      return updated;
+    });
+
+    showToast(`Updated "${artist}" → ${bucket} (Synced to View & DB)`);
   };
 
   // Handle CSV Import
@@ -945,7 +1174,9 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
     const res = importArtistCSV(importCsvText);
     setImportResult(res);
     setCacheList(getAllCachedEntries());
-    showToast(`Imported ${res.imported} mappings to cache.`);
+    // Synchronize to IndexedDB
+    overwriteDatabaseCulturalBucketsFromCache(getCachedClassification, clusteredTracks).catch(console.warn);
+    showToast(`Imported ${res.imported} mappings to cache & synced to DB.`);
   };
 
   const getSourceBadge = (conf: string) => {
@@ -1052,6 +1283,16 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
             </button>
 
             <button
+              onClick={handleOverwriteDBFromCache}
+              disabled={isOverwritingDB}
+              className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 border border-teal-500/50 hover:border-teal-400 rounded-xl text-xs font-semibold flex items-center gap-2 text-teal-300 hover:text-white transition cursor-pointer"
+              title="Overwrite cultural / language fields in Deep Metadata database (IndexedDB) using the superior Language Clustering cache"
+            >
+              <Database className={`w-4 h-4 text-teal-400 ${isOverwritingDB ? 'animate-spin' : ''}`} />
+              <span>Overwrite DB from Cache</span>
+            </button>
+
+            <button
               onClick={() => setShowConfigModal(true)}
               className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700/70 rounded-xl text-xs font-semibold flex items-center gap-2 text-slate-200 transition"
               title="Configure Gemini API Key & Model"
@@ -1070,15 +1311,27 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
             <div className="lg:col-span-8 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2 pb-0.5">
                 <span className="text-xs font-semibold text-slate-300">Playlist Files & Library Intake:</span>
-                <button
-                  type="button"
-                  onClick={handleLoadFromEnrichedDB}
-                  className="px-3 py-1.5 bg-gradient-to-r from-teal-600/30 to-cyan-600/30 hover:from-teal-600 hover:to-cyan-600 text-teal-300 hover:text-white border border-teal-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 shadow-sm cursor-pointer"
-                  title="Directly load enriched tracks from Module 15 (IndexedDB) with 0ms pre-assigned cultural buckets"
-                >
-                  <HardDrive className="w-3.5 h-3.5 text-teal-400" />
-                  <span>📥 Ingest from Module 15 (IndexedDB)</span>
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleOverwriteDBFromCache}
+                    disabled={isOverwritingDB}
+                    className="px-3 py-1.5 bg-teal-950/60 hover:bg-teal-900/60 text-teal-300 hover:text-white border border-teal-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 shadow-sm cursor-pointer"
+                    title="Overwrite language/culturalBucket field across all records in IndexedDB with this superior cache"
+                  >
+                    <Database className={`w-3.5 h-3.5 text-teal-400 ${isOverwritingDB ? 'animate-spin' : ''}`} />
+                    <span>🗃 Overwrite DB Language from Cache</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleLoadFromEnrichedDB(false)}
+                    className="px-3 py-1.5 bg-gradient-to-r from-teal-600/30 to-cyan-600/30 hover:from-teal-600 hover:to-cyan-600 text-teal-300 hover:text-white border border-teal-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 shadow-sm cursor-pointer"
+                    title="Directly load enriched tracks from Module 15 (IndexedDB) with 0ms pre-assigned cultural buckets"
+                  >
+                    <HardDrive className="w-3.5 h-3.5 text-teal-400" />
+                    <span>📥 Ingest from Module 15 (IndexedDB)</span>
+                  </button>
+                </div>
               </div>
 
               <FileUploader
@@ -1109,7 +1362,7 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
                         {parsedTracks.length.toLocaleString()} tracks loaded
                       </span>
                       <span className="text-slate-400">
-                        ({new Set(parsedTracks.map(t => (t.artist || '').toLowerCase().trim())).size.toLocaleString()} unique artists across {files.length} file{files.length !== 1 ? 's' : ''})
+                        ({new Set(parsedTracks.map(t => (t.artist || '').toLowerCase().trim())).size.toLocaleString()} unique artists across {files.length > 0 ? `${files.length} file${files.length !== 1 ? 's' : ''}` : 'Database Library'})
                       </span>
                     </div>
                     <span className="text-[11px] font-mono text-cyan-300 bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-800/60">
@@ -1184,16 +1437,27 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
                 </label>
               </div>
 
-              <div className="pt-2">
+              <div className="pt-2 space-y-2">
                 {!isProcessing ? (
-                  <button
-                    onClick={handleStartClustering}
-                    disabled={parsedTracks.length === 0}
-                    className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold rounded-xl shadow-lg shadow-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition cursor-pointer"
-                  >
-                    <Play className="w-4 h-4 fill-current" />
-                    <span>Run Intelligent Clustering ({parsedTracks.length} tracks)</span>
-                  </button>
+                  <>
+                    <button
+                      onClick={() => applyDefaultCacheToTracks(parsedTracks, false)}
+                      disabled={parsedTracks.length === 0}
+                      className="w-full py-2.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 hover:text-white border border-emerald-500/40 font-bold rounded-xl shadow-lg shadow-emerald-500/10 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition cursor-pointer"
+                      title="Default instantly to the superior local cache without making any online network calls"
+                    >
+                      <Zap className="w-4 h-4 text-emerald-400" />
+                      <span>⚡ Default to Cache ({parsedTracks.length} tracks)</span>
+                    </button>
+                    <button
+                      onClick={handleStartClustering}
+                      disabled={parsedTracks.length === 0}
+                      className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold rounded-xl shadow-lg shadow-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition cursor-pointer"
+                    >
+                      <Play className="w-4 h-4 fill-current" />
+                      <span>Run Intelligent Clustering (MusicBrainz & AI)</span>
+                    </button>
+                  </>
                 ) : (
                   <div className="space-y-2">
                     <button
@@ -1371,6 +1635,17 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
                 >
                   <RefreshCw className="w-3.5 h-3.5 text-emerald-400" />
                   <span>Re-sync Cache</span>
+                </button>
+
+                {/* Overwrite DB Language from Cache */}
+                <button
+                  onClick={handleOverwriteDBFromCache}
+                  disabled={isOverwritingDB}
+                  className="px-3 py-2 bg-teal-950/80 hover:bg-teal-900/80 text-teal-300 hover:text-white border border-teal-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                  title="Overwrite culturalBucket in IndexedDB database using the superior Language Clustering cache"
+                >
+                  <Database className={`w-3.5 h-3.5 text-teal-400 ${isOverwritingDB ? 'animate-spin' : ''}`} />
+                  <span>Overwrite DB from Cache</span>
                 </button>
 
                 {/* Export All as ZIP */}

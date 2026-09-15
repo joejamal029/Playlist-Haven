@@ -431,8 +431,8 @@ export function extractArtistNames(compositeArtist: string): string[] {
 /**
  * Initialize cache by combining pre-seeded dataset with localStorage overrides
  */
-export function initClassificationCache(): Map<string, ArtistClassification> {
-  if (isCacheInitialized) return runtimeCache;
+export function initClassificationCache(forceReload = false): Map<string, ArtistClassification> {
+  if (!forceReload && isCacheInitialized) return runtimeCache;
 
   runtimeCache = new Map();
 
@@ -458,18 +458,25 @@ export function initClassificationCache(): Map<string, ArtistClassification> {
         let purgedCount = 0;
         for (const [key, val] of Object.entries(parsed)) {
           const entry = val as ArtistClassification;
-          // Strict sanitation: strip out any invalid, unresolved, or poisoned MusicBrainz 'Other' records
+          // Strict sanitation: strip out ANY entry that is 'Other', unresolved, or missing bucket
           if (
             !entry || 
             entry.confidence === 'unresolved' || 
             !entry.bucket || 
-            !entry.artist ||
-            (entry.confidence === 'musicbrainz' && entry.bucket === 'Other')
+            entry.bucket === 'Other' ||
+            !entry.artist
           ) {
             purgedCount++;
             continue;
           }
           runtimeCache.set(key, entry);
+        }
+        // Scrub runtimeCache of any rogue 'Other' or unresolved entries
+        for (const [k, v] of runtimeCache.entries()) {
+          if (!v || !v.bucket || v.bucket === 'Other' || v.confidence === 'unresolved') {
+            runtimeCache.delete(k);
+            purgedCount++;
+          }
         }
         if (purgedCount > 0) {
           saveClassificationCache();
@@ -492,12 +499,12 @@ export function saveClassificationCache(): void {
     if (typeof localStorage === 'undefined') return;
     const obj: Record<string, ArtistClassification> = {};
     for (const [k, v] of runtimeCache.entries()) {
-      // Never serialize unresolved entries or poisoned MusicBrainz 'Other' records
+      // Never serialize unresolved entries or ANY 'Other' records to cache
       if (
         v && 
         v.confidence !== 'unresolved' && 
         v.bucket &&
-        !(v.confidence === 'musicbrainz' && v.bucket === 'Other')
+        v.bucket !== 'Other'
       ) {
         obj[k] = v;
       }
@@ -509,28 +516,79 @@ export function saveClassificationCache(): void {
 }
 
 /**
- * Get cached classification for an artist with multi-artist fallback
+ * Get cached classification for an artist with multi-level resilient fallback matching:
+ * 1. Exact normalized key
+ * 2. Stripped parentheticals (e.g. "BTS (방탄소년단)" -> "BTS")
+ * 3. Stripped diacritics / accents (e.g. "Beyoncé" -> "Beyonce")
+ * 4. Stripped punctuation / special characters
+ * 5. Composite multi-artist tokens (e.g. "Asake ft. Burna Boy")
  */
 export function getCachedClassification(artistName: string): ArtistClassification | null {
+  if (!artistName) return null;
   initClassificationCache();
   
+  // Helper to validate non-Other classification
+  const validEntry = (entry: ArtistClassification | undefined): ArtistClassification | null => {
+    if (entry && entry.bucket && entry.bucket !== 'Other') return entry;
+    return null;
+  };
+
+  // 1. Exact normalized key
   const exactKey = normalizeArtistKey(artistName);
   if (runtimeCache.has(exactKey)) {
-    return runtimeCache.get(exactKey)!;
+    const res = validEntry(runtimeCache.get(exactKey));
+    if (res) return res;
   }
 
-  // Multi-artist fallback: check if first primary artist is known
+  // 2. Parenthetical-stripped match: e.g. "BTS (방탄소년단)" -> "BTS"
+  const noParens = normalizeArtistKey(artistName.replace(/\s*\([^)]*\)/g, ''));
+  if (noParens && noParens !== exactKey && runtimeCache.has(noParens)) {
+    const res = validEntry(runtimeCache.get(noParens));
+    if (res) return res;
+  }
+
+  // 3. Diacritics / accents-stripped match: e.g. "Beyoncé" -> "Beyonce"
+  try {
+    const noAccents = normalizeArtistKey(artistName.normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+    if (noAccents && noAccents !== exactKey && runtimeCache.has(noAccents)) {
+      const res = validEntry(runtimeCache.get(noAccents));
+      if (res) return res;
+    }
+  } catch (_) {}
+
+  // 4. Punctuation-stripped match: e.g. "Tyler, The Creator" -> "tyler the creator"
+  const noPunct = normalizeArtistKey(artistName.replace(/[^\p{L}\p{N}\s]/gu, ' '));
+  if (noPunct && noPunct !== exactKey && runtimeCache.has(noPunct)) {
+    const res = validEntry(runtimeCache.get(noPunct));
+    if (res) return res;
+  }
+
+  // 5. Multi-artist fallback: check if any constituent artist is known
   const tokens = extractArtistNames(artistName);
   if (tokens.length > 1) {
     for (const token of tokens) {
-      const tokenKey = normalizeArtistKey(token);
-      if (runtimeCache.has(tokenKey)) {
-        const primary = runtimeCache.get(tokenKey)!;
-        return {
-          ...primary,
-          artist: artistName,
-          sourceDetails: `Inherited from primary artist: ${token}`,
-        };
+      const normToken = normalizeArtistKey(token);
+      if (normToken && normToken !== exactKey && runtimeCache.has(normToken)) {
+        const found = validEntry(runtimeCache.get(normToken));
+        if (found) {
+          return {
+            ...found,
+            artist: artistName,
+            sourceDetails: `Inherited from primary artist: ${token}`,
+          };
+        }
+      }
+      // Also try parenthetical & diacritic on token
+      const tNoParens = normalizeArtistKey(token.replace(/\s*\([^)]*\)/g, ''));
+      if (tNoParens && runtimeCache.has(tNoParens)) {
+        const found = validEntry(runtimeCache.get(tNoParens));
+        if (found) {
+          return {
+            ...found,
+            artist: artistName,
+            sourceDetails: `Inherited from primary artist: ${token}`,
+          };
+        }
       }
     }
   }
@@ -539,15 +597,16 @@ export function getCachedClassification(artistName: string): ArtistClassificatio
 }
 
 /**
- * Store an artist classification in cache (unresolved or MusicBrainz 'Other' entries are strictly blocked)
+ * Store an artist classification in cache ('Other' and unresolved entries are strictly blocked)
  */
 export function setCachedClassification(artistName: string, classification: ArtistClassification): void {
-  // Strict Guard: Never persist unresolved classifications or MusicBrainz 'Other' placeholders to cache
+  // Strict Guard: Never persist 'Other' or unresolved classifications to cache!
+  // In the Language Clustering cache, 'Other' is strictly NOT a valid classification.
   if (
     !classification || 
     classification.confidence === 'unresolved' || 
     !classification.bucket ||
-    (classification.confidence === 'musicbrainz' && classification.bucket === 'Other')
+    classification.bucket === 'Other'
   ) {
     return;
   }
@@ -555,10 +614,18 @@ export function setCachedClassification(artistName: string, classification: Arti
   initClassificationCache();
   const key = normalizeArtistKey(artistName);
   
-  // If existing is manual, do not overwrite unless this new one is also manual
   const existing = runtimeCache.get(key);
-  if (existing && existing.confidence === 'manual' && classification.confidence !== 'manual') {
-    return;
+  // Protection: The Language Clustering cache is superior!
+  // Automated background lookups (MusicBrainz / Deep Metadata Engine) can NEVER overwrite
+  // human manual overrides, user edits, AI remediations, or script signatures.
+  if (existing && existing.bucket && existing.bucket !== 'Other') {
+    const isIncomingAutomated = 
+      classification.confidence === 'musicbrainz' || 
+      classification.sourceDetails?.includes('Deep Metadata Engine') ||
+      classification.sourceDetails?.includes('MusicBrainz');
+    if (isIncomingAutomated && (existing.confidence === 'manual' || existing.confidence === 'user' || existing.confidence === 'llm' || existing.confidence === 'script')) {
+      return;
+    }
   }
 
   runtimeCache.set(key, classification);
@@ -1115,12 +1182,11 @@ export async function classifyPlaylistTracks(
     const cached = getCachedClassification(info.originalName);
     if (cached) {
       resolvedClassifications.set(key, cached);
-      if (cached.confidence === 'manual') tierCounts.manual++;
-      else if (cached.confidence === 'user') tierCounts.user++;
-      else if (cached.confidence === 'musicbrainz') tierCounts.musicbrainz++;
-      else if (cached.confidence === 'llm') tierCounts.llm++;
-      else if (cached.confidence === 'script') tierCounts.script++;
-      else tierCounts.user++;
+      if (cached.confidence === 'manual') {
+        tierCounts.manual++;
+      } else {
+        tierCounts.user++; // Cache hit (displayed as "Cache" in UI)
+      }
       continue;
     }
 
@@ -1414,7 +1480,11 @@ export function setManualOverride(artist: string, newBucket: CanonicalBucket): A
     timestamp: Date.now(),
   };
 
-  setCachedClassification(clean, classification);
+  if (newBucket === 'Other') {
+    deleteCachedEntry(clean);
+  } else {
+    setCachedClassification(clean, classification);
+  }
   return classification;
 }
 

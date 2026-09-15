@@ -1,5 +1,6 @@
 import { EnrichedSongRecord, ArtistBioData, ReleaseContextData } from './metadataEnrichmentTypes';
-import { normalizeArtistKey } from './classificationEngine';
+import { normalizeArtistKey, extractArtistNames, CanonicalBucket, ArtistClassification, detectScriptSignature } from './classificationEngine';
+import { cleanCompositeTrack } from './playlistSanitizer';
 
 const DB_NAME = 'PlaylistHavenMetadataDB';
 const DB_VERSION = 1;
@@ -34,12 +35,13 @@ export function isPersistableEnrichedTrack(record: EnrichedSongRecord): boolean 
     status === 'enriched' || 
     status === 'cached' || 
     status === 'ai_search_resolved' || 
+    status === 'itunes_enriched' || 
     status === 'ai_synthesized_fallback' || 
     status === 'manual_resolved';
   
   if (!isValidVerifiedStatus) return false;
 
-  if (!record.recordingMbid && !record.resolution?.isAiSynthesized && status !== 'manual_resolved' && status !== 'ai_synthesized_fallback') {
+  if (!record.recordingMbid && !record.resolution?.isAiSynthesized && status !== 'manual_resolved' && status !== 'ai_synthesized_fallback' && status !== 'itunes_enriched') {
     return false;
   }
 
@@ -454,6 +456,325 @@ export async function purgeUnresolvedTracks(): Promise<number> {
     request.onerror = () => {
       resolve(0);
     };
+  });
+}
+
+/**
+ * Purge specifically all "Not on MusicBrainz" (ai_synthesized_fallback) records from IndexedDB
+ * so they can be re-queried against Apple iTunes and other sources instead of loading stale cache.
+ */
+export async function purgeNotOnMbTracks(): Promise<number> {
+  const db = await initDB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_TRACKS], 'readwrite');
+    const store = transaction.objectStore(STORE_TRACKS);
+    const request = store.getAll();
+
+    request.onsuccess = () => {
+      const all = (request.result as EnrichedSongRecord[]) || [];
+      const targets = all.filter(t => 
+        t.resolution?.status === 'ai_synthesized_fallback' || 
+        t.resolution?.source === 'ai_synthesized_fallback' ||
+        t.resolution?.isAiSynthesized === true
+      );
+
+      if (targets.length === 0) {
+        resolve(0);
+        return;
+      }
+
+      for (const track of targets) {
+        if (track.id) store.delete(track.id);
+      }
+
+      resolve(targets.length);
+    };
+
+    request.onerror = () => {
+      reject(request.error);
+    };
+  });
+}
+
+/**
+ * Helper to resolve an artist against the Language Clustering cache using all available metadata
+ * (query artist, canonical name, clean names, featured artist tokens, aliases)
+ */
+export function resolveArtistFromCache(
+  track: EnrichedSongRecord,
+  cacheResolver: (artist: string) => ArtistClassification | null
+): ArtistClassification | null {
+  if (!track || !cacheResolver) return null;
+
+  // 1. Try queryArtist (the original name from the user's playlist/import)
+  if (track.queryArtist) {
+    const c1 = cacheResolver(track.queryArtist);
+    if (c1 && c1.bucket) return c1;
+  }
+
+  // 2. Try canonical artist name from MusicBrainz
+  if (track.artist?.name) {
+    const c2 = cacheResolver(track.artist.name);
+    if (c2 && c2.bucket) return c2;
+  }
+
+  // 3. Try clean composite artist (stripping noise, brackets, ft.)
+  if (track.queryArtist) {
+    const cleaned = cleanCompositeTrack(track.title || track.queryTitle || '', track.queryArtist);
+    if (cleaned.artist && cleaned.artist !== track.queryArtist && cleaned.artist !== '<unknown>') {
+      const c3 = cacheResolver(cleaned.artist);
+      if (c3 && c3.bucket) return c3;
+    }
+  }
+  if (track.artist?.name) {
+    const cleaned = cleanCompositeTrack(track.title || '', track.artist.name);
+    if (cleaned.artist && cleaned.artist !== track.artist.name && cleaned.artist !== '<unknown>') {
+      const c4 = cacheResolver(cleaned.artist);
+      if (c4 && c4.bucket) return c4;
+    }
+  }
+
+  // 4. Try multi-artist tokens from extractArtistNames
+  const queryTokens = extractArtistNames(track.queryArtist || '');
+  for (const token of queryTokens) {
+    const ct = cacheResolver(token);
+    if (ct && ct.bucket) return ct;
+  }
+
+  const artTokens = extractArtistNames(track.artist?.name || '');
+  for (const token of artTokens) {
+    const ct = cacheResolver(token);
+    if (ct && ct.bucket) return ct;
+  }
+
+  // 5. Try MusicBrainz aliases
+  if (track.artist?.aliases && Array.isArray(track.artist.aliases)) {
+    for (const alias of track.artist.aliases) {
+      const aliasName = typeof alias === 'string' ? alias : (alias as any)?.name;
+      if (aliasName) {
+        const ca = cacheResolver(aliasName);
+        if (ca && ca.bucket) return ca;
+      }
+    }
+  }
+
+  // 6. Try credited artists
+  if (track.artist?.creditedArtists && Array.isArray(track.artist.creditedArtists)) {
+    for (const ca of track.artist.creditedArtists) {
+      if (ca.name) {
+        const c = cacheResolver(ca.name);
+        if (c && c.bucket) return c;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Overwrite the culturalBucket field for all tracks belonging to a given artist in IndexedDB
+ * (Ensures Language Clustering cache changes immediately sync to the Deep Metadata database)
+ */
+export async function overwriteArtistCulturalBucketInDB(
+  artistName: string,
+  newBucket: CanonicalBucket
+): Promise<number> {
+  if (!artistName || !newBucket) return 0;
+  const db = await initDB();
+  const targetNorm = normalizeArtistKey(artistName);
+  const targetTokens = extractArtistNames(artistName).map(normalizeArtistKey);
+  const now = Date.now();
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_TRACKS], 'readwrite');
+    const store = transaction.objectStore(STORE_TRACKS);
+    const request = store.openCursor();
+    let updatedCount = 0;
+
+    request.onsuccess = (event) => {
+      const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+      if (cursor) {
+        const track = cursor.value as EnrichedSongRecord;
+        const normArt = normalizeArtistKey(track.artist?.name || '');
+        const normQuery = normalizeArtistKey(track.queryArtist || '');
+        
+        let matches = (normArt && (normArt === targetNorm || targetTokens.includes(normArt))) ||
+                      (normQuery && (normQuery === targetNorm || targetTokens.includes(normQuery)));
+
+        if (!matches && track.artist?.aliases && Array.isArray(track.artist.aliases)) {
+          matches = track.artist.aliases.some(a => {
+            const aName = typeof a === 'string' ? a : (a as any)?.name;
+            return aName && normalizeArtistKey(aName) === targetNorm;
+          });
+        }
+
+        if (!matches) {
+          const artTokens = extractArtistNames(track.artist?.name || '').map(normalizeArtistKey);
+          const qTokens = extractArtistNames(track.queryArtist || '').map(normalizeArtistKey);
+          matches = artTokens.includes(targetNorm) || qTokens.includes(targetNorm);
+        }
+
+        if (matches) {
+          if (track.culturalBucket !== newBucket) {
+            track.culturalBucket = newBucket;
+            track.updatedAt = now;
+            // Promote unresolved / pending track to manual_resolved so it persists and is visible
+            if (!track.resolution || track.resolution.status === 'needs_resolution' || track.resolution.status === 'pending') {
+              track.resolution = {
+                status: 'manual_resolved',
+                source: 'manual',
+                isAiSynthesized: true,
+                badgeLabel: '✓ Language Clustered Override',
+                matchScore: 100,
+                timestamp: now,
+              };
+            }
+            cursor.update(track);
+            updatedCount++;
+          }
+        }
+        cursor.continue();
+      }
+    };
+
+    request.onerror = () => reject(request.error);
+    transaction.oncomplete = () => resolve(updatedCount);
+    transaction.onerror = () => reject(transaction.error || new Error('Transaction failed'));
+    transaction.onabort = () => reject(new Error('Transaction aborted'));
+  });
+}
+
+/**
+ * Overwrite the culturalBucket field across all tracks in IndexedDB using the superior Language Clustering cache
+ * and any currently clustered tracks from the active workspace.
+ * Resolves each track by:
+ * 1. Exact song key match (normalizeSongKey) from clusteredTracks
+ * 2. Artist match from clusteredTracks
+ * 3. Multi-tiered cache lookup via cacheResolver
+ */
+export async function overwriteDatabaseCulturalBucketsFromCache(
+  cacheResolver: (artist: string) => ArtistClassification | null,
+  clusteredTracks?: Array<{ title?: string; artist?: string; classification?: { bucket?: CanonicalBucket } }>
+): Promise<{ updatedCount: number; totalTracks: number }> {
+  const db = await initDB();
+  const now = Date.now();
+
+  // Pre-build song-level and artist-level fast lookup maps from clustered tracks if provided
+  const songKeyToBucket = new Map<string, CanonicalBucket>();
+  const clusteredArtistToBucket = new Map<string, CanonicalBucket>();
+
+  if (clusteredTracks && Array.isArray(clusteredTracks) && clusteredTracks.length > 0) {
+    for (const ct of clusteredTracks) {
+      const bucket = ct.classification?.bucket;
+      if (!bucket || bucket === 'Other') continue;
+      
+      if (ct.artist && ct.title) {
+        const songKey = normalizeSongKey(ct.artist, ct.title);
+        songKeyToBucket.set(songKey, bucket);
+        const cleaned = cleanCompositeTrack(ct.title, ct.artist);
+        if (cleaned.artist && cleaned.title) {
+          songKeyToBucket.set(normalizeSongKey(cleaned.artist, cleaned.title), bucket);
+        }
+      }
+
+      if (ct.artist) {
+        clusteredArtistToBucket.set(normalizeArtistKey(ct.artist), bucket);
+        const tokens = extractArtistNames(ct.artist);
+        for (const token of tokens) {
+          clusteredArtistToBucket.set(normalizeArtistKey(token), bucket);
+        }
+      }
+    }
+  }
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_TRACKS], 'readwrite');
+    const store = transaction.objectStore(STORE_TRACKS);
+    const request = store.openCursor();
+    let updatedCount = 0;
+    let totalTracks = 0;
+
+    request.onsuccess = (event) => {
+      const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+      if (cursor) {
+        totalTracks++;
+        const track = cursor.value as EnrichedSongRecord;
+        
+        let targetBucket: CanonicalBucket | null = null;
+
+        // 1. Check exact song-key match from clusteredTracks
+        if (songKeyToBucket.size > 0) {
+          if (track.id && songKeyToBucket.has(track.id)) {
+            targetBucket = songKeyToBucket.get(track.id)!;
+          } else if (track.queryArtist && track.queryTitle) {
+            const qKey = normalizeSongKey(track.queryArtist, track.queryTitle);
+            if (songKeyToBucket.has(qKey)) {
+              targetBucket = songKeyToBucket.get(qKey)!;
+            }
+          } else if (track.artist?.name && track.title) {
+            const aKey = normalizeSongKey(track.artist.name, track.title);
+            if (songKeyToBucket.has(aKey)) {
+              targetBucket = songKeyToBucket.get(aKey)!;
+            }
+          }
+        }
+
+        // 2. Check artist match from clusteredTracks
+        if (!targetBucket && clusteredArtistToBucket.size > 0) {
+          const normArt = normalizeArtistKey(track.artist?.name || '');
+          const normQuery = normalizeArtistKey(track.queryArtist || '');
+          if (normArt && clusteredArtistToBucket.has(normArt)) {
+            targetBucket = clusteredArtistToBucket.get(normArt)!;
+          } else if (normQuery && clusteredArtistToBucket.has(normQuery)) {
+            targetBucket = clusteredArtistToBucket.get(normQuery)!;
+          }
+        }
+
+        // 3. Check multi-tiered cache resolver
+        if (!targetBucket) {
+          const cached = resolveArtistFromCache(track, cacheResolver);
+          if (cached && cached.bucket && cached.bucket !== 'Other') {
+            targetBucket = cached.bucket;
+          }
+        }
+
+        // 4. Script signature fallback
+        if (!targetBucket) {
+          const scriptSig = detectScriptSignature(track.artist?.name || track.queryArtist || '') || 
+                            detectScriptSignature(track.title || track.queryTitle || '');
+          if (scriptSig && scriptSig.bucket && scriptSig.bucket !== 'Other') {
+            targetBucket = scriptSig.bucket;
+          }
+        }
+
+        if (targetBucket && targetBucket !== 'Other') {
+          if (track.culturalBucket !== targetBucket) {
+            track.culturalBucket = targetBucket;
+            track.updatedAt = now;
+            // Promote unresolved / pending track so it is retained and persistable
+            if (!track.resolution || track.resolution.status === 'needs_resolution' || track.resolution.status === 'pending') {
+              track.resolution = {
+                status: 'manual_resolved',
+                source: 'manual',
+                isAiSynthesized: true,
+                badgeLabel: '✓ Language Clustered Override',
+                matchScore: 100,
+                timestamp: now,
+              };
+            }
+            cursor.update(track);
+            updatedCount++;
+          }
+        }
+        cursor.continue();
+      }
+    };
+
+    request.onerror = () => reject(request.error);
+    transaction.oncomplete = () => resolve({ updatedCount, totalTracks });
+    transaction.onerror = () => reject(transaction.error || new Error('Transaction failed'));
+    transaction.onabort = () => reject(new Error('Transaction aborted'));
   });
 }
 

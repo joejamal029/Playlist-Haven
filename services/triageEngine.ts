@@ -7,8 +7,18 @@ import {
   type BucketMetadata,
   getCachedClassification,
   detectScriptSignature,
-  setManualOverride
+  setManualOverride,
+  normalizeArtistKey,
+  initClassificationCache
 } from './classificationEngine';
+import {
+  getAllEnrichedTracks,
+  normalizeSongKey,
+  saveEnrichedTrack,
+  overwriteArtistCulturalBucketInDB,
+  resolveArtistFromCache
+} from './metadataDb';
+import type { EnrichedSongRecord } from './metadataEnrichmentTypes';
 
 export type { CanonicalBucket, BucketMetadata };
 export { CANONICAL_BUCKETS };
@@ -42,9 +52,24 @@ export interface TriageTrack {
   // Cultural provenance from Module 13 or auto-classifier
   culturalBucket: CanonicalBucket;
   country?: string;
+  countryName?: string;
   confidence?: string;
   sourceDetails?: string;
   filePath?: string;
+  // Deep Metadata Inheritance (Module 15 & MusicBrainz / Cover Art)
+  coverArtUrl?: string;
+  coverArtThumbUrl?: string;
+  releaseDate?: string;
+  releaseYear?: number;
+  originalReleaseYear?: number;
+  releaseType?: string;
+  genres?: string[];
+  tags?: string[];
+  artistAliases?: string[];
+  translatedTitle?: string;
+  translatedArtist?: string;
+  culturalContext?: string;
+  enrichedRecord?: any;
 }
 
 export interface CulturalBucketGroup {
@@ -548,6 +573,248 @@ export function importFromLanguageClustering(
   return crossReferenceAndCluster(rawList);
 }
 
+/**
+ * Hydrate a single TriageTrack from a verified EnrichedSongRecord
+ */
+export function hydrateTriageTrackFromEnrichedRecord(
+  track: TriageTrack,
+  rec: EnrichedSongRecord
+): TriageTrack {
+  const releaseYear = rec.release?.originalReleaseYear || 
+    (rec.release?.releaseDate ? parseInt(rec.release.releaseDate.slice(0, 4), 10) : undefined);
+
+  // Derive cover art with Cover Art Archive fallback
+  let coverUrl = rec.release?.coverArtFullUrl || rec.release?.coverArtThumbUrl;
+  let thumbUrl = rec.release?.coverArtThumbUrl || rec.release?.coverArtFullUrl;
+  if (!coverUrl && rec.release?.releaseMbid) {
+    coverUrl = `https://coverartarchive.org/release/${rec.release.releaseMbid}/front`;
+  }
+  if (!thumbUrl && rec.release?.releaseMbid) {
+    thumbUrl = `https://coverartarchive.org/release/${rec.release.releaseMbid}/front-250`;
+  }
+
+  // Cultural & Language classification (Module 13 Cache is Superior!)
+  initClassificationCache();
+  const cacheMatch = resolveArtistFromCache(rec, getCachedClassification) || 
+                     (track.artist ? getCachedClassification(track.artist) : null);
+
+  let culturalBucket: CanonicalBucket;
+  let country: string | undefined = track.country;
+  let countryName: string | undefined = track.countryName;
+  let confidence: string = track.confidence || 'Database Linked';
+  let sourceDetails: string = track.sourceDetails 
+    ? (track.sourceDetails.includes('DB') ? track.sourceDetails : `${track.sourceDetails} • DB Linked`) 
+    : 'Playlist Haven Database';
+
+  if (cacheMatch && cacheMatch.bucket) {
+    culturalBucket = cacheMatch.bucket;
+    country = cacheMatch.country || country;
+    countryName = cacheMatch.countryName || countryName;
+    confidence = cacheMatch.confidence;
+    sourceDetails = cacheMatch.sourceDetails || 'Language Clustering Cache (Superior)';
+  } else if (track.source === 'Language Clustered' && track.culturalBucket && track.culturalBucket !== 'Other') {
+    culturalBucket = track.culturalBucket;
+    confidence = track.confidence || 'Language Clustered';
+    sourceDetails = track.sourceDetails || 'Clustered Intake';
+  } else if (rec.culturalBucket && rec.culturalBucket !== 'Other') {
+    culturalBucket = rec.culturalBucket;
+    country = rec.artist?.countryCode || country;
+    countryName = rec.artist?.countryName || countryName;
+    confidence = rec.resolution?.badgeLabel || 'Database Verified';
+    sourceDetails = 'Deep Metadata DB';
+  } else {
+    const fallback = resolveTrackCulturalBucket(track.artist || rec.artist?.name || '', track.title || rec.title || '');
+    culturalBucket = fallback.bucket;
+    country = fallback.country || country;
+    confidence = fallback.confidence;
+    sourceDetails = fallback.sourceDetails || 'Heuristic Signature';
+  }
+
+  // Ensure attached rec is kept synchronized with the superior bucket and permanently persisted
+  if (rec.culturalBucket !== culturalBucket) {
+    rec.culturalBucket = culturalBucket;
+    rec.updatedAt = Date.now();
+    saveEnrichedTrack(rec, true).catch(err => {
+      console.warn('[Triage Hydration] Auto-persisting culturalBucket update to IndexedDB failed:', err);
+    });
+  }
+
+  return {
+    ...track,
+    // Database canonical names
+    title: rec.title || track.title,
+    artist: rec.artist?.name || track.artist,
+    album: rec.release?.albumTitle || track.album || 'Single / Discovery Batch',
+    // Cover art images
+    coverArtUrl: coverUrl || track.coverArtUrl,
+    coverArtThumbUrl: thumbUrl || track.coverArtThumbUrl,
+    // Release timeline
+    releaseDate: rec.release?.releaseDate || track.releaseDate,
+    releaseYear: releaseYear || track.releaseYear,
+    originalReleaseYear: rec.release?.originalReleaseYear || track.originalReleaseYear || releaseYear,
+    releaseType: rec.release?.releaseType || track.releaseType,
+    // Cultural & Language classification (Module 13 Cache is Authoritative)
+    culturalBucket,
+    country: country || rec.artist?.countryCode,
+    countryName: countryName || rec.artist?.countryName,
+    // Genres, tags, aliases
+    genres: (rec.genres && rec.genres.length > 0) ? rec.genres : track.genres,
+    tags: (rec.tags && rec.tags.length > 0) ? rec.tags.map((x: any) => (x.name || x)) : track.tags,
+    artistAliases: (rec.artist?.aliases && rec.artist.aliases.length > 0) 
+      ? rec.artist.aliases.map((a: any) => (a.name || a)) 
+      : track.artistAliases,
+    // Status & provenance
+    confidence,
+    sourceDetails,
+    isrc: (rec.isrcs && rec.isrcs.length > 0) ? rec.isrcs[0] : track.isrc,
+    duration: rec.durationFormatted || track.duration,
+    // Complete record attachment
+    enrichedRecord: rec,
+  };
+}
+
+/**
+ * Authoritative Direct Database Linking & Metadata Hydration
+ * Matches an array of TriageTracks directly against PlaylistHavenMetadataDB (enriched_tracks store).
+ * Loads and hydrates:
+ * - Cover art URLs (Full & Thumbnail, with Cover Art Archive fallback)
+ * - Canonical Title, Artist, and Album
+ * - Release Date, Release Year, Original Release Year, Release Type
+ * - Cultural Bucket (database is authoritative) & Country
+ * - Genres, Community Tags, Artist Aliases
+ * - Complete Enriched Song Record attachment
+ */
+export async function linkTracksWithDatabase(
+  tracks: TriageTrack[]
+): Promise<{ hydratedTracks: TriageTrack[]; matchedCount: number }> {
+  if (!tracks || tracks.length === 0) {
+    return { hydratedTracks: [], matchedCount: 0 };
+  }
+
+  let enrichedList: EnrichedSongRecord[] = [];
+  try {
+    enrichedList = await getAllEnrichedTracks();
+  } catch (err) {
+    console.warn('[Database Linker] Failed to load tracks from IndexedDB:', err);
+    return { hydratedTracks: tracks, matchedCount: 0 };
+  }
+
+  if (!enrichedList || enrichedList.length === 0) {
+    return { hydratedTracks: tracks, matchedCount: 0 };
+  }
+
+  // 1. Build Multi-Index Maps for O(1) matching
+  const exactKeyMap = new Map<string, EnrichedSongRecord>();
+  const artistMap = new Map<string, EnrichedSongRecord[]>();
+
+  for (const rec of enrichedList) {
+    const artName = rec.artist?.name || rec.queryArtist || '';
+    const recTitle = rec.title || rec.queryTitle || '';
+
+    // Index by primary normalized keys
+    const k1 = normalizeSongKey(artName, recTitle);
+    const k2 = normalizeSongKey(rec.queryArtist, rec.queryTitle);
+    const k3 = normalizeSongKey(artName, rec.queryTitle);
+    const k4 = normalizeSongKey(rec.queryArtist, rec.title);
+
+    if (k1 && !exactKeyMap.has(k1)) exactKeyMap.set(k1, rec);
+    if (k2 && !exactKeyMap.has(k2)) exactKeyMap.set(k2, rec);
+    if (k3 && !exactKeyMap.has(k3)) exactKeyMap.set(k3, rec);
+    if (k4 && !exactKeyMap.has(k4)) exactKeyMap.set(k4, rec);
+
+    // Index by sanitized/clean terms
+    const cleanRec = cleanCompositeTrack(recTitle, artName);
+    const kClean = normalizeSongKey(cleanRec.artist, cleanRec.title);
+    if (kClean && !exactKeyMap.has(kClean)) exactKeyMap.set(kClean, rec);
+
+    // Index by artist key
+    const artKey = normalizeArtistKey(artName);
+    if (artKey) {
+      const list = artistMap.get(artKey) || [];
+      list.push(rec);
+      artistMap.set(artKey, list);
+    }
+    const qArtKey = normalizeArtistKey(rec.queryArtist || '');
+    if (qArtKey && qArtKey !== artKey) {
+      const list = artistMap.get(qArtKey) || [];
+      list.push(rec);
+      artistMap.set(qArtKey, list);
+    }
+  }
+
+  let matchedCount = 0;
+  initClassificationCache(true);
+
+  const hydratedTracks = tracks.map(t => {
+    // Attempt 1: Direct key match on (t.artist, t.title)
+    let rec = exactKeyMap.get(normalizeSongKey(t.artist, t.title));
+
+    // Attempt 2: Direct key match on sanitized terms
+    if (!rec) {
+      const cleaned = cleanCompositeTrack(t.title, t.artist);
+      rec = exactKeyMap.get(normalizeSongKey(cleaned.artist, cleaned.title));
+    }
+
+    // Attempt 3: Direct key match using rawTitle if present
+    if (!rec && t.rawTitle && t.rawTitle !== t.title) {
+      const cleanedRaw = cleanCompositeTrack(t.rawTitle, t.artist);
+      rec = exactKeyMap.get(normalizeSongKey(cleanedRaw.artist, cleanedRaw.title));
+    }
+
+    // Attempt 4: Search among tracks by the same artist
+    if (!rec) {
+      const artKey = normalizeArtistKey(t.artist);
+      const artistTracks = artistMap.get(artKey);
+      if (artistTracks && artistTracks.length > 0) {
+        const normTargetTitle = normalizeSongKey('', t.title).replace(/^:::+/, '');
+        for (const candidate of artistTracks) {
+          const cTitleNorm = normalizeSongKey('', candidate.title || candidate.queryTitle || '').replace(/^:::+/, '');
+          if (cTitleNorm && normTargetTitle && cTitleNorm === normTargetTitle) {
+            rec = candidate;
+            break;
+          }
+          // Substring / stripped feature match
+          if (normTargetTitle && cTitleNorm && (normTargetTitle.includes(cTitleNorm) || cTitleNorm.includes(normTargetTitle))) {
+            rec = candidate;
+            break;
+          }
+        }
+      }
+    }
+
+    if (rec) {
+      matchedCount++;
+      const originalDbBucket = rec.culturalBucket;
+      const hydrated = hydrateTriageTrackFromEnrichedRecord(t, rec);
+      // If the superior cultural bucket in hydrated differs from what was stored in the DB record, update IndexedDB!
+      if (rec.id && hydrated.culturalBucket && hydrated.culturalBucket !== originalDbBucket) {
+        rec.culturalBucket = hydrated.culturalBucket;
+        rec.updatedAt = Date.now();
+        saveEnrichedTrack(rec, true).catch(err => console.warn('[Database Linker] Sync culturalBucket failed:', err));
+      }
+      return hydrated;
+    }
+
+    // For unmatched tracks, still ensure superior cache is honored
+    const dummyRec = { queryArtist: t.artist, title: t.title } as any;
+    const cacheFallback = resolveArtistFromCache(dummyRec, getCachedClassification) || getCachedClassification(t.artist);
+    if (cacheFallback && cacheFallback.bucket && t.culturalBucket !== cacheFallback.bucket) {
+      return {
+        ...t,
+        culturalBucket: cacheFallback.bucket,
+        country: cacheFallback.country || t.country,
+        countryName: cacheFallback.countryName || t.countryName,
+        confidence: cacheFallback.confidence,
+        sourceDetails: cacheFallback.sourceDetails || 'Language Clustering Cache (Superior)'
+      };
+    }
+
+    return t;
+  });
+
+  return { hydratedTracks, matchedCount };
+}
+
 // Cross-reference tracks across files and deduplicate while preserving earliest chronological discovery order
 export function crossReferenceAndCluster(
   rawTracks: {
@@ -564,9 +831,23 @@ export function crossReferenceAndCluster(
     spotifyId?: string;
     culturalBucket?: CanonicalBucket;
     country?: string;
+    countryName?: string;
     confidence?: string;
     sourceDetails?: string;
     filePath?: string;
+    coverArtUrl?: string;
+    coverArtThumbUrl?: string;
+    releaseDate?: string;
+    releaseYear?: number;
+    originalReleaseYear?: number;
+    releaseType?: string;
+    genres?: string[];
+    tags?: string[];
+    artistAliases?: string[];
+    translatedTitle?: string;
+    translatedArtist?: string;
+    culturalContext?: string;
+    enrichedRecord?: any;
   }[]
 ): TriageTrack[] {
   const unifiedMap = new Map<string, TriageTrack>();
@@ -622,12 +903,27 @@ export function crossReferenceAndCluster(
         existing.culturalBucket = t.culturalBucket;
       }
       if (t.country && !existing.country) existing.country = t.country;
+      if (t.countryName && !existing.countryName) existing.countryName = t.countryName;
       if (t.confidence && !existing.confidence) existing.confidence = t.confidence;
       if (t.sourceDetails && !existing.sourceDetails) existing.sourceDetails = t.sourceDetails;
       if (t.filePath && !existing.filePath) existing.filePath = t.filePath;
       if (existing.album === 'Single / Discovery Batch' && t.album && t.album !== 'Single / Discovery Batch') {
         existing.album = t.album;
       }
+      // Metadata inheritance
+      if (!existing.coverArtUrl && t.coverArtUrl) existing.coverArtUrl = t.coverArtUrl;
+      if (!existing.coverArtThumbUrl && t.coverArtThumbUrl) existing.coverArtThumbUrl = t.coverArtThumbUrl;
+      if (!existing.releaseDate && t.releaseDate) existing.releaseDate = t.releaseDate;
+      if (!existing.releaseYear && t.releaseYear) existing.releaseYear = t.releaseYear;
+      if (!existing.originalReleaseYear && t.originalReleaseYear) existing.originalReleaseYear = t.originalReleaseYear;
+      if (!existing.releaseType && t.releaseType) existing.releaseType = t.releaseType;
+      if (!existing.genres && t.genres) existing.genres = t.genres;
+      if (!existing.tags && t.tags) existing.tags = t.tags;
+      if (!existing.artistAliases && t.artistAliases) existing.artistAliases = t.artistAliases;
+      if (!existing.translatedTitle && t.translatedTitle) existing.translatedTitle = t.translatedTitle;
+      if (!existing.translatedArtist && t.translatedArtist) existing.translatedArtist = t.translatedArtist;
+      if (!existing.culturalContext && t.culturalContext) existing.culturalContext = t.culturalContext;
+      if (!existing.enrichedRecord && t.enrichedRecord) existing.enrichedRecord = t.enrichedRecord;
     } else {
       unifiedMap.set(key, {
         id: generateId(),
@@ -648,11 +944,43 @@ export function crossReferenceAndCluster(
         addedAt: new Date().toISOString(),
         culturalBucket: t.culturalBucket || 'Other',
         country: t.country,
+        countryName: t.countryName,
         confidence: t.confidence,
         sourceDetails: t.sourceDetails,
         filePath: t.filePath,
+        coverArtUrl: t.coverArtUrl,
+        coverArtThumbUrl: t.coverArtThumbUrl,
+        releaseDate: t.releaseDate,
+        releaseYear: t.releaseYear,
+        originalReleaseYear: t.originalReleaseYear,
+        releaseType: t.releaseType,
+        genres: t.genres,
+        tags: t.tags,
+        artistAliases: t.artistAliases,
+        translatedTitle: t.translatedTitle,
+        translatedArtist: t.translatedArtist,
+        culturalContext: t.culturalContext,
+        enrichedRecord: t.enrichedRecord,
       });
     }
+  }
+
+  // Calculate true artist track frequencies across deduplicated unique tracks
+  const deduplicatedArtistCounts = new Map<string, number>();
+  for (const track of unifiedMap.values()) {
+    const normArtist = normalizeStringForMatching(track.artist);
+    if (normArtist) {
+      deduplicatedArtistCounts.set(normArtist, (deduplicatedArtistCounts.get(normArtist) || 0) + 1);
+    }
+  }
+
+  // Assign accurate resonance tier and download priority based on unique tracks per artist
+  for (const track of unifiedMap.values()) {
+    const normArtist = normalizeStringForMatching(track.artist);
+    const count = (normArtist && deduplicatedArtistCounts.get(normArtist)) || 1;
+    const tier: ResonanceTier = count >= 4 ? 'high' : count >= 2 ? 'emerging' : 'probe';
+    track.resonanceTier = tier;
+    track.downloadPriority = tier === 'high' ? 'immediate' : 'secondary';
   }
 
   // Strictly sort the unified collection by chronological sourceOrder ascending.
@@ -781,7 +1109,7 @@ export function stageBalancedIntakeCohort(
   return toStageIds;
 }
 
-// Reassign a track's cultural bucket and update permanent cache
+// Reassign a track's cultural bucket and update permanent cache & database
 export function updateTrackCulturalBucket(
   trackId: string,
   newBucket: CanonicalBucket,
@@ -792,11 +1120,13 @@ export function updateTrackCulturalBucket(
   const updated = tracks.map(t => {
     if (t.id === trackId) {
       targetArtist = t.artist;
+      const updatedRecord = t.enrichedRecord ? { ...t.enrichedRecord, culturalBucket: newBucket, updatedAt: Date.now() } : undefined;
       return {
         ...t,
         culturalBucket: newBucket,
         confidence: 'manual',
-        sourceDetails: 'Manual user reassignment'
+        sourceDetails: 'Manual user reassignment',
+        enrichedRecord: updatedRecord
       };
     }
     return t;
@@ -805,6 +1135,8 @@ export function updateTrackCulturalBucket(
   if (updatePermanentCache && targetArtist) {
     try {
       setManualOverride(targetArtist, newBucket);
+      // Immediately overwrite IndexedDB records for this artist
+      overwriteArtistCulturalBucketInDB(targetArtist, newBucket).catch(console.warn);
     } catch (e) {
       console.warn('Failed to update permanent classification cache:', e);
     }
@@ -1522,4 +1854,512 @@ Provide 2 to 3 landmarkAlbums and 3 recommendedNextTracks. Return PURE JSON ONLY
     console.error('Failed to parse Artist AIDossier JSON:', rawResponseText);
     throw new Error('AI returned an invalid JSON response format for the artist.');
   }
+}
+
+// =========================================================================
+// 15. Crystallized Baseline & Homeostasis Engine (Singles Probe Intelligence)
+// =========================================================================
+
+export interface CrystallizedChoiceTrack {
+  id: string;
+  title: string;
+  artist: string;
+  album?: string;
+  culturalBucket: CanonicalBucket;
+  decisionType: 'album' | 'single';
+  sourceOrder?: number;
+  sources?: TriageSource[];
+  isrc?: string;
+  spotifyId?: string;
+  fileName?: string;
+}
+
+export interface CrystallizedHomeostasisStats {
+  totalTracks: number;
+  albumTracksCount: number;
+  singleProbesCount: number;
+  bucketCounts: Record<string, number>;
+  bucketPercentages: Record<string, number>;
+  deficitBuckets: { bucket: CanonicalBucket; count: number; percentage: number; deficitDeficit: number }[];
+}
+
+/**
+ * Parse an uploaded CSV of prior definite choices (albums and singles).
+ * Recognizes Playlist Haven exports (Album intake, Singlesified, Compiled)
+ * as well as generic Spotify/YTM/Musicolet exports.
+ */
+export function parseDefiniteChoicesCSV(
+  content: string,
+  fileName: string
+): CrystallizedChoiceTrack[] {
+  const cleanContent = content.replace(/^\ufeff/, '');
+  const parsed = parseCSVString(cleanContent);
+  if (parsed.header.length === 0 || parsed.rows.length === 0) return [];
+
+  const headerLower = parsed.header.map(h => h.toLowerCase());
+  const trackIdx = headerLower.findIndex(h => h.includes('track') || h.includes('title') || h === 'song');
+  const artistIdx = headerLower.findIndex(h => h.includes('artist') || h === 'performer');
+  const albumIdx = headerLower.findIndex(h => h.includes('album') || h.includes('collection'));
+  const bucketIdx = headerLower.findIndex(h => h.includes('bucket') || h.includes('cultural') || h.includes('language'));
+  const decisionIdx = headerLower.findIndex(h => h.includes('decision') || h.includes('triagecategory') || h === 'category' || h === 'type');
+  const isrcIdx = headerLower.findIndex(h => h.includes('isrc'));
+  const spotifyIdIdx = headerLower.findIndex(h => h.includes('spotify') || h.includes('id'));
+  const sourceSeqIdx = headerLower.findIndex(h => h.includes('sequence') || h.includes('source_sequence') || h === 'seq');
+  const sourcesIdx = headerLower.findIndex(h => h === 'sources' || h === 'source');
+
+  const fileNameLower = fileName.toLowerCase();
+  const fileImpliesAlbum = fileNameLower.includes('album') || fileNameLower.includes('collection') || fileNameLower.includes('discography');
+  const fileImpliesSingle = fileNameLower.includes('single') || fileNameLower.includes('probe');
+
+  const results: CrystallizedChoiceTrack[] = [];
+
+  for (let i = 0; i < parsed.rows.length; i++) {
+    const row = parsed.rows[i];
+    const rawTrack = (trackIdx !== -1 && row[trackIdx]) ? row[trackIdx].trim() : '';
+    let rawArtist = (artistIdx !== -1 && row[artistIdx]) ? row[artistIdx].trim() : '';
+    let rawAlbum = (albumIdx !== -1 && row[albumIdx]) ? row[albumIdx].trim() : '';
+    const rawDecision = (decisionIdx !== -1 && row[decisionIdx]) ? row[decisionIdx].toLowerCase().trim() : '';
+    const rawBucket = (bucketIdx !== -1 && row[bucketIdx]) ? row[bucketIdx].trim() : '';
+    const isrc = (isrcIdx !== -1 && row[isrcIdx]) ? row[isrcIdx].trim() : undefined;
+    const spotifyId = (spotifyIdIdx !== -1 && row[spotifyIdIdx]) ? row[spotifyIdIdx].trim() : undefined;
+    const rawSeq = (sourceSeqIdx !== -1 && row[sourceSeqIdx]) ? row[sourceSeqIdx].trim() : '';
+    const rawSources = (sourcesIdx !== -1 && row[sourcesIdx]) ? row[sourcesIdx].trim() : '';
+
+    if (!rawTrack && !rawArtist) continue;
+
+    // All definite choices uploaded in Discovery Triage are previously organized tracks from album and artist collections triage
+    const decisionType: 'album' | 'single' = 'album';
+
+    // Determine Cultural Bucket
+    let canonicalBucket: CanonicalBucket = 'English';
+    if (rawBucket && CANONICAL_BUCKETS[rawBucket as CanonicalBucket]) {
+      canonicalBucket = rawBucket as CanonicalBucket;
+    } else {
+      canonicalBucket = resolveTrackCulturalBucket(rawArtist || 'Unknown', rawTrack || 'Unknown').bucket;
+    }
+
+    // Sequence parsing
+    let seqOrder = i + 1;
+    const seqMatch = rawSeq.match(/#(\d+)/);
+    if (seqMatch) {
+      seqOrder = parseInt(seqMatch[1], 10);
+    }
+
+    const sources: TriageSource[] = [];
+    if (rawSources.includes('Spotify')) sources.push('Spotify');
+    if (rawSources.includes('YouTube') || rawSources.includes('YTM')) sources.push('YouTube Music');
+    if (sources.length === 0) sources.push('Custom');
+
+    results.push({
+      id: `crystallized_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 7)}`,
+      title: rawTrack || 'Untitled Track',
+      artist: rawArtist || 'Unknown Artist',
+      album: rawAlbum || (decisionType === 'album' ? 'Promoted Album Collection' : 'Single Choice'),
+      culturalBucket: canonicalBucket,
+      decisionType,
+      sourceOrder: seqOrder,
+      sources,
+      isrc,
+      spotifyId,
+      fileName
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Compute real-time cultural homeostasis statistics across crystallized decisions
+ * and determine which cultural traditions suffer from representation deficits.
+ */
+export function computeCrystallizedHomeostasis(
+  crystallizedTracks: CrystallizedChoiceTrack[],
+  totalIntakeCandidates: number = 0
+): CrystallizedHomeostasisStats {
+  const bucketCounts: Record<string, number> = {};
+  let albumTracksCount = 0;
+  let singleProbesCount = 0;
+
+  for (const t of crystallizedTracks) {
+    bucketCounts[t.culturalBucket] = (bucketCounts[t.culturalBucket] || 0) + 1;
+    if (t.decisionType === 'album') albumTracksCount++;
+    else singleProbesCount++;
+  }
+
+  const total = crystallizedTracks.length;
+  const bucketPercentages: Record<string, number> = {};
+
+  if (total > 0) {
+    for (const [b, count] of Object.entries(bucketCounts)) {
+      bucketPercentages[b] = (count / total) * 100;
+    }
+  }
+
+  const activeBucketNames = Object.keys(CANONICAL_BUCKETS) as CanonicalBucket[];
+  const deficitBuckets: { bucket: CanonicalBucket; count: number; percentage: number; deficitDeficit: number }[] = [];
+
+  for (const b of activeBucketNames) {
+    const count = bucketCounts[b] || 0;
+    const pct = bucketPercentages[b] || 0;
+    // If a bucket has fewer than 2 selections or less than 12% representation in a non-trivial baseline
+    if (total >= 4 && pct < 12) {
+      deficitBuckets.push({
+        bucket: b,
+        count,
+        percentage: pct,
+        deficitDeficit: Math.max(1, Math.round((0.15 * total) - count))
+      });
+    }
+  }
+
+  // Sort deficit buckets by most urgent need
+  deficitBuckets.sort((a, b) => a.count - b.count);
+
+  return {
+    totalTracks: total,
+    albumTracksCount,
+    singleProbesCount,
+    bucketCounts,
+    bucketPercentages,
+    deficitBuckets
+  };
+}
+
+// =========================================================================
+// RELEASE ERA HELPERS (Classics Hunter)
+// =========================================================================
+export type ReleaseEraKey = 'all' | 'classics' | '90s' | '2000s' | '2010s' | '2020s';
+
+export interface ReleaseEraOption {
+  key: ReleaseEraKey;
+  label: string;
+  sublabel: string;
+  filterFn: (year?: number) => boolean;
+}
+
+export const RELEASE_ERA_OPTIONS: ReleaseEraOption[] = [
+  { key: 'all', label: 'All Eras', sublabel: 'All Releases', filterFn: () => true },
+  { key: 'classics', label: 'Classics (< 1990)', sublabel: '70s, 80s & Vintage', filterFn: (y) => y !== undefined && y > 0 && y < 1990 },
+  { key: '90s', label: '90s (1990–1999)', sublabel: 'Golden Era', filterFn: (y) => y !== undefined && y >= 1990 && y <= 1999 },
+  { key: '2000s', label: '2000s (2000–2009)', sublabel: 'Millennium', filterFn: (y) => y !== undefined && y >= 2000 && y <= 2009 },
+  { key: '2010s', label: '2010s (2010–2019)', sublabel: 'Streaming Dawn', filterFn: (y) => y !== undefined && y >= 2010 && y <= 2019 },
+  { key: '2020s', label: '2020s (2020+)', sublabel: 'Contemporary', filterFn: (y) => y !== undefined && y >= 2020 },
+];
+
+export function getTrackEraBadge(year?: number): { label: string; color: string } | null {
+  if (!year || year <= 0) return null;
+  if (year < 1980) return { label: `${year} · 70s Classic`, color: 'bg-amber-950/80 text-amber-300 border-amber-500/40' };
+  if (year < 1990) return { label: `${year} · 80s Classic`, color: 'bg-amber-900/80 text-amber-200 border-amber-500/40' };
+  if (year < 2000) return { label: `${year} · 90s`, color: 'bg-purple-950/80 text-purple-300 border-purple-500/40' };
+  if (year < 2010) return { label: `${year} · 2000s`, color: 'bg-blue-950/80 text-blue-300 border-blue-500/40' };
+  if (year < 2020) return { label: `${year} · 2010s`, color: 'bg-cyan-950/80 text-cyan-300 border-cyan-500/40' };
+  return { label: `${year} · Modern`, color: 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40' };
+}
+
+// =========================================================================
+// AI TRANSLATION & CULTURAL CONTEXT ENGINE
+// =========================================================================
+export interface TrackTranslationResult {
+  trackKey: string;
+  originalArtist: string;
+  originalTitle: string;
+  romanizedArtist?: string;
+  romanizedTitle?: string;
+  translatedTitle?: string;
+  culturalContext?: string;
+  detectedLanguage?: string;
+  timestamp: number;
+}
+
+export interface EffectiveTranslation {
+  romanizedTitle?: string;
+  translatedTitle?: string;
+  romanizedArtist?: string;
+  translatedArtist?: string;
+  culturalContext?: string;
+  detectedLanguage?: string;
+  hasTranslation: boolean;
+}
+
+export function getEffectiveTrackTranslation(
+  track: { 
+    artist: string; 
+    title: string; 
+    translatedTitle?: string; 
+    translatedArtist?: string; 
+    culturalContext?: string; 
+    artistAliases?: string[]; 
+    enrichedRecord?: any 
+  },
+  translationsMap: Record<string, TrackTranslationResult>
+): EffectiveTranslation {
+  const normKey = `${(track.artist || '').trim().toLowerCase()}:::${(track.title || '').trim().toLowerCase()}`;
+  let trans = translationsMap[normKey];
+
+  if (!trans && track.enrichedRecord) {
+    const qArtist = track.enrichedRecord.queryArtist;
+    const qTitle = track.enrichedRecord.queryTitle;
+    if (qArtist && qTitle) {
+      const qKey = `${qArtist.trim().toLowerCase()}:::${qTitle.trim().toLowerCase()}`;
+      trans = translationsMap[qKey];
+    }
+  }
+
+  const romanizedTitle = trans?.romanizedTitle || track.translatedTitle;
+  const translatedTitle = trans?.translatedTitle;
+  const romanizedArtist = trans?.romanizedArtist || trans?.translatedArtist || track.translatedArtist || track.artistAliases?.[0];
+  const culturalContext = trans?.culturalContext || track.culturalContext;
+  const detectedLanguage = trans?.detectedLanguage;
+
+  const hasTranslation = Boolean(
+    (romanizedTitle && romanizedTitle.toLowerCase().trim() !== track.title.toLowerCase().trim()) ||
+    (translatedTitle && translatedTitle.toLowerCase().trim() !== track.title.toLowerCase().trim()) ||
+    (romanizedArtist && romanizedArtist.toLowerCase().trim() !== track.artist.toLowerCase().trim()) ||
+    culturalContext
+  );
+
+  return {
+    romanizedTitle,
+    translatedTitle,
+    romanizedArtist,
+    translatedArtist: trans?.translatedArtist || track.translatedArtist,
+    culturalContext,
+    detectedLanguage,
+    hasTranslation,
+  };
+}
+
+const AI_TRANSLATION_CACHE_KEY = 'playlist_haven_ai_translations';
+
+export function getCachedTranslations(): Record<string, TrackTranslationResult> {
+  try {
+    const raw = localStorage.getItem(AI_TRANSLATION_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    const cleaned: Record<string, TrackTranslationResult> = {};
+    let hasDirty = false;
+    for (const [k, v] of Object.entries(parsed)) {
+      const item = v as TrackTranslationResult;
+      // Strictly require at least one real translation, romanization, or cultural insight
+      if (item && (
+        (item.translatedTitle && item.translatedTitle.trim()) || 
+        (item.romanizedTitle && item.romanizedTitle.trim()) || 
+        (item.romanizedArtist && item.romanizedArtist.trim()) || 
+        (item.culturalContext && item.culturalContext.trim())
+      )) {
+        cleaned[k] = item;
+      } else {
+        hasDirty = true;
+      }
+    }
+    if (hasDirty) {
+      localStorage.setItem(AI_TRANSLATION_CACHE_KEY, JSON.stringify(cleaned));
+    }
+    return cleaned;
+  } catch (e) {
+    return {};
+  }
+}
+
+export function saveCachedTranslations(newEntries: Record<string, TrackTranslationResult>): void {
+  try {
+    const existing = getCachedTranslations();
+    const validOnly: Record<string, TrackTranslationResult> = {};
+    for (const [k, v] of Object.entries(newEntries)) {
+      if (v && (
+        (v.translatedTitle && v.translatedTitle.trim()) || 
+        (v.romanizedTitle && v.romanizedTitle.trim()) || 
+        (v.romanizedArtist && v.romanizedArtist.trim()) || 
+        (v.culturalContext && v.culturalContext.trim())
+      )) {
+        validOnly[k] = v;
+      }
+    }
+    const merged = { ...existing, ...validOnly };
+    localStorage.setItem(AI_TRANSLATION_CACHE_KEY, JSON.stringify(merged));
+  } catch (e) {
+    console.warn('Failed to cache AI translations to localStorage', e);
+  }
+}
+
+/**
+ * Single Track AI Translation
+ */
+export async function translateSingleTrackWithAI(
+  artist: string,
+  title: string,
+  culturalBucket?: string,
+  signal?: AbortSignal
+): Promise<TrackTranslationResult> {
+  const normKey = `${(artist || '').trim().toLowerCase()}:::${(title || '').trim().toLowerCase()}`;
+  const cache = getCachedTranslations();
+  if (cache[normKey] && (cache[normKey].translatedTitle || cache[normKey].romanizedTitle || cache[normKey].culturalContext)) {
+    return cache[normKey];
+  }
+
+  const results = await batchTranslateTracksWithAI([{ artist, title, culturalBucket }], signal);
+  if (results[normKey]) return results[normKey];
+
+  throw new Error(`Could not generate translation for "${title}" by "${artist}". Check your Gemini API key.`);
+}
+
+/**
+ * Batch AI Translation for filtered results
+ */
+export async function batchTranslateTracksWithAI(
+  items: { artist: string; title: string; culturalBucket?: string }[],
+  signal?: AbortSignal,
+  onProgress?: (processed: number, total: number) => void
+): Promise<Record<string, TrackTranslationResult>> {
+  const cache = getCachedTranslations();
+  const resultMap: Record<string, TrackTranslationResult> = {};
+  const needed: { idx: number; artist: string; title: string; culturalBucket?: string; key: string }[] = [];
+
+  items.forEach((item, idx) => {
+    const key = `${(item.artist || '').trim().toLowerCase()}:::${(item.title || '').trim().toLowerCase()}`;
+    const cached = cache[key];
+    if (cached && (cached.translatedTitle || cached.romanizedTitle || cached.romanizedArtist)) {
+      resultMap[key] = cached;
+    } else {
+      needed.push({ idx, artist: item.artist, title: item.title, culturalBucket: item.culturalBucket, key });
+    }
+  });
+
+  if (needed.length === 0) {
+    return resultMap;
+  }
+
+  const aiConfig = getAIConfig();
+  let apiKey = aiConfig.apiKey?.trim() || '';
+  if (!apiKey) {
+    try {
+      const procKey = typeof process !== 'undefined' && process.env ? (process.env.API_KEY || process.env.GEMINI_API_KEY) : '';
+      if (procKey && procKey.trim()) apiKey = procKey.trim();
+    } catch (e) {}
+  }
+  if (!apiKey) {
+    try {
+      // @ts-ignore
+      const viteKey = import.meta.env?.VITE_GEMINI_API_KEY || import.meta.env?.VITE_API_KEY || '';
+      if (viteKey && viteKey.trim()) apiKey = viteKey.trim();
+    } catch (e) {}
+  }
+
+  const isGemini = aiConfig.provider === 'gemini' || !aiConfig.provider;
+  if (!apiKey && isGemini) {
+    throw new Error('Gemini API key is required for AI translation. Please add your key in AI Settings (top-right gear icon).');
+  }
+
+  const client = isGemini ? new GoogleGenAI({ apiKey }) : null;
+  const primaryModel = aiConfig.modelName || 'gemini-2.5-flash';
+  const secondaryModel = 'gemini-2.0-flash';
+
+  // Process in chunks of 20
+  const CHUNK_SIZE = 20;
+  for (let i = 0; i < needed.length; i += CHUNK_SIZE) {
+    if (signal?.aborted) break;
+    const chunk = needed.slice(i, i + CHUNK_SIZE);
+
+    const promptPayload = chunk.map((c, cIdx) => ({
+      id: cIdx,
+      artist: c.artist,
+      title: c.title,
+      culturalBucket: c.culturalBucket || 'Unknown'
+    }));
+
+    const prompt = `You are a master multilingual musicologist and linguist.
+Translate and provide romanization and concise cultural context for these tracks.
+If an artist or title is already in English, provide an accurate clean version and musical context.
+
+Input Tracks:
+${JSON.stringify(promptPayload, null, 2)}
+
+Return a strict JSON object with this exact structure:
+{
+  "translations": [
+    {
+      "id": 0,
+      "romanizedArtist": "Romanized name or English stage name",
+      "romanizedTitle": "Romanized song title (e.g. Romaji, Pinyin, RTGS)",
+      "translatedTitle": "English translation of song title (e.g. 'The Moon Represents My Heart')",
+      "culturalContext": "1 sentence describing the song's musical style, era, vibe, or cultural significance",
+      "detectedLanguage": "e.g. Japanese, Mandarin, Thai, Yoruba, Vietnamese"
+    }
+  ]
+}
+Return JSON ONLY. No markdown wrappers.`;
+
+    try {
+      let rawText = '';
+      if (isGemini && client) {
+        const tryCall = async (m: string) => {
+          return await client.models.generateContent({
+            model: m,
+            contents: prompt,
+            config: { responseMimeType: 'application/json' }
+          });
+        };
+        try {
+          const res = await tryCall(primaryModel);
+          rawText = res.text || '';
+        } catch (err: any) {
+          if (primaryModel !== secondaryModel) {
+            console.warn(`[TranslateEngine] Model ${primaryModel} failed. Failing over to ${secondaryModel}...`);
+            const res = await tryCall(secondaryModel);
+            rawText = res.text || '';
+          } else {
+            throw err;
+          }
+        }
+      } else {
+        const res = await fetch(`${aiConfig.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {})
+          },
+          body: JSON.stringify({
+            model: primaryModel,
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.1
+          }),
+          signal
+        });
+        const data = await res.json();
+        rawText = data.choices?.[0]?.message?.content || '';
+      }
+
+      let cleanJson = rawText.trim().replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
+      const parsed = JSON.parse(cleanJson);
+      const list: any[] = parsed.translations || [];
+
+      const newBatchCache: Record<string, TrackTranslationResult> = {};
+      list.forEach(t => {
+        const matchingChunkItem = chunk[t.id];
+        if (matchingChunkItem) {
+          const res: TrackTranslationResult = {
+            trackKey: matchingChunkItem.key,
+            originalArtist: matchingChunkItem.artist,
+            originalTitle: matchingChunkItem.title,
+            romanizedArtist: t.romanizedArtist,
+            romanizedTitle: t.romanizedTitle,
+            translatedTitle: t.translatedTitle,
+            culturalContext: t.culturalContext,
+            detectedLanguage: t.detectedLanguage,
+            timestamp: Date.now()
+          };
+          resultMap[matchingChunkItem.key] = res;
+          newBatchCache[matchingChunkItem.key] = res;
+        }
+      });
+
+      saveCachedTranslations(newBatchCache);
+      onProgress?.(Math.min(i + CHUNK_SIZE, needed.length), needed.length);
+    } catch (chunkErr: any) {
+      console.error('[TranslateEngine] Chunk translation error:', chunkErr);
+      throw new Error(`AI Translation chunk failed: ${chunkErr?.message || 'Gemini API call failed'}`);
+    }
+  }
+
+  return resultMap;
 }

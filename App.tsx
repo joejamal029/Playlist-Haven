@@ -18,6 +18,8 @@ import DeepMetadataEnrichmentView from './views/DeepMetadataEnrichmentView';
 import PlaylistResequencerView from './views/PlaylistResequencerView';
 import HelpGuideModal from './components/HelpGuideModal';
 import ErrorBoundary from './components/ErrorBoundary';
+import { AudioPreviewProvider } from './components/AudioPreviewContext';
+import AudioPlayerBar from './components/AudioPlayerBar';
 
 type AppView = 'dashboard' | 'sieve' | 'merger' | 'splitter' | 'randomizer' | 'pruner' | 'renamer' | 'appearance' | 'vision' | 'tier' | 'manipulator' | 'matcher' | 'stripper' | 'clustering' | 'triage' | 'enrichment' | 'resequencer';
 
@@ -82,20 +84,25 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200">
-      <ErrorBoundary 
-        fallbackTitle="Module Render Error" 
-        onReset={() => setCurrentView('dashboard')}
-      >
-        {renderView()}
-      </ErrorBoundary>
-      
-      {/* Universal Searchable Help & Guidance Modal (?) */}
-      <HelpGuideModal 
-        isOpen={isHelpModalOpen} 
-        onClose={() => setIsHelpModalOpen(false)} 
-      />
-    </div>
+    <AudioPreviewProvider>
+      <div className="min-h-screen bg-slate-950 text-slate-200">
+        <ErrorBoundary 
+          fallbackTitle="Module Render Error" 
+          onReset={() => setCurrentView('dashboard')}
+        >
+          {renderView()}
+        </ErrorBoundary>
+        
+        {/* Universal Searchable Help & Guidance Modal (?) */}
+        <HelpGuideModal 
+          isOpen={isHelpModalOpen} 
+          onClose={() => setIsHelpModalOpen(false)} 
+        />
+
+        {/* Global Floating Audio Player Bar */}
+        <AudioPlayerBar />
+      </div>
+    </AudioPreviewProvider>
   );
 }
 
