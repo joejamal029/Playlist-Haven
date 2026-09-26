@@ -1,9 +1,10 @@
 import { EnrichedSongRecord, ArtistBioData, ReleaseContextData } from './metadataEnrichmentTypes';
+import { AcousticProfile } from './acousticTypes';
 import { normalizeArtistKey, extractArtistNames, CanonicalBucket, ArtistClassification, detectScriptSignature } from './classificationEngine';
 import { cleanCompositeTrack } from './playlistSanitizer';
 
 const DB_NAME = 'PlaylistHavenMetadataDB';
-const DB_VERSION = 1;
+const DB_VERSION = 4;
 
 const STORE_TRACKS = 'enriched_tracks';
 const STORE_ARTISTS = 'cached_artists';
@@ -62,6 +63,20 @@ export function initDB(): Promise<IDBDatabase> {
     const request = window.indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onerror = () => {
+      // VersionError safety: if database already exists at higher version, fallback to opening current version
+      if (request.error?.name === 'VersionError') {
+        console.warn('[MetadataDB] Database version mismatch. Opening existing version...');
+        const fallbackReq = window.indexedDB.open(DB_NAME);
+        fallbackReq.onsuccess = () => {
+          dbInstance = fallbackReq.result;
+          resolve(dbInstance);
+        };
+        fallbackReq.onerror = () => {
+          console.error('[MetadataDB] Failed to open fallback existing version:', fallbackReq.error);
+          reject(fallbackReq.error);
+        };
+        return;
+      }
       console.error('Failed to open IndexedDB:', request.error);
       reject(request.error);
     };
@@ -775,6 +790,210 @@ export async function overwriteDatabaseCulturalBucketsFromCache(
     transaction.oncomplete = () => resolve({ updatedCount, totalTracks });
     transaction.onerror = () => reject(transaction.error || new Error('Transaction failed'));
     transaction.onabort = () => reject(new Error('Transaction aborted'));
+  });
+}
+
+/**
+ * Updates or creates an enriched song record with an acoustic analysis profile from Audimote.
+ */
+export async function updateTrackAcousticProfile(
+  artist: string,
+  title: string,
+  profile: AcousticProfile,
+  extra?: { album?: string; previewUrl?: string }
+): Promise<EnrichedSongRecord> {
+  const db = await initDB();
+  const id = normalizeSongKey(artist, title);
+  const now = Date.now();
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_TRACKS], 'readwrite');
+    const store = transaction.objectStore(STORE_TRACKS);
+    const getReq = store.get(id);
+
+    getReq.onsuccess = () => {
+      let record = getReq.result as EnrichedSongRecord | undefined;
+      if (record) {
+        // Merge acoustic profile
+        record.acousticProfile = profile;
+        record.updatedAt = now;
+        if (extra?.previewUrl && (!record.artist.externalLinks || !record.artist.externalLinks.audioPreviewUrl)) {
+          record.artist.externalLinks = {
+            ...record.artist.externalLinks,
+            audioPreviewUrl: extra.previewUrl,
+          };
+        }
+        // If status was pending or needs_resolution, upgrade to itunes_enriched
+        if (!record.resolution || record.resolution.status === 'pending' || record.resolution.status === 'needs_resolution') {
+          record.resolution = {
+            status: 'itunes_enriched',
+            source: 'itunes',
+            isAiSynthesized: false,
+            badgeLabel: '⚡ Audimote Acoustic Profile',
+            matchScore: 100,
+            timestamp: now,
+          };
+        }
+      } else {
+        // Create new minimal record
+        record = {
+          id,
+          queryArtist: artist,
+          queryTitle: title,
+          queryAlbum: extra?.album,
+          recordingMbid: '',
+          title: title,
+          artist: {
+            artistMbid: '',
+            name: artist,
+            sortName: artist,
+            type: 'Other',
+            isActive: true,
+            aliases: [],
+            bandMembers: [],
+            creditedArtists: [],
+            externalLinks: {
+              audioPreviewUrl: extra?.previewUrl,
+            },
+          },
+          work: {
+            lyricsLanguages: [],
+            composers: [],
+            lyricists: [],
+            arrangers: [],
+            producers: [],
+            engineers: [],
+            relationships: [],
+          },
+          release: {
+            albumTitle: extra?.album || '',
+            releaseType: 'Track',
+            releaseStatus: 'Official',
+            labels: [],
+          },
+          genres: [],
+          tags: [],
+          culturalBucket: 'Other',
+          isrcs: [],
+          acoustids: [],
+          isVideo: false,
+          acousticProfile: profile,
+          resolution: {
+            status: 'itunes_enriched',
+            source: 'itunes',
+            isAiSynthesized: false,
+            badgeLabel: '⚡ Audimote Acoustic Profile',
+            matchScore: 100,
+            timestamp: now,
+          },
+          createdAt: now,
+          updatedAt: now,
+        };
+      }
+
+      const putReq = store.put(record);
+      putReq.onsuccess = () => resolve(record!);
+      putReq.onerror = () => reject(putReq.error);
+    };
+
+    getReq.onerror = () => reject(getReq.error);
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
+
+/**
+ * Retrieves all tracks in the database that have acoustic analysis profiles.
+ */
+export async function getAllAcousticProfiles(): Promise<{
+  id: string;
+  artist: string;
+  title: string;
+  album?: string;
+  previewUrl?: string;
+  profile: AcousticProfile;
+}[]> {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_TRACKS], 'readonly');
+    const store = transaction.objectStore(STORE_TRACKS);
+    const request = store.openCursor();
+    const results: {
+      id: string;
+      artist: string;
+      title: string;
+      album?: string;
+      previewUrl?: string;
+      profile: AcousticProfile;
+    }[] = [];
+
+    request.onsuccess = (event) => {
+      const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+      if (cursor) {
+        const track = cursor.value as EnrichedSongRecord;
+        if (track && track.acousticProfile) {
+          results.push({
+            id: track.id,
+            artist: track.artist?.name || track.queryArtist || 'Unknown Artist',
+            title: track.title || track.queryTitle || 'Unknown Title',
+            album: track.release?.albumTitle || track.queryAlbum,
+            previewUrl: track.artist?.externalLinks?.audioPreviewUrl,
+            profile: track.acousticProfile,
+          });
+        }
+        cursor.continue();
+      } else {
+        resolve(results);
+      }
+    };
+
+    request.onerror = () => reject(request.error);
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
+
+/**
+ * Clears all acoustic profiles from the database, resetting all tracks to unanalyzed status.
+ */
+export async function clearAllAcousticProfiles(): Promise<number> {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_TRACKS], 'readwrite');
+    const store = transaction.objectStore(STORE_TRACKS);
+    const request = store.openCursor();
+    let count = 0;
+
+    request.onsuccess = (event) => {
+      const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+      if (cursor) {
+        const track = cursor.value as EnrichedSongRecord;
+        if (track && track.acousticProfile) {
+          delete track.acousticProfile;
+          cursor.update(track);
+          count++;
+        }
+        cursor.continue();
+      } else {
+        resolve(count);
+      }
+    };
+
+    request.onerror = () => reject(request.error);
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
+
+/**
+ * Completely purges all stored tracks, artists, and releases from the metadata database.
+ */
+export async function clearEntireMetadataDB(): Promise<void> {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_TRACKS, STORE_ARTISTS, STORE_RELEASES], 'readwrite');
+    transaction.objectStore(STORE_TRACKS).clear();
+    transaction.objectStore(STORE_ARTISTS).clear();
+    transaction.objectStore(STORE_RELEASES).clear();
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
   });
 }
 

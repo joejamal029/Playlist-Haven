@@ -103,6 +103,7 @@ Instead of getting lost in technical jargon, here is how Playlist Haven solves r
 | **The Global & Diaspora Curator:**<br/>*"Streaming algorithms shove all non-Western music into lazy 'World' or generic 'Pop' buckets."* | Partitions thousands of tracks into **20 authentic cultural and linguistic cohorts** (Naija, J-Pop, K-Pop, Français, C-Pop, etc.) via a 5-tier waterfall engine. | **13. Language Clustering** |
 | **The Cross-Platform Migrator:**<br/>*"I converted my YouTube discovery queue to Spotify, and the chronological discovery order got completely scrambled."* | Restores authentic chronological discovery sequence using title-guarded matching and a 10-category AI musicological resolver. | **16. Playlist Resequencer** |
 | **The Musicologist & Metadata Purist:**<br/>*"I want real songwriting credits, true release dates, high-res cover art, and in-app previews."* | Dual-source catalog linking: queries **MusicBrainz** with zero-key **Apple iTunes** fallback for uncataloged tracks; smart Cover Art Archive 404 sanitation; full Work songwriting traversal; decoupled AI remediation; and universal 30-second audio previews with direct `.m4a` downloads. | **15. Deep Metadata Enrichment** |
+| **The Acoustic & Emotional Crate Triage (Zero-Cost MIR):**<br/>*"I want true BPM, Camelot keys, energy, danceability, and emotional mood without paying for black-box APIs."* | 100% client-side WebAssembly (**Essentia.js Wasm**) paired with **Apple iTunes 30s audio previews**. Features **3-tier multi-band consensus BPM** with **vocal-aware octave normalization** (`[1×]` fold badge), 24-tone Camelot Harmonic Wheel with Anchor mode, and Russell's 2D Circumplex (4 quadrants & 8 octants). | **18. Audimote 🐣** |
 
 ### 🖼️ Layer 3: Experience Jobs (Living with Art on the Wall)
 | Real-World Role / Curation Challenge | How Playlist Haven Solves It | Core Engine |
@@ -113,7 +114,7 @@ Instead of getting lost in technical jargon, here is how Playlist Haven solves r
 | **The Offline Collector:**<br/>*"I have curated playlists on streaming, but I want to play them 100% offline from physical files on my local hard drive."* | Fuzzy-matches online streaming tracklists against physical local audio folders (`.mp3`/`.flac`) using Jaro-Winkler bigram similarity to produce 100% playable local `.m3u` playlists for Musicolet and offline audiophile players. | **8. Offline Matcher / Reconciler** |
 
 <details>
-<summary><b>🛠️ Click to expand the 16-Module Functional Directory by Lifecycle Layer</b></summary>
+<summary><b>🛠️ Click to expand the 18-Module Functional Directory by Lifecycle Layer</b></summary>
 
 <br/>
 
@@ -123,12 +124,14 @@ Instead of getting lost in technical jargon, here is how Playlist Haven solves r
 * **Playlist Manipulator (Quad View)** (`PlaylistManipulatorView.tsx`): 1/2/4-pane multi-list organizer with fuzzy Jaro-Winkler cross-pruning.
 * **Smart Renamer & Tag Editor** (`SmartRenamerView.tsx`): Batch metadata sanitizer with regex find/replace and musical acronym preservation.
 * **Playlist Randomizer** (`PlaylistRandomizerView.tsx`): Cryptographic shuffle enforcing artist separation spacing.
+* **Consensus Aggregator** (`ConsensusAggregatorView.tsx`): Multi-source crowdsourced 'Best Of' cross-tabulation with Jaro-Winkler consensus thresholding and audio previews.
 
 #### Layer 2: Ingestion & Cultural Bridge Modules
 * **Discovery Triage & Honing** (`DiscoveryTriageView.tsx`): High-agency intake hub for singles, resonance artists, and validated albums with instant in-app audio decision previews.
 * **Language & Cultural Clustering** (`LanguageClusteringView.tsx`): 5-tier waterfall engine partitioning libraries into 20 canonical cultural buckets.
 * **Playlist Resequencer & Chronology Restorer** (`PlaylistResequencerView.tsx`): Repairs scrambled track order from cross-platform conversions.
 * **Deep Metadata Enrichment** (`DeepMetadataEnrichmentView.tsx`): Dual-source MusicBrainz + Apple iTunes knowledge graph integration with Work songwriting traversal, smart cover art sanitation, and in-app 30s audio preview downloads.
+* **Audimote 🐣** (`AudimoteView.tsx`): Client-side acoustic and emotional intelligence triage engine. 3-tier consensus BPM with vocal fold protection, 24-tone Camelot wheel, 2D circumplex (4Q & 8 octants), and zero-tab iTunes audio previews.
 
 #### Layer 3: Experience, Rotation & Archival Modules
 * **Sonic Sieve Engine** (`SonicSieveView.tsx`): Weekly listening rotation generator with play-count sieving, skeleton anchors, and penalty lists.
@@ -138,8 +141,6 @@ Instead of getting lost in technical jargon, here is how Playlist Haven solves r
 * **Playlist Merger & Grouping** (`PlaylistMergerView.tsx`): Temporal consolidation into weekly, monthly, and yearly chronological archives.
 * **Playlist Splitter** (`PlaylistSplitterView.tsx`): Decomposes monolithic 2,000+ track playlists into sequential numbered chapters.
 * **Playlist Matcher / Reconciler** (`PlaylistMatcherView.tsx`): Bridges streaming tracklists to local physical `.mp3`/`.flac` hard drive storage.
-
-> *Future Roadmap*: Ongoing development includes decoupling the **Consensus Aggregator** (crowdsourced 'Best Of' cross-tabulation) into a dedicated standalone module, and packaging basic list transformations into a standalone manipulation suite.
 
 *For complete technical architecture, API schemas, and mathematical specifications, see the [Comprehensive System Brief](docs/PLAYLIST_HAVEN_SYSTEM_BRIEF.md).*
 
@@ -236,8 +237,11 @@ Playlist Haven supports local-first vision and language models out of the box!
 ## 📚 Deep Technical Documentation
 
 For deeper architecture diagrams, database schemas, and mathematical specifications:
-* ⚡ **[High-Density Executive Summary](playlist_haven_high_density_summary.md)**: Architectural briefing, 16-module matrix, failover ceilings, and benchmark guarantees.
-* 📘 **[Comprehensive System Brief](docs/PLAYLIST_HAVEN_SYSTEM_BRIEF.md)**: Master engineering manual detailing all 16 modules, IndexedDB object stores, MusicBrainz Work entity traversal, and defensive null-safety standards.
+* ⚡ **[High-Density Executive Summary](playlist_haven_high_density_summary.md)**: Architectural briefing, 18-module matrix, failover ceilings, and benchmark guarantees.
+* 📘 **[Comprehensive System Brief](docs/PLAYLIST_HAVEN_SYSTEM_BRIEF.md)**: Master engineering manual detailing all 18 modules, IndexedDB object stores, MusicBrainz Work entity traversal, and defensive null-safety standards.
+* 🐣 **[Audimote User Guide](docs/AUDIMOTE_USER_GUIDE.md)**: Operator manual for Module 18 acoustic triage, 3-tier consensus BPM, 24-tone Camelot wheel, and circumplex models.
+* 🔬 **[Audimote Algorithms Audit](docs/AUDIMOTE_ALGORITHMS_AUDIT.md)**: Exhaustive DSP audit, mathematical equations, vocal fold arbitration trees, and test suite matrix.
+* 🧭 **[Audimote Affective Circumplex Spec](docs/AUDIMOTE_AFFECTIVE_CIRCUMPLEX_SPEC.md)**: Mathematical specification for 4-quadrant macro planes, 8 mood octants, and 9-cell Cartesian boundaries.
 
 ---
 

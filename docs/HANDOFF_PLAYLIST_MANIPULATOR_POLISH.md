@@ -83,6 +83,30 @@ Currently, `playCountFilterPlaylistId` opens a modal. Move all filters directly 
 
 ---
 
+### 2.4 In-App Audio Previews in Multi-Pane Grids
+- **The Listening Gap**: Curators comparing two versions of a playlist or deciding which duplicate to purge during $A - B$ subtraction frequently need to hear the actual audio without opening YouTube in an external browser tab.
+- **Implementation**:
+  - In each track row across Panes 1, 2, 3, and 4, embed `<AudioPreviewButton size="xs" track={track} />` from `components/AudioPreviewButton.tsx`.
+  - The button resolves a 30s `.m4a` preview on the fly via Apple iTunes and streams it inside the root `<AudioPlayerBar />` floating dock.
+  - Requires zero extra audio handling or HTML audio element plumbing.
+
+---
+
+### 2.5 Song Deep Metadata Inspector Modal
+- Wire `components/SongMetadataInspectorModal.tsx` on row double-click or via a small inspection icon:
+  - Displays high-resolution cover art, release details, MusicBrainz / iTunes tags, and songwriting credits.
+
+---
+
+### 2.6 Downstream Curation Handoff Bridges
+Allow curators to route any active pane or combined playlist directly into other core modules:
+- **`🧭 Route to Discovery Triage (Module 14)`**: Ingests the pane's tracks as a new intake cohort for Singles vs Magnet Artists vs Albums triage.
+- **`🌐 Route to Language Clustering (Module 13)`**: Ingests tracks for cultural cohort partitioning.
+- **`🧬 Enrich with MusicBrainz / iTunes (Module 15)`**: Passes the tracks directly into the enrichment queue.
+- **`🎛️ Feed into Sonic Sieve (Module 1)`**: Uses the manipulated playlist as the reference skeleton anchor.
+
+---
+
 ## 3. 🔍 Codebase Mappings in `views/PlaylistManipulatorView.tsx`
 
 | Existing Symbol | Line Area | How to Use / Refactor |
@@ -114,10 +138,15 @@ Currently, `playCountFilterPlaylistId` opens a modal. Move all filters directly 
 1. **Defensive Null-Safety**:
    - Always guard track arrays: `playlist?.tracks ?? []`.
    - Protect IDs and lookups: `playlists.find(p => p.id === id) || null`.
-2. **Immutable State Updates**:
+2. **Audio Element Hygiene**:
+   - Do NOT mount separate `<audio>` tags.
+   - Use `<AudioPreviewButton size="xs" track={track} />` and rely on root `AudioPreviewProvider`.
+3. **Immutable State Updates**:
    - Use the existing `updatePlaylist(playlistId, updater)` helper to avoid direct state mutation.
-3. **UTF-8 BOM Preservation**:
+4. **UTF-8 BOM Preservation**:
    - When exporting CSVs, ensure `\uFEFF` is preserved so CJK/accented characters render correctly in Excel.
+5. **Git Safety Protocol**:
+   - Under NO circumstances should automated subagents run any `git` commands (`git ...`) unless explicitly instructed by the user.
 
 ---
 
@@ -129,3 +158,5 @@ When complete, verify:
 3. **Merge**: Click `🔄 Merge (A + B)` $\rightarrow$ verify a combined playlist appears with deduplication option.
 4. **Inline Filters**: Change play count or artist filter on Pane 1 $\rightarrow$ Pane 1 updates instantly without modal popups.
 5. **Multi-Pane**: Switch between 1, 2, and 4 panes $\rightarrow$ layout adapts responsively without broken heights or horizontal overflow.
+6. **Audio Previews**: Click `<AudioPreviewButton />` on any row in Pane 1 or 2 $\rightarrow$ 30s `.m4a` preview plays cleanly in the floating dock without opening new tabs.
+7. **Downstream Routing**: Verify 1-click bridge buttons successfully package tracks and navigate to Discovery Triage or Language Clustering.

@@ -51,7 +51,7 @@ export const setAIConfig = (config: Partial<AIConfig>) => {
 
 // Initialize Gemini Client Lazily to prevent crash on startup if API key is missing
 let aiInstance: GoogleGenAI | null = null;
-const getAIClient = (): GoogleGenAI => {
+export const getAIClient = (): GoogleGenAI => {
   if (!aiInstance) {
     let apiKey = currentAIConfig.apiKey || "";
     if (!apiKey) {
@@ -74,7 +74,7 @@ const getAIClient = (): GoogleGenAI => {
   return aiInstance;
 };
 
-const callOpenAICompatible = async (
+export const callOpenAICompatible = async (
   prompt: string,
   base64Image?: { data: string; mimeType: string }
 ): Promise<string> => {
@@ -163,7 +163,7 @@ export interface EnrichedSong {
 }
 
 // Helper: Smart Retry with Exponential Backoff
-const smartRetry = async <T>(
+export const smartRetry = async <T>(
   operation: () => Promise<T>,
   maxRetries: number = 5,
   baseDelay: number = 1000

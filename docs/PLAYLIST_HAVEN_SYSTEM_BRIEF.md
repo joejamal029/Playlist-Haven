@@ -119,14 +119,15 @@ Musicolet is the gold standard for offline Android music management. Playlist Ha
 
 ---
 
-## 3. 🎛️ Complete 16-Module Functional Specifications
+## 3. 🎛️ Complete 16-Module Functional Specifications (With Module 17 Roadmap)
 
 ```mermaid
 graph TD
     subgraph Layer 1: Discovery & Acquisition
+        M17["17. Consensus Aggregator (Roadmap)"]
         M11["11. Vision-to-Playlist AI"]
         M12["12. Scrape Stripper & Formatter"]
-        M4["4. Playlist Manipulator Quad-View"]
+        M4["4. Playlist Manipulator Quad-View (Core Polish)"]
         M9["9. Smart Renamer & Tag Editor"]
         M10["10. Playlist Randomizer"]
     end
@@ -177,14 +178,19 @@ graph TD
   * Interactive distribution charts and instant sub-playlist generation.
 
 ### Module 4: 🪟 Playlist Manipulator — Quad Multi-Pane (`PlaylistManipulatorView.tsx`)
-* **Purpose**: Desktop-grade multi-list workspace and cross-playlist deduplicator.
+* **Purpose**: Desktop-grade multi-list workspace, cross-playlist deduplicator, and anti-repeat discovery engine.
 * **Architecture & Features**:
-  * Supports **Single, Dual, and 4-Pane Quad Views** side-by-side.
-  * Drag-and-drop track reordering between panes.
-  * **Fuzzy Cross-Pruner**: Detects cross-playlist duplicates using Jaro-Winkler bigram similarity.
-  * Mathematical Set Operations: Union ($A \cup B$), Intersection ($A \cap B$), and Difference ($A - B$).
-  * **Format Agility & Deep Filtering**: Seamless bidirectional conversion between `.m3u` and `.csv` formats, plus deep multi-condition filtering (by artist, album, title).
-  * *Roadmap*: Slated for evolution into a standalone basic manipulation suite aggregating core playlist utilities.
+  * Supports **Single, Dual, and 4-Pane Quad Views** side-by-side with responsive grid scaling.
+  * **Mathematical Set Operations**: Union ($A \cup B$), Intersection ($A \cap B$), and Difference ($A - B$).
+  * **Fuzzy Cross-Pruner**: Detects cross-playlist duplicates using Jaro-Winkler bigram similarity ($\ge 0.85$).
+  * **Format Agility & Deep Filtering**: Bidirectional `.m3u` $\leftrightarrow$ `.csv` conversion with multi-condition filtering.
+  * **Core Suite Elevation [Roadmap]**:
+    * **Quick-Action Operations Toolbar**: 1-click top-level buttons for `🔄 Merge (A + B)`, `⚡ Subtract Known (A - B)` (Anti-Repeat Discovery Superpower), `🤝 Find Overlaps (A ∩ B)`, and `🧹 Quick Cross-Prune`.
+    * **Inline Sticky Filters**: Eliminates filter modals in favor of header pills per pane (Search, Artist, Album, and Play Count $\ge 2 / 5 / 10$).
+    * **Native `Shift + Click` Range Selection**: Fluid multi-row selection replacing modal range selectors.
+    * **Integrated In-App Audio Previews**: Embedded `<AudioPreviewButton size="xs" />` in every track row across all 4 panes.
+    * **Downstream Curation Handoffs**: 1-click routing into Module 14 (Discovery Triage), Module 13 (Language Clustering), Module 15 (Metadata Enrichment), and Module 1 (Sonic Sieve).
+    * *Detailed Specification*: See [`docs/HANDOFF_PLAYLIST_MANIPULATOR_POLISH.md`](file:///c:/Users/USER/Desktop/APPS/Playlist%20Haven/Playlist-Haven/docs/HANDOFF_PLAYLIST_MANIPULATOR_POLISH.md).
 
 ### Module 5: 📈 Track Appearance Frequency Counter (`PlaylistAppearanceView.tsx`)
 * **Purpose**: Multi-year longitudinal listening audit.
@@ -304,6 +310,45 @@ graph TD
   * **Drag-and-Drop Resequencing**: Fluid row repositioning with live placement indicators (above/below) and boundary auto-scrolling.
   * **Source Provenance Export**: Resequenced Spotify CSV (UTF-8 BOM) with embedded `Source: YouTube Music` or `Provenance` header for seamless downstream ingestion into Module 14 and Module 13.
 
+### Module 17: 🏆 Consensus Aggregator & 'Best-Of' Discography Synthesizer (`ConsensusAggregatorView.tsx`) [Roadmap / Next Up]
+* **Purpose**: Decoupled crate-digging engine that cross-tabulates 4 to 8 independent 'Best Of' tracklists, concert setlists, and fan threads to extract universal consensus masterpieces across deep artist discographies.
+* **Architecture & Features**:
+  * **Multi-Format Ingestion**: Ingests `.csv` (TuneMyMusic/Spotify), `.m3u` playlists, raw text dumps (`Artist - Title`), forum pasteboards, and image screenshots via Gemini Vision OCR (`services/visionEngine.ts`).
+  * **Shared Normalization & Fuzzy Cross-Tabulation**: Reuses `services/playlistSanitizer.ts` for clean bracket/metadata stripping and applies Jaro-Winkler bigram similarity ($\ge 0.85$) to aggregate duplicate candidate titles across sources.
+  * **Interactive Consensus Control Bar**: Real-time threshold slider ($1..N$ sources) and quick filters (*All Candidates $\ge 1$*, *Emerging Consensus $\ge 2$*, *Strong Consensus $\ge 50\%$*, *Unanimous Masterpieces $100\%$*).
+  * **Integrated In-App Audio Previews**: Every consensus candidate row embeds `<AudioPreviewButton size="sm" />` to stream 30-second `.m4a` audio previews from Apple iTunes without leaving the app.
+  * **Song Dossier Inspector Modal**: Incorporates `<SongMetadataInspectorModal />` for inspecting cover art, album details, and songwriting credits.
+  * **1-Click Downstream Curation Handoffs**: Direct pipeline bridges to package and route consensus hits into **Module 14 (Discovery Triage)**, **Module 13 (Language Clustering)**, or **Module 15 (Deep Metadata Enrichment)**.
+  * *Detailed Specification*: See [`docs/HANDOFF_MODULE_17_CONSENSUS_AGGREGATOR.md`](file:///c:/Users/USER/Desktop/APPS/Playlist%20Haven/Playlist-Haven/docs/HANDOFF_MODULE_17_CONSENSUS_AGGREGATOR.md).
+
+### Module 18: 🐣 Audimote (The Acoustic & Emotional Triage Engine) (`AudimoteView.tsx`)
+* **Purpose**: Client-side acoustic and emotional intelligence triage engine. Completely replaces expensive, rate-limited B2B APIs (e.g. Cyanite.ai) with a 100% zero-cost, zero-backend engine pairing the **Apple iTunes 30s audio preview superpower** with **Essentia.js WebAssembly (Wasm)**.
+* **Key Architecture & Features**:
+  * **Essentia.js Wasm Dual-Worker Pool (`workers/audimote.worker.ts`)**: Runs intensive FFT and musicological feature extraction off the main UI thread with zero-copy buffer transfers. Extracts:
+    * **Tempo / BPM (3-Tier Multi-Band Consensus)**: Fuses Tier A (`RhythmExtractor2013` multifeature onset), Tier B (`PercivalBpmEstimator` octave-scale filterbank), and Tier C (`LowPass` 180 Hz Butterworth + `PercivalBpmEstimator` bass pulse isolation).
+    * **Vocal-Aware Octave Normalization**: Evaluates dynamic priors (Loudness, Dynamic Complexity, Danceability) against the isolated sub-180 Hz kick/bass foundation to reject rapid vocal phrasing octave-doubling on ballads and pop tracks, surfacing a dynamic `[1×]` fold badge and diagnostic tooltips.
+    * **Key & Scale**: `KeyExtractor` mapped to the standard 24-tone Camelot Wheel system (`1A` to `12B`).
+    * **Perceived Energy**: Multi-factor composite fusing normalized integrated loudness, spectral centroid brightness, dynamic complexity sparsity penalty, and sub-bass boost compensation.
+    * **Danceability**: Detrended Fluctuation Analysis (DFA) normalized via smooth sigmoid ($0.0 - 1.0$).
+    * **Dynamic Complexity & Loudness**: Envelope variance and integrated loudness in LUFS/dB.
+    * **Spectral Centroid**: `SpectralCentroidTime` measuring timbral brightness (Hz).
+    * **Valence & Arousal**: Russell's 2D Circumplex Model derived from harmonic mode, rhythmic danceability, spectral brightness, and tempo drive.
+  * **2D Valence-Arousal Mood Circumplex**: Interactive 2D scatterplot supporting real-time toggling between:
+    * *4 Quadrants (Macro Triage)*: Euphoric (Q1), Tense (Q2), Melancholic (Q3), Peaceful (Q4).
+    * *8 Mood Octants + Balanced Core (Micro Precision)*: Euphoric, Driving ⚡, Tense, Moody, Melancholic, Bittersweet 🌸, Peaceful, Sunny ☀️, and central Balanced ⚖️ core ($|V| \le 0.18, |A| \le 0.18$).
+    * Dot radius scales with Danceability; dots pulse with animated waves during active audio playback.
+  * **12-Segment Camelot Harmonic Wheel Visualizer**: Dual-ring circular dial (outer Major 'B', inner Minor 'A') displaying key density and allowing 1-click harmonic filtering ($\pm 1$ step, relative major/minor, +2 energy boost).
+  * **Harmonic Anchor Mode**: Select any track as an anchor to filter the triage table exclusively to harmonically compatible mixing partners.
+  * **Fail-Open iTunes Resolver & Self-Healing IndexedDB (v4)**: Database cache lookups are fail-open (local cache errors never block live Apple CDN searches). Automatic `VersionError` recovery ensures unbroken persistence in `PlaylistHavenMetadataDB`.
+  * **Multi-Source Ingestion & Instant Rehydration**: Drag-and-drop local audio files (`.mp3`, `.wav`, `.m4a`), import from library DB, paste raw song lists, or drop 14-column Dense Acoustic CSVs to instantly rehydrate profiles while bypassing Wasm.
+  * **Execution Controls**: High-throughput parallel batch analysis across dual workers, single-track "Re-analyze", and batch "Re-analyze All".
+  * **1-Click Triage Exporters**:
+    * *Harmonic DJ Sets (`.m3u`)*: Annotated with Camelot and BPM tags for Serato/Rekordbox/Musicolet.
+    * *Deep Study / Focus Playlists*: Auto-filtered to peaceful/focus quadrants.
+    * *Dense Acoustic CSV (14 columns)*: Complete acoustic profile spreadsheet with UTF-8 BOM.
+    * *Downstream Curation Bridge*: 1-click handoff directly into **Module 14 (Discovery Triage)**.
+  * *Detailed Specifications*: See [`docs/AUDIMOTE_USER_GUIDE.md`](file:///c:/Users/USER/Desktop/APPS/Playlist%20Haven/Playlist-Haven/docs/AUDIMOTE_USER_GUIDE.md), [`docs/AUDIMOTE_ALGORITHMS_AUDIT.md`](file:///c:/Users/USER/Desktop/APPS/Playlist%20Haven/Playlist-Haven/docs/AUDIMOTE_ALGORITHMS_AUDIT.md), and [`docs/AUDIMOTE_AFFECTIVE_CIRCUMPLEX_SPEC.md`](file:///c:/Users/USER/Desktop/APPS/Playlist%20Haven/Playlist-Haven/docs/AUDIMOTE_AFFECTIVE_CIRCUMPLEX_SPEC.md).
+
 ---
 
 ## 4. ⚙️ Technical Stack & System Architecture
@@ -321,7 +366,7 @@ graph TD
 
 ### 4.3 Dual Client Storage Architecture
 * **`localStorage`**: Fast UI settings, active filters, user API keys, and custom rule presets.
-* **`IndexedDB` (`PlaylistHavenMetadataDB` v1)**: High-capacity browser database stores (`enriched_tracks`, `cached_artists`, `cached_releases`) supporting hundreds of thousands of songs with nested schemas, Cover Art URLs, and 0ms preloaded offline JSON databases.
+* **`IndexedDB` (`PlaylistHavenMetadataDB` v4)**: High-capacity browser database stores (`enriched_tracks`, `cached_artists`, `cached_releases`) supporting hundreds of thousands of songs with nested schemas, Cover Art URLs, 0ms preloaded offline JSON databases, and automated version-recovery self-healing.
 
 ### 4.4 Data Standards & Compatibility
 * **Universal UTF-8 Byte Order Mark (`\uFEFF`)**: Injected into all CSV/TSV exports to guarantee Excel, Google Sheets, and Windows render CJK and accented characters without mojibake.

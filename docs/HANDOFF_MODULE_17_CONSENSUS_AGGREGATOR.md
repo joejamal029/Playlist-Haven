@@ -27,16 +27,25 @@ In reality, curators have lists in multiple formats:
 
 ---
 
-## 2. 🧱 Target Deliverables
+## 2. 🧱 Target Deliverables & Shared Subsystem Dependencies
 
 You will create and wire the following:
 
 | Target File | Role | Description |
 | :--- | :--- | :--- |
-| `services/consensusEngine.ts` | **New Service** | Pure business logic: string normalization, Jaro-Winkler bigram similarity, multi-source ingestion, recurrence cross-tabulation, and TuneMyMusic CSV generation. |
-| `views/ConsensusAggregatorView.tsx` | **New View** | First-class UI with multi-source file dropzones, text paste modal, source management cards, interactive consensus threshold slider, recurrence heatmaps, source breakdown popover, and exports. |
-| `App.tsx` | **Modification** | Register `'consensus'` in `AppView` type, add routing switch case, and add the card to the Dashboard under **Layer 1: Discovery / Crate Digging**. |
-| `components/HelpGuideModal.tsx` | **Modification** | Add Module 17 documentation to the universal help guide modal. |
+| `services/consensusEngine.ts` | **New Service** | Pure business logic: string normalization (reusing `services/playlistSanitizer.ts`), Jaro-Winkler bigram similarity, multi-source ingestion, recurrence cross-tabulation, and TuneMyMusic CSV generation. |
+| `views/ConsensusAggregatorView.tsx` | **New View** | First-class UI with multi-source file dropzones, text paste modal, source management cards, interactive consensus threshold slider, recurrence heatmaps, source breakdown popovers, in-app audio previews, and downstream exports. |
+| `App.tsx` | **Modification** | Register `'consensus'` in `AppView` type, add routing switch case, and add the card to the Dashboard under **Layer 1: Discovery & Acquisition**. |
+| `components/HelpGuideModal.tsx` | **Modification** | Add Module 17 documentation to the universal searchable help guide modal. |
+
+### 2.1 Reused Shared Subsystems (DO NOT REINVENT)
+1. **Universal In-App Audio Preview Subsystem**:
+   - `App.tsx` root already mounts `<AudioPreviewProvider>` and `<AudioPlayerBar />`.
+   - In each consensus track table row, render `<AudioPreviewButton size="sm" track={{ artist: track.artist, title: track.title }} />` from `components/AudioPreviewButton.tsx`. It will resolve and stream 30-second previews on the fly via Apple iTunes with zero extra audio plumbing.
+2. **Song Deep Metadata Inspector Modal**:
+   - Wire `components/SongMetadataInspectorModal.tsx` so users can inspect deep artwork, songwriting credits, and external links for any consensus track.
+3. **Centralized Sanitizers**:
+   - Import `cleanCompositeTrack` or `stripBracketsAndMetadata` from `services/playlistSanitizer.ts` and `services/songQuerySanitizer.ts` rather than writing redundant ad-hoc regexes.
 
 ---
 
@@ -122,6 +131,7 @@ Follow the Dark Audiophile design system (`#020617` Slate-950, `#0f172a / 60%` g
 5. **The Consensus Track Table**:
    - Columns:
      - Selection Checkbox.
+     - **Audio Preview**: `<AudioPreviewButton size="sm" track={{ artist: track.artist, title: track.title }} />` (stream 30s preview on the fly via Apple iTunes with zero tab opening).
      - Track # (1-based sequence).
      - Title & Artist (clean, bold).
      - Consensus Progress Bar: Visual percentage bar with color gradient:
@@ -131,11 +141,17 @@ Follow the Dark Audiophile design system (`#020617` Slate-950, `#0f172a / 60%` g
        - Single nomination: Slate (`bg-slate-700`)
      - Consensus Metric: e.g. `4/5 sources (80%)`.
      - Source Breakdown Popover/Drawer: Hover or click to see the exact source names that nominated this song.
-6. **Action & Export Bar**:
+     - **Inspector**: Detail button triggering `<SongMetadataInspectorModal />` to view cover art, release details, and songwriting credits.
+6. **Action & Downstream Curation Bar**:
    - Selection count display: `X of Y tracks selected`.
-   - **TuneMyMusic CSV Export**: Direct download for immediate Spotify/Apple Music import.
-   - **M3U Playlist Export**: Playable playlist for local players.
-   - **Copy to Clipboard**: Instant TSV/CSV format for spreadsheets.
+   - **Exporters**:
+     - **TuneMyMusic CSV Export**: Direct download for immediate Spotify/Apple Music import.
+     - **M3U Playlist Export**: Playable playlist for local players.
+     - **Copy to Clipboard**: Instant TSV/CSV format for spreadsheets.
+   - **1-Click Downstream Curation Bridges**:
+     - `🧭 Stage to Discovery Triage (Module 14)`: Passes consensus tracks into Triage (`pending_triage_import` or state callback) so curators can immediately triage candidates into Singles vs Magnet Artists vs Albums.
+     - `🌐 Route to Language Clustering (Module 13)`: Ingests cohort into cultural buckets.
+     - `🧬 Batch Enrich (Module 15)`: Routes tracks to Deep Metadata Enrichment for MusicBrainz/iTunes metadata and high-res cover art.
 
 ---
 
@@ -152,7 +168,13 @@ Follow the Dark Audiophile design system (`#020617` Slate-950, `#0f172a / 60%` g
 3. Add to `renderView()` switch statement:
    ```typescript
    case 'consensus':
-     return <ConsensusAggregatorView onBack={() => setCurrentView('dashboard')} onOpenHelp={() => setIsHelpModalOpen(true)} />;
+     return (
+       <ConsensusAggregatorView 
+         onBack={() => setCurrentView('dashboard')} 
+         onOpenHelp={() => setIsHelpModalOpen(true)} 
+         onViewSelect={setCurrentView}
+       />
+     );
    ```
 4. Add Dashboard card in `Dashboard` component under **Layer 1: Discovery & Acquisition**:
    - Title: **Consensus Aggregator**
@@ -168,12 +190,17 @@ Follow the Dark Audiophile design system (`#020617` Slate-950, `#0f172a / 60%` g
 1. **Defensive Null-Safety**:
    - Use safe optional chaining: `song?.title ?? ''`, `sources?.size ?? 0`.
    - Protect division against zero: `totalSources > 0 ? Math.round((k / totalSources) * 100) : 0`.
-2. **Client-Side UTF-8 BOM**:
+2. **Audio Element Hygiene (Crucial)**:
+   - Do NOT create or mount new `<audio>` elements.
+   - Use `<AudioPreviewButton size="sm" track={{ artist, title }} />` and rely entirely on the root-mounted `AudioPreviewProvider` (`components/AudioPreviewContext.tsx`) and persistent dock (`components/AudioPlayerBar.tsx`).
+3. **Client-Side UTF-8 BOM**:
    - In CSV exports, always prefix content with `\uFEFF`:
      ```typescript
      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
      ```
-3. **No Breaking Changes**:
+4. **Git Safety Protocol**:
+   - Under NO circumstances should automated subagents run any `git` commands (`git ...`) unless explicitly requested by the user.
+5. **No Breaking Changes**:
    - Preserve existing functionality in `VisionToPlaylistView.tsx`.
    - Ensure existing tests and views remain completely unaffected.
 
@@ -187,5 +214,8 @@ When implementation is complete, verify the following:
    - Clicking the new **Consensus Aggregator** dashboard card navigates to the view cleanly.
    - Dropping 3 different sample CSVs or text files creates 3 active sources.
    - Moving the consensus slider from 1 to 3 immediately filters out single-source tracks.
+   - Clicking the `<AudioPreviewButton />` on any consensus track row plays the 30s `.m4a` preview in the floating player dock with zero external redirects.
+   - Clicking the Inspector button opens `<SongMetadataInspectorModal />`.
    - The TuneMyMusic CSV downloads cleanly and contains the UTF-8 BOM.
+   - 1-Click handoff buttons (e.g. `Stage to Discovery Triage`) package the cohort and navigate to Module 14.
    - The Back button returns to the main Dashboard.

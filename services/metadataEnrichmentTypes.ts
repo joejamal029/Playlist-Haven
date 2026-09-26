@@ -1,4 +1,5 @@
 import { CanonicalBucket } from './classificationEngine';
+import { AcousticProfile } from './acousticTypes';
 
 export type EnrichmentStatus = 
   | 'pending'
@@ -126,6 +127,7 @@ export interface EnrichedSongRecord {
   tags: { name: string; count: number }[];
   culturalBucket: CanonicalBucket;
   resolution: EnrichmentResolution;
+  acousticProfile?: AcousticProfile;
   rawMusicBrainzData?: any;
   createdAt: number;
   updatedAt: number;
@@ -214,5 +216,12 @@ export const ENRICHED_CSV_COLUMNS = [
   { key: 'STATUS_BADGE', label: 'Status Badge', get: (r: EnrichedSongRecord) => r.resolution?.badgeLabel || '' },
   { key: 'IS_AI_SYNTHESIZED', label: 'Is AI Synthesized (Fallback)', get: (r: EnrichedSongRecord) => r.resolution?.isAiSynthesized ? 'TRUE' : 'FALSE' },
   { key: 'MATCH_SCORE', label: 'Match Score (%)', get: (r: EnrichedSongRecord) => r.resolution?.matchScore ?? '' },
+  { key: 'BPM', label: 'BPM', get: (r: EnrichedSongRecord) => r.acousticProfile?.bpm ? Math.round(r.acousticProfile.bpm).toString() : '' },
+  { key: 'KEY', label: 'Key', get: (r: EnrichedSongRecord) => r.acousticProfile?.key ? `${r.acousticProfile.key} ${r.acousticProfile.scale}` : '' },
+  { key: 'CAMELOT', label: 'Camelot Code', get: (r: EnrichedSongRecord) => r.acousticProfile?.camelotCode || '' },
+  { key: 'ENERGY', label: 'Energy (0-1)', get: (r: EnrichedSongRecord) => r.acousticProfile?.energy != null ? r.acousticProfile.energy.toFixed(2) : '' },
+  { key: 'DANCEABILITY', label: 'Danceability (0-1)', get: (r: EnrichedSongRecord) => r.acousticProfile?.danceability != null ? r.acousticProfile.danceability.toFixed(2) : '' },
+  { key: 'VALENCE', label: 'Valence (-1 to +1)', get: (r: EnrichedSongRecord) => r.acousticProfile?.valence != null ? r.acousticProfile.valence.toFixed(2) : '' },
+  { key: 'AROUSAL', label: 'Arousal (-1 to +1)', get: (r: EnrichedSongRecord) => r.acousticProfile?.arousal != null ? r.acousticProfile.arousal.toFixed(2) : '' },
   { key: 'LOCAL_FILE_PATH', label: 'Original File Path', get: (r: EnrichedSongRecord) => r.queryPath || '' },
 ];

@@ -478,6 +478,29 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
         </div>
       )
     },
+    {
+      id: 'workflow-consensus-masterpieces',
+      category: 'workflows',
+      title: "Workflow 8: Synthesize Universal 'Best-Of' Consensus Across Multiple Sources",
+      badge: 'Module #17 Consensus',
+      badgeColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+      summary: 'Cross-tabulate fan rankings, setlists, and recommendations to extract universal consensus masterpieces across deep discographies.',
+      tags: ['consensus', 'aggregator', 'best of', 'crate digging', 'setlists', 'module 17', 'radiohead'],
+      content: (
+        <div className="space-y-2 text-xs text-slate-300 text-[11px]">
+          <p>
+            When crate-digging into deep artist discographies, streaming popular rows are heavily distorted by recency or virality. Module 17 cross-tabulates 4 to 8 independent sources:
+          </p>
+          <ol className="space-y-1.5 list-decimal list-inside">
+            <li>Open <strong>Consensus Aggregator</strong> (Module 17).</li>
+            <li>Drop multiple files (.csv, .m3u, .txt) or paste forum tracklists. You can also click <em>Load Sample Crate</em> to test with Radiohead sources immediately.</li>
+            <li>Adjust the <strong>Consensus Threshold Slider</strong> (e.g. &ge; 50% or &ge; 3 of 4 sources) to filter out single-source bias.</li>
+            <li>Listen to 30-second iTunes in-app audio previews directly in the table with zero tab switching.</li>
+            <li>Click <strong>TuneMyMusic CSV</strong> for immediate streaming import, or click <strong>Stage to Triage (M14)</strong> to funnel consensus masterpieces into Discovery Triage!</li>
+          </ol>
+        </div>
+      )
+    },
 
     // --- TOOL-BY-TOOL GUIDE ---
     {
@@ -689,6 +712,74 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
           <p className="text-[11px] text-slate-400">
             <strong>Dense Multi-Format Exports:</strong> Export a 38-column UTF-8 BOM CSV (with composers, lyricists, ISWC, original year, begin-area, catalog numbers, barcodes, and native script aliases), a Master JSON backup, or tagged M3U8 playlists.
           </p>
+        </div>
+      )
+    },
+    {
+      id: 'tool-consensus-aggregator',
+      category: 'tools',
+      title: '📊 Module 17: Consensus Aggregator (True Best-Of Synthesis)',
+      badge: 'Crate-Digging Workbench',
+      badgeColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+      summary: 'Cross-tabulates multiple fan playlists, setlists, and recommendations to isolate undisputed consensus masterpieces with fuzzy bigram matching.',
+      tags: ['consensus', 'aggregator', 'module 17', 'best-of', 'discography', 'crate digging', 'fuzzy matching', 'audio preview'],
+      content: (
+        <div className="space-y-3 text-xs text-slate-300">
+          <p>
+            Individual playlists suffer from individual bias; streaming popular rows suffer from algorithmic recency churn. <strong>Module 17</strong> aggregates 4 to 8 independent curation sources to isolate undisputed consensus masterpieces:
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <span className="font-bold text-cyan-300">🎚️ Dynamic Consensus Slider</span>
+              <p className="text-slate-400">Set threshold from 1 to N sources. Instant real-time recalculation of candidate vs consensus tracks.</p>
+            </div>
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <span className="font-bold text-emerald-300">🎵 Zero-Tab Audio Previews</span>
+              <p className="text-slate-400">Integrated with root AudioPlayerBar. Stream 30s iTunes previews on the fly while crate-digging.</p>
+            </div>
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <span className="font-bold text-violet-300">🔍 Universal Fuzzy Bigram Matcher</span>
+              <p className="text-slate-400">Reconciles discrepancies in punctuation, subtitle noise, remasters, and feat. artists automatically.</p>
+            </div>
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <span className="font-bold text-amber-300">🧭 1-Click Curation Bridges</span>
+              <p className="text-slate-400">Stage directly to Discovery Triage (M14), Language Clustering (M13), or Deep Metadata Enrichment (M15).</p>
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'tool-audimote',
+      category: 'tools',
+      title: '🐣 Module 18: Audimote (Acoustic & Emotional Intelligence)',
+      badge: 'Essentia.js Wasm ⚡',
+      badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+      summary: 'Client-side acoustic and emotional intelligence triage engine. Pairs Apple iTunes 30s previews with Essentia.js Wasm for zero-cost BPM, Camelot keys, Energy, Danceability, and 2D Affective Circumplex triage.',
+      tags: ['audimote', 'module 18', 'essentia', 'wasm', 'bpm', 'camelot', 'key', 'energy', 'danceability', 'circumplex', 'valence', 'arousal', 'octants', 'vocal fold', 'harmonic wheel', 'audio preview', 'dj'],
+      content: (
+        <div className="space-y-3 text-xs text-slate-300">
+          <p>
+            <strong>Audimote 🐣</strong> delivers browser-based digital signal processing powered by compiled C++ WebAssembly (<code>essentia.js</code>) and Apple iTunes 30-second AAC audio streams. Zero server fees, zero API rate limits, and 100% client-side privacy:
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <span className="font-bold text-emerald-300">🥁 3-Tier Multi-Band Consensus BPM</span>
+              <p className="text-slate-400">Combines full-spectrum onsets, energy filterbanks, and sub-180 Hz low-pass bass pulse tracking. Vocal-aware octave normalization rejects rapid vocal chatter doubling on ballads with a dynamic <code className="text-cyan-400">[1×]</code> fold badge.</p>
+            </div>
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <span className="font-bold text-cyan-300">🎡 24-Tone Camelot Harmonic Wheel</span>
+              <p className="text-slate-400">Maps HPCP chroma to the Circle of Fifths (1A-12B). Pin any song as an <strong>Anchor Track</strong> to filter the entire library down to seamless harmonic mixing partners (exact key, relative major/minor, ±1 fifth, +2 energy boosts).</p>
+            </div>
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <span className="font-bold text-violet-300">🧭 2D Affective Circumplex (4Q & 8-Octants)</span>
+              <p className="text-slate-400">Plots tracks on Russell's Valence-Arousal plane. Toggle between macro 4-quadrants (Euphoric, Tense, Melancholic, Peaceful) and nuanced 8-octants (Driving ⚡, Moody, Bittersweet 🌸, Sunny ☀️, and central Balanced ⚖️ core).</p>
+            </div>
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <span className="font-bold text-amber-300">📤 Universal Exporters & Downstream Bridges</span>
+              <p className="text-slate-400">Export Harmonic DJ M3Us (annotated with Camelot & BPM tags), Focus M3Us, Downloader TXTs, 14-column Acoustic CSVs, or stage directly into <strong>Module 14 (Discovery Triage)</strong> with 1 click.</p>
+            </div>
+          </div>
         </div>
       )
     },

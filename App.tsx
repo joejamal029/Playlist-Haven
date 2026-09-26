@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layers, Merge, Music, Settings, Github, Activity, Scissors, Shuffle, Eraser, Type, BarChart3, Eye, Filter, SlidersHorizontal, Wand2, HelpCircle, Sparkles, BookOpen, GitCompare, Globe, Compass, Database, ArrowUpDown } from 'lucide-react';
+import { Layers, Merge, Music, Settings, Github, Activity, Scissors, Shuffle, Eraser, Type, BarChart3, Eye, Filter, SlidersHorizontal, Wand2, HelpCircle, Sparkles, BookOpen, GitCompare, Globe, Compass, Database, ArrowUpDown, Headphones } from 'lucide-react';
 import SonicSieveView from './views/SonicSieveView';
 import PlaylistMergerView from './views/PlaylistMergerView';
 import PlaylistSplitterView from './views/PlaylistSplitterView';
@@ -16,12 +16,14 @@ import LanguageClusteringView from './views/LanguageClusteringView';
 import DiscoveryTriageView from './views/DiscoveryTriageView';
 import DeepMetadataEnrichmentView from './views/DeepMetadataEnrichmentView';
 import PlaylistResequencerView from './views/PlaylistResequencerView';
+import ConsensusAggregatorView from './views/ConsensusAggregatorView';
+import AudimoteView from './views/AudimoteView';
 import HelpGuideModal from './components/HelpGuideModal';
 import ErrorBoundary from './components/ErrorBoundary';
 import { AudioPreviewProvider } from './components/AudioPreviewContext';
 import AudioPlayerBar from './components/AudioPlayerBar';
 
-type AppView = 'dashboard' | 'sieve' | 'merger' | 'splitter' | 'randomizer' | 'pruner' | 'renamer' | 'appearance' | 'vision' | 'tier' | 'manipulator' | 'matcher' | 'stripper' | 'clustering' | 'triage' | 'enrichment' | 'resequencer';
+type AppView = 'dashboard' | 'sieve' | 'merger' | 'splitter' | 'randomizer' | 'pruner' | 'renamer' | 'appearance' | 'vision' | 'tier' | 'manipulator' | 'matcher' | 'stripper' | 'clustering' | 'triage' | 'enrichment' | 'resequencer' | 'consensus' | 'audimote';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<AppView>('dashboard');
@@ -78,6 +80,22 @@ export default function App() {
         return <DeepMetadataEnrichmentView onBack={() => setCurrentView('dashboard')} />;
       case 'resequencer':
         return <PlaylistResequencerView onBack={() => setCurrentView('dashboard')} onOpenHelp={() => setIsHelpModalOpen(true)} />;
+      case 'consensus':
+        return (
+          <ConsensusAggregatorView 
+            onBack={() => setCurrentView('dashboard')} 
+            onOpenHelp={() => setIsHelpModalOpen(true)} 
+            onViewSelect={setCurrentView} 
+          />
+        );
+      case 'audimote':
+        return (
+          <AudimoteView 
+            onBack={() => setCurrentView('dashboard')} 
+            onOpenHelp={() => setIsHelpModalOpen(true)} 
+            onViewSelect={setCurrentView}
+          />
+        );
       default:
         return <Dashboard onViewSelect={setCurrentView} onOpenHelp={() => setIsHelpModalOpen(true)} />;
     }
@@ -236,6 +254,60 @@ const Dashboard = ({
               </div>
               <p className="text-xs text-slate-400 leading-relaxed font-medium">
                 Repair playlist chronology disrupted by cross-platform conversion (YouTube ➔ Spotify). Reorder appended corrections back to their original discovery positions, omit failed conversions, and tag with YouTube provenance for downstream Module 14 Triage & downloaders.
+              </p>
+            </div>
+          </button>
+          
+          {/* Consensus Aggregator Card - Featured (Module 17) */}
+          <button 
+            onClick={() => onViewSelect('consensus')}
+            className="group relative overflow-hidden p-6 bg-slate-900 border border-cyan-500/30 rounded-2xl text-left transition-all hover:border-cyan-500/60 hover:shadow-2xl hover:shadow-cyan-900/20 active:scale-[0.98] col-span-2"
+          >
+            <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+              <BarChart3 size={80} className="text-cyan-400" />
+            </div>
+            <div className="relative z-10">
+              <div className="w-10 h-10 bg-cyan-500/20 text-cyan-400 rounded-xl flex items-center justify-center mb-4 group-hover:bg-cyan-500 group-hover:text-slate-950 transition-colors">
+                <BarChart3 size={20} />
+              </div>
+              <div className="flex items-center space-x-2">
+                <h2 className="text-xl font-bold text-slate-100 mb-1">Consensus Aggregator</h2>
+                <span className="text-[9px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono">
+                  Module 17
+                </span>
+                <span className="text-[9px] bg-slate-800 text-slate-400 border border-slate-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono hidden sm:inline">
+                  True 'Best-Of'
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed font-medium">
+                Cross-tabulate multiple fan playlists, setlists, and recommendations to extract universal consensus masterpieces across deep discographies. Features fuzzy bigram matching, interactive consensus thresholding, and 30s in-app audio previews.
+              </p>
+            </div>
+          </button>
+          
+          {/* Audimote Card - Featured (Module 18) */}
+          <button 
+            onClick={() => onViewSelect('audimote')}
+            className="group relative overflow-hidden p-6 bg-slate-900 border border-emerald-500/30 rounded-2xl text-left transition-all hover:border-emerald-500/60 hover:shadow-2xl hover:shadow-emerald-900/20 active:scale-[0.98] col-span-2"
+          >
+            <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Headphones size={80} className="text-emerald-400" />
+            </div>
+            <div className="relative z-10">
+              <div className="w-10 h-10 bg-emerald-500/20 text-emerald-400 rounded-xl flex items-center justify-center mb-4 group-hover:bg-emerald-500 group-hover:text-slate-950 transition-colors">
+                <Headphones size={20} />
+              </div>
+              <div className="flex items-center space-x-2">
+                <h2 className="text-xl font-bold text-slate-100 mb-1">Audimote 🐣</h2>
+                <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono">
+                  Module 18
+                </span>
+                <span className="text-[9px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono hidden sm:inline">
+                  Essentia.js Wasm ⚡
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed font-medium">
+                Client-side acoustic & emotional intelligence triage engine. Pairs Apple iTunes 30s audio previews with Essentia.js Wasm for zero-cost BPM, Musical Key & Camelot (1A-12B), Energy, Danceability, and 2D Valence-Arousal mood circumplex triage. Direct IndexedDB hydration with 1-click harmonic DJ sets.
               </p>
             </div>
           </button>

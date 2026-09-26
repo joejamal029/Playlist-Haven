@@ -50,10 +50,12 @@ $$\text{Layer 1: Discovery (Pure Exploration)} \xrightarrow{\text{Intake Cohorts
 | **14**| **Discovery Triage & Honing** | **L2: Ingestion** | Triage | Tri-Philosophy (Singles / Artists / Albums) + In-App Audio Decision Hub | Immersion Basket (TXT, CSV, M3U) |
 | **15**| **Deep Metadata Enrichment** | **L2: Ingestion** | Musicology | MusicBrainz WS v2 + Apple iTunes zero-key fallback + CAA 404 sanitation + 30s Audio Preview | 38-Column Master CSV + IndexedDB store |
 | **16**| **Playlist Resequencer** | **L2: Ingestion** | Repair | 2-Tier matching (Clean baseline + 10-category AI) + Chronology restorer | Restored Spotify CSV with Provenance |
+| **17**| **Consensus Aggregator** | **L1: Discovery** | Crate-Digging | Multi-source 'Best Of' cross-tabulation + Jaro-Winkler consensus thresholding + Audio Previews | Consensus Masterpiece CSV / M3U |
+| **18**| **Audimote 🐣** | **L2: Triage** | Intelligence | Essentia.js Wasm + 3-Tier Multi-Band Consensus BPM + Camelot Wheel + 2D Mood Circumplex | Harmonic DJ M3U / Focus M3U / Dense Acoustic CSV |
 
 ---
 
-## 3. 🚀 The 5 Flagship Intelligence Engines
+## 3. 🚀 The 6 Flagship Intelligence Engines
 
 ### 1. 🎛️ Sonic Sieve Logic Engine (Module 1)
 * Solves the play-count tie dilemma: when dozens of tracks share the exact same play count, standard sorting destroys positional memory.
@@ -92,6 +94,13 @@ $$\text{Layer 1: Discovery (Pure Exploration)} \xrightarrow{\text{Intake Cohorts
   * **Side-by-Side Dual Pane**: Reference Pane (YouTube order) vs. Target Pane (Restored order with green shift badges `↑ +56`).
   * **Interaction Design**: Clean interface concealing jump inputs behind hover `#` popouts; 1-click in-row & batch track deletions; drag-and-drop reordering with placement indicators.
 
+### 6. 🐣 Audimote: Acoustic & Emotional Intelligence Engine (Module 18)
+* Client-side DSP and emotional triage pairing Apple iTunes 30s previews with Essentia.js Wasm:
+  * **3-Tier Multi-Band Consensus BPM**: Combines multifeature onsets (RhythmExtractor), octave-scale filterbanks (Percival), and surgical sub-180 Hz low-pass filtering (`LowPass` + `PercivalBass`). Evaluates dynamic priors to normalize rapid vocal phrasing doubling on ballads via an automated `[1×]` fold engine.
+  * **24-Tone Camelot Harmonic Wheel**: Dual-ring visualizer (1A–12B) with 1-click harmonic filtering and Harmonic Anchor Mode for seamless DJ transitions.
+  * **2D Affective Circumplex**: Visualizes tracks on Russell's Valence-Arousal plane across 4 macro quadrants, 8 nuanced octants, and a central Balanced ⚖️ equilibrium core ($|V| \le 0.18, |A| \le 0.18$).
+  * **Fail-Open Network & Self-Healing IndexedDB (v4)**: Database cache checks never block live Apple CDN searches; automatic version recovery handles schema migrations transparently.
+
 ---
 
 ## 4. ⚙️ Technical Architecture & Quality Guarantees
@@ -104,7 +113,7 @@ $$\text{Layer 1: Discovery (Pure Exploration)} \xrightarrow{\text{Intake Cohorts
 | **Audio Subsystem**| Global Audio Context + Reusable Component Pipeline | Permanently mounted HTML5 audio element with zero-tab `.m4a` blob downloader and persistent playback across views |
 | **AI Hierarchy** | `gemini-2.5-flash` (★) $\rightarrow$ `gemini-2.0-flash` $\rightarrow$ `gemini-1.5-flash` | Automatic failover on HTTP 429 / network errors; 25-second `Promise.race` safety ceiling |
 | **Local-First AI** | OpenAI-Compatible Endpoints (Ollama / LM Studio) | 100% offline privacy for both vision OCR and text classification |
-| **Client Storage** | `localStorage` (settings) + `IndexedDB` (metadata cache) | Scalable to hundreds of thousands of songs with 0ms preloaded offline JSON dumps |
+| **Client Storage** | `localStorage` (settings) + `IndexedDB` (`PlaylistHavenMetadataDB` v4) | Scalable to hundreds of thousands of songs with 0ms preloaded offline JSON dumps and version self-healing |
 | **Compliance** | Built-in 1,150ms token-bucket rate limiter | Strict adherence to MusicBrainz Web Service v2 fair-use policies |
 | **Portability** | Universal UTF-8 Byte Order Mark (`\uFEFF`) | Eliminates CJK and accented character corruption in Excel, Sheets, and Windows |
 
@@ -113,5 +122,9 @@ $$\text{Layer 1: Discovery (Pure Exploration)} \xrightarrow{\text{Intake Cohorts
 ## 5. 📚 Architectural Documentation Ecosystem
 
 * 🏠 **[README.md](file:///c:/Users/USER/Desktop/APPS/Playlist%20Haven/Playlist-Haven/README.md)**: The welcoming, human-friendly storefront and user guide for music lovers and developers.
-* 📘 **[Comprehensive System Brief (`docs/PLAYLIST_HAVEN_SYSTEM_BRIEF.md`)](file:///c:/Users/USER/Desktop/APPS/Playlist%20Haven/Playlist-Haven/docs/PLAYLIST_HAVEN_SYSTEM_BRIEF.md)**: The complete, exhaustive 16-module technical specification and protocol manual.
+* 📘 **[Comprehensive System Brief (`docs/PLAYLIST_HAVEN_SYSTEM_BRIEF.md`)](file:///c:/Users/USER/Desktop/APPS/Playlist%20Haven/Playlist-Haven/docs/PLAYLIST_HAVEN_SYSTEM_BRIEF.md)**: The complete, exhaustive 18-module technical specification and protocol manual.
+* 🐣 **[Audimote User Guide (`docs/AUDIMOTE_USER_GUIDE.md`)](file:///c:/Users/USER/Desktop/APPS/Playlist%20Haven/Playlist-Haven/docs/AUDIMOTE_USER_GUIDE.md)**: Operator manual for Module 18 acoustic triage, 3-tier consensus BPM, Camelot wheel, and circumplex models.
+* 🔬 **[Audimote Algorithms Audit (`docs/AUDIMOTE_ALGORITHMS_AUDIT.md`)](file:///c:/Users/USER/Desktop/APPS/Playlist%20Haven/Playlist-Haven/docs/AUDIMOTE_ALGORITHMS_AUDIT.md)**: Exhaustive DSP audit, mathematical equations, vocal fold arbitration trees, and test suite matrix.
+* 📋 **[Module 17 Handoff (`docs/HANDOFF_MODULE_17_CONSENSUS_AGGREGATOR.md`)](file:///c:/Users/USER/Desktop/APPS/Playlist%20Haven/Playlist-Haven/docs/HANDOFF_MODULE_17_CONSENSUS_AGGREGATOR.md)**: Engineering blueprint for the Consensus Aggregator module.
+* 📋 **[Manipulator Polish Handoff (`docs/HANDOFF_PLAYLIST_MANIPULATOR_POLISH.md`)](file:///c:/Users/USER/Desktop/APPS/Playlist%20Haven/Playlist-Haven/docs/HANDOFF_PLAYLIST_MANIPULATOR_POLISH.md)**: Engineering blueprint for the multi-pane operations bar, inline filters, and audio preview polish.
 * 🌐 **[Live Application](https://playlist-haven.vercel.app)** • **[GitHub Repository](https://github.com/joejamal029/Playlist-Haven)** • **[Substack Essays](https://substack.com/@beyondshuffleandalgorithms)**

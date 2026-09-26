@@ -108,6 +108,31 @@ function computeStringMatchScore(query: string, candidate: string): number {
   return Math.round(dice * 100);
 }
 
+// DEF-12: Minimum delay between outgoing Apple Search API requests to prevent HTTP 403/429 IP bans
+let lastITunesRequestTime = 0;
+const MIN_ITUNES_INTERVAL_MS = 350; // Spaced requests prevent burst throttling on large CSV imports
+
+async function throttledFetchITunes(url: string, signal?: AbortSignal): Promise<Response> {
+  const now = Date.now();
+  const elapsed = now - lastITunesRequestTime;
+  if (elapsed < MIN_ITUNES_INTERVAL_MS) {
+    await new Promise((resolve) => setTimeout(resolve, MIN_ITUNES_INTERVAL_MS - elapsed));
+  }
+  lastITunesRequestTime = Date.now();
+
+  let response = await fetch(url, { signal });
+
+  // If Apple throttles with 403 or 429, back off 3 seconds and retry once
+  if ((response.status === 403 || response.status === 429) && !signal?.aborted) {
+    console.warn('[iTunes API] Rate limit / 403 encountered, backing off 3s...');
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    lastITunesRequestTime = Date.now();
+    response = await fetch(url, { signal });
+  }
+
+  return response;
+}
+
 /**
  * Query Apple iTunes Search API as a public, zero-key secondary fallback
  * when MusicBrainz catalog has no match.
@@ -131,8 +156,9 @@ export async function queryITunesRecording(
 
     try {
       const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=5`;
-      const response = await fetch(url, { signal });
+      const response = await throttledFetchITunes(url, signal);
       if (!response.ok) continue;
+
 
       const data = await response.json();
       const results: ITunesTrackResult[] = data.results || [];
@@ -427,12 +453,17 @@ export async function resolveAudioPreviewForTrack(
 
   try {
     // 1. Check local IndexedDB first (0ms cache lookup)
-    const cached = await getEnrichedTrack(artist, title);
-    if (cached?.artist?.externalLinks?.audioPreviewUrl) {
-      return {
-        previewUrl: cached.artist.externalLinks.audioPreviewUrl,
-        coverArt: cached.release?.coverArtFullUrl || cached.release?.coverArtThumbUrl,
-      };
+    let cached: any = null;
+    try {
+      cached = await getEnrichedTrack(artist, title);
+      if (cached?.artist?.externalLinks?.audioPreviewUrl) {
+        return {
+          previewUrl: cached.artist.externalLinks.audioPreviewUrl,
+          coverArt: cached.release?.coverArtFullUrl || cached.release?.coverArtThumbUrl,
+        };
+      }
+    } catch (dbErr) {
+      console.warn(`[iTunes Preview] IndexedDB cache lookup bypassed for "${artist} - ${title}":`, dbErr);
     }
 
     // 2. Query iTunes Search API
@@ -443,10 +474,14 @@ export async function resolveAudioPreviewForTrack(
 
       // If cached record existed in DB without preview, attach preview and save
       if (cached) {
-        if (!cached.artist.externalLinks) cached.artist.externalLinks = {};
-        cached.artist.externalLinks.audioPreviewUrl = previewUrl;
-        cached.updatedAt = Date.now();
-        await saveEnrichedTrack(cached, true);
+        try {
+          if (!cached.artist.externalLinks) cached.artist.externalLinks = {};
+          cached.artist.externalLinks.audioPreviewUrl = previewUrl;
+          cached.updatedAt = Date.now();
+          await saveEnrichedTrack(cached, true);
+        } catch (saveErr) {
+          console.warn('[iTunes Preview] Failed to update preview in DB:', saveErr);
+        }
       }
 
       return { previewUrl, coverArt };

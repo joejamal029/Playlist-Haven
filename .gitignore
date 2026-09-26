@@ -1,37 +1,167 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+# ==============================================================================
+# PLAYLIST HAVEN - MASTER SECURITY, PRIVACY & PRODUCTION GITIGNORE
+# ==============================================================================
 
-# Dependencies & Build
-node_modules
-dist
-dist-ssr
-*.local
-
-# Environment & Secrets
+# ------------------------------------------------------------------------------
+# 1. Environment Variables, Secrets, API Keys & Private Credentials
+# ------------------------------------------------------------------------------
 .env
 .env.*
 !.env.example
+*.env
+*.env.local
+*.env.development.local
+*.env.test.local
+*.env.production.local
 *.pem
 *.key
 *.cert
+*.crt
+*.p12
+*.pfx
+*.pkcs12
+*.der
+id_rsa*
+id_ed25519*
+id_ecdsa*
+*credentials*.json
+*serviceAccount*.json
+client_secret*.json
+google-services.json
+GoogleService-Info.plist
+apple-app-site-association
+.npmrc
+.yarnrc
+auth*.json
+token*.json
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+# ------------------------------------------------------------------------------
+# 2. Android & Mobile Signing, Keystores & Machine-Specific Configs
+# ------------------------------------------------------------------------------
+local.properties
+**/local.properties
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+.gradle/
+**/android/.gradle/
+**/android/build/
+**/android/app/build/
+build/
+*.apk
+*.aab
+*.ap_
+*.aar
+*.dex
+*.class
+*.hprof
+captures/
+.externalNativeBuild/
+.cxx/
+.navigation/
+capacitor-cordova-android-plugins/
+**/app/src/main/assets/public/
+**/app/src/main/assets/capacitor.config.json
+**/app/src/main/assets/capacitor.plugins.json
+**/app/src/main/res/xml/config.xml
 
-# OS Generated Files
+# ------------------------------------------------------------------------------
+# 3. User Playlists, Music Libraries & Personal Listening Data (Strict Privacy)
+# ------------------------------------------------------------------------------
+*.csv
+*.xlsx
+*.xls
+*.tsv
+*.ods
+*.txt
+!docs/**/*.md
+!docs/**/*.png
+!docs/**/*.jpg
+!docs/**/*.jpeg
+!docs/**/*.svg
+!docs/**/*.webp
+*.m3u
+*.m3u8
+*.pls
+*.zpl
+*.wpl
+*.xspf
+*.asx
+Audimote_Session_Backup_*.json
+*_backup.json
+*_export.json
+session_backup*.json
+*playlist*.json
+*library*.json
+*history*.json
+# Local audio files (never commit binary media or copyrighted audio)
+*.mp3
+*.wav
+*.flac
+*.m4a
+*.aac
+*.ogg
+*.opus
+*.wma
+*.alac
+*.aiff
+*.pcm
+*.mid
+*.midi
+
+# ------------------------------------------------------------------------------
+# 4. Agent Artifacts, Brain, Scratchpads, Transcripts & Caches
+# ------------------------------------------------------------------------------
+.vibecode/
+.vibecode.yaml
+*.vibecode
+*_llm.md
+*_LLM.md
+*llm*.md
+.gemini/
+brain/
+scratch/
+.agents/
+artifacts/
+CLAUDE.md
+claude.md
+corss-module_integration.md
+cross-module_integration.md
+.cursor/
+.cursorrules
+.cursorignore
+.windsurf/
+.codeium/
+.cline/
+.claude/
+*.prompt
+*transcript*.jsonl
+*transcript*.json
+
+# ------------------------------------------------------------------------------
+# 5. Local Scraping, Clustering & Auxiliary Research Folders
+# ------------------------------------------------------------------------------
+language_clustering/
+scrapper/
+scraper/
+Resequencer/
+resequencer/
+
+# ------------------------------------------------------------------------------
+# 6. Database & Local Store Dumps
+# ------------------------------------------------------------------------------
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+*.dump
+*.sql
+
+# ------------------------------------------------------------------------------
+# 7. OS, Desktop & File System Metadata
+# ------------------------------------------------------------------------------
 .DS_Store
 .DS_Store?
 ._*
@@ -39,37 +169,48 @@ dist-ssr
 .Trashes
 ehthumbs.db
 Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+*.orig
+*.rej
+*.crash
 
-# Temporary, Backup & Dump files
+# ------------------------------------------------------------------------------
+# 8. Logs & Diagnostic Output
+# ------------------------------------------------------------------------------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ------------------------------------------------------------------------------
+# 9. Editor & IDE Settings
+# ------------------------------------------------------------------------------
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.swp
+*~
+
+# ------------------------------------------------------------------------------
+# 10. Temporary, Backup & Swap Files
+# ------------------------------------------------------------------------------
 *.tmp
 *.temp
 *.bak
-*.swp
-*~
-*.dump
 
-# Agent Artifacts, Brain, Scratch & VibeCode
-.vibecode/
-.vibecode.yaml
-*.vibecode
-*_llm.md
-.gemini/
-brain/
-scratch/
-.agents/
-
-# Demonstration, Sample Data & Local Instruction Files
-*.csv
-*.xlsx
-*.tsv
-*.txt
-!docs/**
-CLAUDE.md
-corss-module_integration.md
-artifacts/
-language_clustering/
-scrapper/
-Resequencer/
-
-
-
+# ------------------------------------------------------------------------------
+# 11. Node.js & Vite Build Outputs
+# ------------------------------------------------------------------------------
+node_modules/
+dist/
+dist-ssr/
+*.local
