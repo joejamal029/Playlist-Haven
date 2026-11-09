@@ -196,9 +196,9 @@ export default function PlaylistSplitterView({ onBack }: PlaylistSplitterViewPro
     setExpandedIndex(null);
 
     // Deep copy jobs to update status and clear previous results
-    const updatedJobs = jobs.map(j => ({
+    const updatedJobs: PlaylistJob[] = jobs.map(j => ({
       ...j,
-      status: 'processing' as const,
+      status: 'processing',
       results: [] as SplitResult[]
     }));
     setJobs(updatedJobs);

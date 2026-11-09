@@ -388,7 +388,7 @@ export default function AudimoteView({ onBack, onOpenHelp, onViewSelect }: Audim
   // Handle Drag & Drop: supports audio files (.mp3, .wav, .m4a, .flac) AND playlists (.csv, .tsv, .m3u, .txt, .json)
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
-    const rawFiles = Array.from(e.dataTransfer.files);
+    const rawFiles = Array.from(e.dataTransfer.files) as File[];
     if (rawFiles.length === 0) return;
 
     let totalAdded = 0;
@@ -420,7 +420,7 @@ export default function AudimoteView({ onBack, onOpenHelp, onViewSelect }: Audim
   // Handle File Input Selection
   const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
-    const rawFiles = Array.from(e.target.files);
+    const rawFiles = Array.from(e.target.files) as File[];
 
     let totalAdded = 0;
     let totalUpdated = 0;

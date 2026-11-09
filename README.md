@@ -95,6 +95,7 @@ Instead of getting lost in technical jargon, here is how Playlist Haven solves r
 | **The Visual Playlist Bridge (Screenshots to Playable Lists):**<br/>*"I have screenshots of playlists from friends, social media, or an offline player with no export option—or photos of festival flyers—and I can't bridge them to streaming without typing every song by hand."* | Instantly turns screenshots and photos into clean `.csv` and `.m3u` playlists—saving hours of manual retyping. Rescues music trapped in offline players with no export button, and creates ready-to-import files that feed directly into transfer tools like **TuneMyMusic** or **Soundiiz** to instantly rebuild your playlists on Spotify, Apple Music, or YouTube Music (runs via Cloud Gemini or 100% offline local AI). | **11. Vision-to-Playlist AI** |
 | **The Tastemaker & Crate-Digger (True 'Best-Of' Synthesis):**<br/>*"I want to find an artist's true consensus masterpieces across deep discographies, not Spotify's sponsored tracks."* | **Consensus Aggregator**: Cross-tabulates multiple crowdsourced 'Best Of' playlists and fan setlists to identify the most recurrent, universally acclaimed tracks. | **11. Consensus Aggregator** |
 | **The Boiler Room / Mix Tape Archivist (Web Dump Sanitizer):**<br/>*"I copied a raw tracklist from a YouTube DJ set or blog, and it's choked with timestamps, video tags, and flipped artist names."* | Strips video noise (`[MV]`, `1080p`, `Lyrics`, timestamps), cleans sidebar leaks, handles CJK character syntax, and inverts `Artist ↔ Title` orientations with 1 click. | **12. Scrape Stripper & Formatter** |
+| **The Macro Discovery Architect (Macro-Scale Bipartite Graph Intelligence):**<br/>*"I have 1,000+ playlists and 78k+ tracks across Spotify and TuneMyMusic backups, but streaming algorithms keep recommending the same 50 songs, blind to the deep connective topology of my library."* | Ingests multi-thousand playlist CSV backups in sub-second Web Workers. Constructs a bipartite graph with 3-tier deduplication, sparse Jaccard similarity, Louvain community modularity, Playlist DNA & archaeology, Curatorial recipe pipelines, Curator taste affinity with trust weighting, Autonomous AI agent personas & Synthesis Cortex, and 5 interactive visualization lenses: Infinite Galaxy, Global Cultural Music Atlas (with direct 30s preview streaming from 20 regional centroids), Artist Co-Occurrence Network, Wander Odyssey continuous flow player, and 2D Russell Circumplex Acoustic Mood Map. | **20. Discovery Intelligence Layer** |
 
 ### 🌉 Layer 2: Ingestion Jobs (Taming the Intake Floodgate & Decision Bridge)
 | Real-World Role / Curation Challenge | How Playlist Haven Solves It | Core Engine |
@@ -103,6 +104,7 @@ Instead of getting lost in technical jargon, here is how Playlist Haven solves r
 | **The Global & Diaspora Curator:**<br/>*"Streaming algorithms shove all non-Western music into lazy 'World' or generic 'Pop' buckets."* | Partitions thousands of tracks into **20 authentic cultural and linguistic cohorts** (Naija, J-Pop, K-Pop, Français, C-Pop, etc.) via a 5-tier waterfall engine. | **13. Language Clustering** |
 | **The Cross-Platform Migrator:**<br/>*"I converted my YouTube discovery queue to Spotify, and the chronological discovery order got completely scrambled."* | Restores authentic chronological discovery sequence using title-guarded matching and a 10-category AI musicological resolver. | **16. Playlist Resequencer** |
 | **The Musicologist & Metadata Purist:**<br/>*"I want real songwriting credits, true release dates, high-res cover art, and in-app previews."* | Dual-source catalog linking: queries **MusicBrainz** with zero-key **Apple iTunes** fallback for uncataloged tracks; smart Cover Art Archive 404 sanitation; full Work songwriting traversal; decoupled AI remediation; and universal 30-second audio previews with direct `.m4a` downloads. | **15. Deep Metadata Enrichment** |
+| **The Autonomous Stream Importer (Zero-Auth Direct Spotify Intake):**<br/>*"I want to ingest public or shared Spotify playlists directly without signing up for third-party tools like TuneMyMusic or Soundiiz, without paying Spotify Premium for developer API tokens, and without running background Python daemons."* | 100% pure client-side web engine. Computes RFC 6238 TOTP via browser Web Crypto (`crypto.subtle` HMAC-SHA1) to mint anonymous Web Player session tokens, and paginates Spotify's internal Pathfinder GraphQL service in 300-track batches (extracting all 389+ tracks). Displays inline high-res album cover art, plays in-app 30s previews, and exports to UTF-8 BOM CSV (with Cover Art URLs), M3U, TSV, or Spotify desktop URIs (`spotify:track:...`) with 1-click downstream staging to Discovery Triage or Consensus Aggregator. | **19. Spotify Intake & Bridge** |
 | **The Acoustic & Emotional Crate Triage (Zero-Cost MIR):**<br/>*"I want true BPM, Camelot keys, energy, danceability, and emotional mood without paying for black-box APIs."* | 100% client-side WebAssembly (**Essentia.js Wasm**) paired with **Apple iTunes 30s audio previews**. Features **3-tier multi-band consensus BPM** with **vocal-aware octave normalization** (`[1×]` fold badge), 24-tone Camelot Harmonic Wheel with Anchor mode, and Russell's 2D Circumplex (4 quadrants & 8 octants). | **18. Audimote 🐣** |
 
 ### 🖼️ Layer 3: Experience Jobs (Living with Art on the Wall)
@@ -114,7 +116,7 @@ Instead of getting lost in technical jargon, here is how Playlist Haven solves r
 | **The Offline Collector:**<br/>*"I have curated playlists on streaming, but I want to play them 100% offline from physical files on my local hard drive."* | Fuzzy-matches online streaming tracklists against physical local audio folders (`.mp3`/`.flac`) using Jaro-Winkler bigram similarity to produce 100% playable local `.m3u` playlists for Musicolet and offline audiophile players. | **8. Offline Matcher / Reconciler** |
 
 <details>
-<summary><b>🛠️ Click to expand the 18-Module Functional Directory by Lifecycle Layer</b></summary>
+<summary><b>🛠️ Click to expand the 20-Module Functional Directory by Lifecycle Layer</b></summary>
 
 <br/>
 
@@ -125,10 +127,12 @@ Instead of getting lost in technical jargon, here is how Playlist Haven solves r
 * **Smart Renamer & Tag Editor** (`SmartRenamerView.tsx`): Batch metadata sanitizer with regex find/replace and musical acronym preservation.
 * **Playlist Randomizer** (`PlaylistRandomizerView.tsx`): Cryptographic shuffle enforcing artist separation spacing.
 * **Consensus Aggregator** (`ConsensusAggregatorView.tsx`): Multi-source crowdsourced 'Best Of' cross-tabulation with Jaro-Winkler consensus thresholding and audio previews.
+* **Discovery Intelligence Layer (Module 20)** (`DiscoveryLayerView.tsx`): Macro-scale bipartite graph intelligence across 1,000+ playlists (78k+ tracks) with 5 visualization lenses: Infinite Galaxy, Global Cultural Music Atlas (with 20 regional centroids), Artist Co-Occurrence Network, Wander Odyssey flow player, and 2D Acoustic Mood Map.
 
 #### Layer 2: Ingestion & Cultural Bridge Modules
 * **Discovery Triage & Honing** (`DiscoveryTriageView.tsx`): High-agency intake hub for singles, resonance artists, and validated albums with instant in-app audio decision previews.
 * **Language & Cultural Clustering** (`LanguageClusteringView.tsx`): 5-tier waterfall engine partitioning libraries into 20 canonical cultural buckets.
+* **Spotify Intake & Bridge** (`SpotifyIntakeBridgeView.tsx`): Pure client-side zero-auth Spotify playlist extractor. Bypasses developer paywalls, paginates 300+ tracks via Pathfinder GraphQL, renders inline Spotify CDN cover art, and exports to UTF-8 BOM CSV, M3U, TSV, and desktop URIs with downstream bridges.
 * **Playlist Resequencer & Chronology Restorer** (`PlaylistResequencerView.tsx`): Repairs scrambled track order from cross-platform conversions.
 * **Deep Metadata Enrichment** (`DeepMetadataEnrichmentView.tsx`): Dual-source MusicBrainz + Apple iTunes knowledge graph integration with Work songwriting traversal, smart cover art sanitation, and in-app 30s audio preview downloads.
 * **Audimote 🐣** (`AudimoteView.tsx`): Client-side acoustic and emotional intelligence triage engine. 3-tier consensus BPM with vocal fold protection, 24-tone Camelot wheel, 2D circumplex (4Q & 8 octants), and zero-tab iTunes audio previews.
@@ -237,9 +241,10 @@ Playlist Haven supports local-first vision and language models out of the box!
 ## 📚 Deep Technical Documentation
 
 For deeper architecture diagrams, database schemas, and mathematical specifications:
-* ⚡ **[High-Density Executive Summary](playlist_haven_high_density_summary.md)**: Architectural briefing, 18-module matrix, failover ceilings, and benchmark guarantees.
-* 📘 **[Comprehensive System Brief](docs/PLAYLIST_HAVEN_SYSTEM_BRIEF.md)**: Master engineering manual detailing all 18 modules, IndexedDB object stores, MusicBrainz Work entity traversal, and defensive null-safety standards.
+* ⚡ **[High-Density Executive Summary](playlist_haven_high_density_summary.md)**: Architectural briefing, 19-module matrix, failover ceilings, and benchmark guarantees.
+* 📘 **[Comprehensive System Brief](docs/PLAYLIST_HAVEN_SYSTEM_BRIEF.md)**: Master engineering manual detailing all 19 modules, IndexedDB object stores, MusicBrainz Work entity traversal, and defensive null-safety standards.
 * 🐣 **[Audimote User Guide](docs/AUDIMOTE_USER_GUIDE.md)**: Operator manual for Module 18 acoustic triage, 3-tier consensus BPM, 24-tone Camelot wheel, and circumplex models.
+* 📻 **[Spotify Intake & Bridge Guide](docs/SPOTIFY_INTAKE_BRIDGE_GUIDE.md)**: Architecture and operator manual for Module 19 zero-daemon Spotify playlist ingestion, Web Crypto TOTP, and multi-format exporters.
 * 🔬 **[Audimote Algorithms Audit](docs/AUDIMOTE_ALGORITHMS_AUDIT.md)**: Exhaustive DSP audit, mathematical equations, vocal fold arbitration trees, and test suite matrix.
 * 🧭 **[Audimote Affective Circumplex Spec](docs/AUDIMOTE_AFFECTIVE_CIRCUMPLEX_SPEC.md)**: Mathematical specification for 4-quadrant macro planes, 8 mood octants, and 9-cell Cartesian boundaries.
 

@@ -12,6 +12,7 @@ export type ClassificationConfidence =
   | 'musicbrainz'  // Sourced from MusicBrainz API area/country
   | 'llm'          // Sourced from Gemini AI (search-grounded fallback)
   | 'manual'       // Explicit user manual override (permanent)
+  | 'heuristic'    // Detected via heuristic signatures/rules
   | 'unresolved';  // Still unknown / needs manual classification
 
 export interface ArtistClassification {
@@ -1389,6 +1390,7 @@ export async function classifyPlaylistTracks(
     musicbrainz: 0,
     llm: 0,
     manual: 0,
+    heuristic: 0,
     unresolved: 0,
   };
 

@@ -738,7 +738,7 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
       return;
     }
 
-    const uniqueArtists = Array.from(new Set(unresolvedTracks.map(t => t.artist))).filter(Boolean);
+    const uniqueArtists = Array.from(new Set(unresolvedTracks.map(t => t.artist))).filter(Boolean) as string[];
     setIsAiRemediating(true);
     setAiRemediationProgress(`Starting AI remediation for ${uniqueArtists.length} unique artists with Gemini 2.5 Flash...`);
 
@@ -1004,7 +1004,7 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
   // Batch Reassign Bucket
   const handleBatchReassignBucket = () => {
     if (selectedCacheKeys.size === 0) return;
-    const keysArray = Array.from(selectedCacheKeys);
+    const keysArray = Array.from(selectedCacheKeys) as string[];
     const count = batchUpdateCachedEntries(keysArray, {
       bucket: batchBucketTarget,
       confidence: 'manual',
@@ -1025,7 +1025,7 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
             classification: {
               ...t.classification,
               bucket: batchBucketTarget,
-              confidence: 'manual',
+              confidence: 'manual' as const,
               sourceDetails: 'Batch manual reassignment'
             }
           };
@@ -1054,7 +1054,7 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
   const handleBatchDelete = () => {
     if (selectedCacheKeys.size === 0) return;
     if (!confirm(`Are you sure you want to delete ${selectedCacheKeys.size} artist mappings from cache?`)) return;
-    const count = batchDeleteCachedEntries(Array.from(selectedCacheKeys));
+    const count = batchDeleteCachedEntries(Array.from(selectedCacheKeys) as string[]);
     setCacheList(getAllCachedEntries());
     setSelectedCacheKeys(new Set());
     showToast(`Deleted ${count} artist mappings from cache.`);
@@ -1063,7 +1063,7 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
   // Batch AI Reclassify
   const handleBatchReclassifyAI = async () => {
     if (selectedCacheKeys.size === 0) return;
-    const keysArray = Array.from(selectedCacheKeys);
+    const keysArray = Array.from(selectedCacheKeys) as string[];
     setIsAiRemediating(true);
     setAiRemediationProgress(`Reclassifying ${keysArray.length} cached artists with Gemini 2.5 Flash...`);
 
@@ -1147,7 +1147,7 @@ export default function LanguageClusteringView({ onBack }: LanguageClusteringVie
             classification: {
               ...t.classification,
               bucket,
-              confidence: 'manual',
+              confidence: 'manual' as const,
               sourceDetails: 'Manual cache edit'
             }
           };

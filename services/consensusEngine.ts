@@ -15,6 +15,7 @@ export interface RawTrackInput {
   title: string;
   artist: string;
   album?: string;
+  coverArtUrl?: string;
   sourceName: string;
 }
 
@@ -23,6 +24,7 @@ export interface ConsensusTrack {
   artist: string;
   title: string;
   album: string;
+  coverArtUrl?: string;
   consensusCount: number;          // Number of distinct sources that included this track (k)
   totalSources: number;            // Total active sources evaluated (N)
   consensusPercentage: number;     // Math.round((k / N) * 100)
@@ -220,6 +222,7 @@ export const parseCSVTracks = (content: string, sourceName: string): RawTrackInp
   let titleIdx = headerLower.findIndex(h => h.includes('track') || h.includes('title') || h === 'song' || h === 'name');
   let artistIdx = headerLower.findIndex(h => h.includes('artist') || h === 'performer' || h === 'author');
   let albumIdx = headerLower.findIndex(h => h.includes('album') || h === 'collection' || h === 'release');
+  let coverArtIdx = headerLower.findIndex(h => h.includes('cover') || h.includes('artwork') || h.includes('image'));
 
   const hasRecognizedHeader = titleIdx !== -1 || artistIdx !== -1;
   const startRow = hasRecognizedHeader ? 1 : 0;
@@ -237,6 +240,7 @@ export const parseCSVTracks = (content: string, sourceName: string): RawTrackInp
     let artist = '';
     let title = '';
     let album = '';
+    let coverArtUrl = coverArtIdx !== -1 && cols[coverArtIdx] ? cols[coverArtIdx].trim() : undefined;
 
     if (titleIdx !== -1 && cols[titleIdx]) {
       title = cols[titleIdx];
@@ -264,6 +268,7 @@ export const parseCSVTracks = (content: string, sourceName: string): RawTrackInp
         artist: sanitized.cleanArtist || artist || 'Unknown Artist',
         title: sanitized.cleanTitle || title,
         album: sanitized.cleanAlbum || album || '',
+        coverArtUrl: coverArtUrl || undefined,
         sourceName,
       });
     }
@@ -705,6 +710,11 @@ export const computeConsensus = (
           match.album = raw.album;
         }
 
+        // Adopt coverArtUrl if match doesn't have one yet
+        if (!match.coverArtUrl && raw.coverArtUrl) {
+          match.coverArtUrl = raw.coverArtUrl;
+        }
+
         // Retain cleaner/longer proper casing if present
         if (raw.title && raw.title.length > match.title.length && !raw.title.includes('  ')) {
           match.title = raw.title;
@@ -716,6 +726,7 @@ export const computeConsensus = (
           artist: raw.artist,
           title: raw.title,
           album: raw.album || '',
+          coverArtUrl: raw.coverArtUrl,
           consensusCount: 1,
           totalSources,
           consensusPercentage: 0,

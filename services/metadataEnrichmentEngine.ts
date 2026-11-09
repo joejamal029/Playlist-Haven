@@ -27,6 +27,7 @@ import {
 import { getAIConfig } from './visionEngine';
 import { GoogleGenAI, Type } from '@google/genai';
 import { queryITunesRecording, supplementTrackFromITunes } from './itunesApi';
+import { sanitizeSongQuery } from './songQuerySanitizer';
 
 // MusicBrainz Rate Limit: strict minimum 1150ms between network calls
 const MUSICBRAINZ_MIN_INTERVAL_MS = 1150;

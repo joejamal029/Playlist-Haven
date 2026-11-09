@@ -1,31 +1,55 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Play, Pause, RefreshCw } from 'lucide-react';
 import { useAudioPreview, PlayableTrack } from './AudioPreviewContext';
 
 interface AudioPreviewButtonProps {
-  track: PlayableTrack;
+  track?: PlayableTrack;
+  artist?: string;
+  title?: string;
+  trackName?: string;
   variant?: 'icon' | 'pill' | 'text';
   size?: 'xs' | 'sm' | 'md';
   className?: string;
-  title?: string;
 }
 
 export default function AudioPreviewButton({
-  track,
+  track: propTrack,
+  artist,
+  title,
+  trackName,
   variant = 'icon',
   size = 'sm',
   className = '',
-  title,
 }: AudioPreviewButtonProps) {
+  const effectiveTrack: PlayableTrack | null = useMemo(() => {
+    if (propTrack && (propTrack.title || propTrack.artist)) {
+      return {
+        ...propTrack,
+        id: propTrack.id || `${propTrack.artist}-${propTrack.title}`
+      };
+    }
+    const resolvedTitle = title || trackName;
+    if (artist && resolvedTitle) {
+      return {
+        id: `${artist}-${resolvedTitle}`,
+        artist,
+        title: resolvedTitle
+      };
+    }
+    return null;
+  }, [propTrack, artist, title, trackName]);
+
   const { activeAudio, isPlaying, loadingTrackId, togglePlayTrack } = useAudioPreview();
 
-  const isCurrent = activeAudio?.trackId === track.id;
+  if (!effectiveTrack) return null;
+
+  const isCurrent = activeAudio?.trackId === effectiveTrack.id;
   const isCurrentPlaying = isCurrent && isPlaying;
-  const isLoading = loadingTrackId === track.id;
+  const isLoading = loadingTrackId === effectiveTrack.id;
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    togglePlayTrack(track);
+    togglePlayTrack(effectiveTrack);
   };
 
   const iconSizes = {
@@ -70,7 +94,7 @@ export default function AudioPreviewButton({
         className={`flex items-center space-x-1 text-slate-400 hover:text-pink-400 transition-colors cursor-pointer text-[11px] font-semibold ${
           isCurrentPlaying ? 'text-pink-400' : ''
         } ${className}`}
-        title={title || (isCurrentPlaying ? 'Pause audio preview' : `Listen to 30s preview of "${track.title}"`)}
+        title={title || (isCurrentPlaying ? 'Pause audio preview' : `Listen to 30s preview of "${effectiveTrack.title}"`)}
       >
         {isLoading ? (
           <RefreshCw size={iconSize} className="animate-spin text-pink-400" />
@@ -105,7 +129,7 @@ export default function AudioPreviewButton({
           ? 'Resolving iTunes audio preview...'
           : isCurrentPlaying
           ? 'Pause 30s preview'
-          : `Play 30s iTunes preview of "${track.title}"`)}
+          : `Play 30s iTunes preview of "${effectiveTrack.title}"`)}
     >
       {isLoading ? (
         <RefreshCw size={iconSize} className="animate-spin text-pink-400" />

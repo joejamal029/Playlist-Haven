@@ -47,8 +47,21 @@ export function AudioPreviewProvider({ children }: { children: ReactNode }) {
   const [loadingTrackId, setLoadingTrackId] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(30);
-  const [volume, setVolumeState] = useState<number>(0.85);
-  const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [volume, setVolumeState] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('haven_audio_volume');
+      return saved ? Math.max(0, Math.min(1, parseFloat(saved))) : 0.85;
+    } catch {
+      return 0.85;
+    }
+  });
+  const [isMuted, setIsMuted] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('haven_audio_muted') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -94,6 +107,7 @@ export function AudioPreviewProvider({ children }: { children: ReactNode }) {
     if (audioRef.current) {
       audioRef.current.src = previewUrl;
       audioRef.current.currentTime = 0;
+      audioRef.current.muted = isMuted;
       audioRef.current.volume = isMuted ? 0 : volume;
       audioRef.current
         .play()
@@ -146,18 +160,31 @@ export function AudioPreviewProvider({ children }: { children: ReactNode }) {
   const setAudioVolume = (newVol: number) => {
     const clamped = Math.max(0, Math.min(1, newVol));
     setVolumeState(clamped);
+    try {
+      localStorage.setItem('haven_audio_volume', clamped.toString());
+    } catch {}
     if (audioRef.current) {
       audioRef.current.volume = isMuted ? 0 : clamped;
     }
     if (clamped > 0 && isMuted) {
       setIsMuted(false);
+      try {
+        localStorage.setItem('haven_audio_muted', 'false');
+      } catch {}
+      if (audioRef.current) {
+        audioRef.current.muted = false;
+      }
     }
   };
 
   const toggleMuteAudio = () => {
     setIsMuted(prev => {
       const next = !prev;
+      try {
+        localStorage.setItem('haven_audio_muted', next.toString());
+      } catch {}
       if (audioRef.current) {
+        audioRef.current.muted = next;
         audioRef.current.volume = next ? 0 : volume;
       }
       return next;
@@ -221,6 +248,7 @@ export function AudioPreviewProvider({ children }: { children: ReactNode }) {
       {/* Permanently mounted hidden HTML5 Audio Element */}
       <audio
         ref={audioRef}
+        muted={isMuted}
         preload="auto"
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}

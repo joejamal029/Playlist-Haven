@@ -1855,7 +1855,7 @@ export default function PlaylistManipulatorView({ onBack }: PlaylistManipulatorV
 
                       {playlists.length > 1 && (
                         <button 
-                          onClick={openCrossPruneModal}
+                          onClick={() => openCrossPruneModal()}
                           className="flex items-center space-x-2 text-xs font-medium text-indigo-305 hover:text-white bg-indigo-500/20 hover:bg-indigo-500/40 px-3 py-1.5 rounded-lg transition-colors border border-indigo-500/30"
                           title="Remove songs that are present in any of the other open playlists"
                         >

@@ -895,7 +895,8 @@ export default function DiscoveryTriageView({ onBack, onOpenHelp }: DiscoveryTri
   const handleToggleKeepAsSingle = (artistName: string, trackId: string) => {
     setTempSinglesSelections(prev => {
       const next = new Map(prev);
-      const current = new Set(next.get(artistName) || []);
+      const existing = next.get(artistName);
+      const current = new Set<string>(existing ? Array.from(existing) : []);
       if (current.has(trackId)) current.delete(trackId);
       else current.add(trackId);
       next.set(artistName, current);
@@ -1377,9 +1378,13 @@ export default function DiscoveryTriageView({ onBack, onOpenHelp }: DiscoveryTri
         id: st.id,
         title: st.title,
         artist: st.artist,
+        rawTitle: (st as any).rawTitle || st.title,
+        triageStatus: 'kept_single' as const,
+        downloadPriority: 'secondary' as const,
+        addedAt: Date.now(),
         album: st.album || 'Single Probe',
         culturalBucket: st.culturalBucket,
-        resonanceTier: 'probe',
+        resonanceTier: 'probe' as const,
         sources: st.sources || ['Custom'],
         sourceOrder: st.sourceOrder || 1
       }));
@@ -1533,7 +1538,8 @@ export default function DiscoveryTriageView({ onBack, onOpenHelp }: DiscoveryTri
   const handleValidateSingleProbe = (track: TriageTrack) => {
     setSinglesifiedTracksMap(prev => {
       const next = new Map(prev);
-      const set = next.get(track.artist) || new Set<string>();
+      const existing = next.get(track.artist);
+      const set = new Set<string>(existing ? Array.from(existing) : []);
       set.add(track.id);
       next.set(track.artist, set);
       return next;
@@ -1576,7 +1582,8 @@ export default function DiscoveryTriageView({ onBack, onOpenHelp }: DiscoveryTri
     setSinglesifiedTracksMap(prev => {
       const next = new Map(prev);
       selectedTracks.forEach(track => {
-        const set = next.get(track.artist) || new Set<string>();
+        const existing = next.get(track.artist);
+        const set = new Set<string>(existing ? Array.from(existing) : []);
         set.add(track.id);
         next.set(track.artist, set);
       });
@@ -1665,7 +1672,7 @@ export default function DiscoveryTriageView({ onBack, onOpenHelp }: DiscoveryTri
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    Array.from(files).forEach(file => {
+    Array.from(files).forEach((file: File) => {
       const reader = new FileReader();
       reader.onload = event => {
         const text = event.target?.result as string;
@@ -3524,7 +3531,7 @@ export default function DiscoveryTriageView({ onBack, onOpenHelp }: DiscoveryTri
 
                             {/* Release Era Badge */}
                             {artistEraBadge && (
-                              <span className={`text-[9px] px-2 py-0.5 rounded-full font-mono font-bold ${artistEraBadge.bgColor} ${artistEraBadge.textColor} border ${artistEraBadge.borderColor}`}>
+                              <span className={`text-[9px] px-2 py-0.5 rounded-full font-mono font-bold border ${artistEraBadge.color}`}>
                                 {artistEraBadge.label}
                               </span>
                             )}
@@ -3823,7 +3830,7 @@ export default function DiscoveryTriageView({ onBack, onOpenHelp }: DiscoveryTri
                                     <div className="flex items-center space-x-2 text-[10px] text-slate-500 truncate">
                                       <span className="truncate">{t.album}</span>
                                       {tEra && (
-                                        <span className={`text-[8px] px-1 py-0.1 rounded font-mono font-bold ${tEra.bgColor} ${tEra.textColor} border ${tEra.borderColor}`}>
+                                        <span className={`text-[8px] px-1 py-0.1 rounded font-mono font-bold border ${tEra.color}`}>
                                           {tEra.label}
                                         </span>
                                       )}
@@ -4384,7 +4391,7 @@ export default function DiscoveryTriageView({ onBack, onOpenHelp }: DiscoveryTri
                       No crystallized choices recorded yet. Retain single probes or upload definite choices above.
                     </div>
                   ) : (
-                    Object.entries(homeostasisStats.bucketPercentages).map(([bucket, pct]) => {
+                    (Object.entries(homeostasisStats.bucketPercentages) as [string, number][]).map(([bucket, pct]) => {
                       if (pct <= 0) return null;
                       const barColor = BUCKET_BAR_COLORS[bucket] || 'bg-slate-500';
                       const count = homeostasisStats.bucketCounts[bucket] || 0;
@@ -4404,7 +4411,7 @@ export default function DiscoveryTriageView({ onBack, onOpenHelp }: DiscoveryTri
                 {/* Cultural Share Legend Chips with Actual Numbers and Percentages */}
                 {homeostasisStats.totalTracks > 0 && (
                   <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                    {Object.entries(homeostasisStats.bucketPercentages).map(([bucket, pct]) => {
+                    {(Object.entries(homeostasisStats.bucketPercentages) as [string, number][]).map(([bucket, pct]) => {
                       if (pct <= 0) return null;
                       const barColor = BUCKET_BAR_COLORS[bucket] || 'bg-slate-500';
                       const count = homeostasisStats.bucketCounts[bucket] || 0;
@@ -4951,7 +4958,7 @@ export default function DiscoveryTriageView({ onBack, onOpenHelp }: DiscoveryTri
                                 )}
                                 <span className="text-slate-500">· {track.album || 'Single'}</span>
                                 {eraBadge && (
-                                  <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold ${eraBadge.bgColor} ${eraBadge.textColor} border ${eraBadge.borderColor}`}>
+                                  <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold border ${eraBadge.color}`}>
                                     {eraBadge.label}
                                   </span>
                                 )}
@@ -5179,7 +5186,7 @@ export default function DiscoveryTriageView({ onBack, onOpenHelp }: DiscoveryTri
                           <div className="flex items-center space-x-2 text-[11px] text-slate-500 line-clamp-1 mt-0.5">
                             <span className="truncate">{track.album || 'Single Release'}</span>
                             {eraBadge && (
-                              <span className={`text-[8px] px-1 py-0.1 rounded font-mono font-bold ${eraBadge.bgColor} ${eraBadge.textColor} border ${eraBadge.borderColor}`}>
+                              <span className={`text-[8px] px-1 py-0.1 rounded font-mono font-bold border ${eraBadge.color}`}>
                                 {eraBadge.label}
                               </span>
                             )}
@@ -5876,7 +5883,7 @@ export default function DiscoveryTriageView({ onBack, onOpenHelp }: DiscoveryTri
             <div className="p-3 bg-cyan-950/20 border border-cyan-500/30 rounded-xl text-xs flex items-center justify-between">
               <span className="text-slate-300">Cohort Intake Total:</span>
               <span className="font-bold font-mono text-cyan-300">
-                {Array.from(selectedQuotaBuckets).reduce((acc, b) => {
+                {Array.from(selectedQuotaBuckets).reduce((acc: number, b) => {
                   const g = bucketGroups.find(x => x.bucket === b);
                   const unstaged = g ? g.tracks.filter(t => !stagedTrackIds.has(t.id)).length : 0;
                   return acc + Math.min(unstaged, quotaPerBucket);
@@ -5998,7 +6005,7 @@ export default function DiscoveryTriageView({ onBack, onOpenHelp }: DiscoveryTri
                         tracks: artistBaselineTracks,
                         trackCount: artistBaselineTracks.length,
                         albumCount: 1,
-                        albums: [{ name: artistBaselineTracks[0]?.album || 'Crystallized Collection', tracks: [], isCandidate: true }],
+                        albums: [{ name: artistBaselineTracks[0]?.album || 'Crystallized Collection', tracks: [], trackCount: 0, isValidated: true, isCandidate: true }],
                         hasAlbumCandidate: true,
                         resonanceTier: 'high',
                         primaryCulturalBucket: artistBaselineTracks[0]?.culturalBucket || 'English'
@@ -6029,15 +6036,19 @@ export default function DiscoveryTriageView({ onBack, onOpenHelp }: DiscoveryTri
                             id: st.id,
                             title: st.title,
                             artist: st.artist,
+                            rawTitle: (st as any).rawTitle || st.title,
+                            triageStatus: 'kept_single' as const,
+                            downloadPriority: 'secondary' as const,
+                            addedAt: Date.now(),
                             album: st.album || 'Single Probe',
                             culturalBucket: st.culturalBucket,
-                            resonanceTier: 'probe',
+                            resonanceTier: 'probe' as const,
                             sources: st.sources || ['Custom'],
                             sourceOrder: st.sourceOrder || 1
                           })),
                           trackCount: artistSingleTracks.length,
                           albumCount: 1,
-                          albums: [{ name: 'Singles / EPs', tracks: [], isCandidate: false }],
+                          albums: [{ name: 'Singles / EPs', tracks: [], trackCount: 0, isValidated: false, isCandidate: false }],
                           hasAlbumCandidate: false,
                           resonanceTier: 'probe',
                           primaryCulturalBucket: t.culturalBucket

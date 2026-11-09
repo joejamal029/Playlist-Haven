@@ -24,7 +24,7 @@ export type { CanonicalBucket, BucketMetadata };
 export { CANONICAL_BUCKETS };
 
 export type TriageSource = 'Spotify' | 'YouTube Music' | 'Musicolet' | 'M3U' | 'TXT' | 'Custom' | 'Language Clustered' | 'YouTube ➔ Spotify Converted';
-export type ResonanceTier = 'high' | 'emerging' | 'probe';
+export type ResonanceTier = 'high' | 'emerging' | 'probe' | 'album_candidate';
 export type TriageStatus = 'inbox' | 'staged' | 'kept_single' | 'dismissed';
 export type DownloadPriority = 'immediate' | 'secondary';
 export type AlbumValidationStatus = 'unvalidated' | 'candidate' | 'validated';
@@ -34,7 +34,7 @@ export interface TriageTrack {
   title: string;
   artist: string;
   album: string;
-  rawTitle: string;
+  rawTitle?: string;
   sources: TriageSource[];
   sourceOrder: number; // 1-indexed chronological position in source playlist(s)
   sourcePositions?: Record<string, number>; // Individual per-source / per-list positions, e.g. { 'Spotify': 1, 'YouTube Music': 1 }
@@ -45,10 +45,10 @@ export interface TriageTrack {
   duration?: string;
   durationSeconds?: number;
   resonanceTier: ResonanceTier;
-  triageStatus: TriageStatus;
-  downloadPriority: DownloadPriority;
+  triageStatus?: TriageStatus;
+  downloadPriority?: DownloadPriority;
   notes?: string;
-  addedAt: string;
+  addedAt?: string | number;
   // Cultural provenance from Module 13 or auto-classifier
   culturalBucket: CanonicalBucket;
   country?: string;
@@ -95,6 +95,7 @@ export interface ArtistAlbumSummary {
   trackCount: number;
   tracks: TriageTrack[];
   isValidated: boolean;
+  isCandidate?: boolean;
 }
 
 export interface ArtistCluster {
@@ -103,12 +104,13 @@ export interface ArtistCluster {
   tracks: TriageTrack[];
   albumCount: number;
   albums: ArtistAlbumSummary[];
+  hasAlbumCandidate?: boolean;
   resonanceTier: ResonanceTier;
-  explorationStatus: 'unexplored' | 'exploring' | 'validated' | 'archived';
-  sources: TriageSource[];
+  explorationStatus?: 'unexplored' | 'exploring' | 'validated' | 'archived';
+  sources?: TriageSource[];
   aiDossier?: ArtistAIDossier;
   primaryCulturalBucket: CanonicalBucket;
-  culturalBuckets: CanonicalBucket[];
+  culturalBuckets?: CanonicalBucket[];
 }
 
 export interface AlbumCluster {
@@ -361,6 +363,8 @@ export function parseDiscoveryFiles(
     confidence?: string;
     sourceDetails?: string;
     filePath?: string;
+    coverArtUrl?: string;
+    coverArtThumbUrl?: string;
   }[] = [];
 
   for (const file of files) {
@@ -421,6 +425,7 @@ export function parseDiscoveryFiles(
       const confidenceIdx = headerLower.findIndex(h => h.includes('confidence'));
       const filePathIdx = headerLower.findIndex(h => h.includes('file_path') || h.includes('filepath') || h.includes('path'));
       const sourceIdx = headerLower.findIndex(h => h === 'source' || h === 'provenance');
+      const coverArtIdx = headerLower.findIndex(h => h.includes('cover') || h.includes('artwork') || h.includes('image') || h.includes('album art'));
 
       // Determine Default Source
       let inferredSource: TriageSource = 'Custom';
@@ -444,6 +449,7 @@ export function parseDiscoveryFiles(
         const country = (countryIdx !== -1 && row[countryIdx]) ? row[countryIdx] : undefined;
         let confidence = (confidenceIdx !== -1 && row[confidenceIdx]) ? row[confidenceIdx] : undefined;
         const filePath = (filePathIdx !== -1 && row[filePathIdx]) ? row[filePathIdx] : undefined;
+        const coverArtUrl = (coverArtIdx !== -1 && row[coverArtIdx]) ? row[coverArtIdx].trim() : undefined;
 
         if (!rawTrack && !rawArtist) continue;
 
@@ -500,6 +506,8 @@ export function parseDiscoveryFiles(
           confidence,
           sourceDetails,
           filePath,
+          coverArtUrl: coverArtUrl || undefined,
+          coverArtThumbUrl: coverArtUrl || undefined,
         });
       }
       continue;
@@ -612,7 +620,7 @@ export function hydrateTriageTrackFromEnrichedRecord(
     countryName = cacheMatch.countryName || countryName;
     confidence = cacheMatch.confidence;
     sourceDetails = cacheMatch.sourceDetails || 'Language Clustering Cache (Superior)';
-  } else if (track.source === 'Language Clustered' && track.culturalBucket && track.culturalBucket !== 'Other') {
+  } else if ((track.sources || []).includes('Language Clustered') && track.culturalBucket && track.culturalBucket !== 'Other') {
     culturalBucket = track.culturalBucket;
     confidence = track.confidence || 'Language Clustered';
     sourceDetails = track.sourceDetails || 'Clustered Intake';
@@ -2066,6 +2074,7 @@ export interface TrackTranslationResult {
   romanizedArtist?: string;
   romanizedTitle?: string;
   translatedTitle?: string;
+  translatedArtist?: string;
   culturalContext?: string;
   detectedLanguage?: string;
   timestamp: number;

@@ -349,6 +349,23 @@ graph TD
     * *Downstream Curation Bridge*: 1-click handoff directly into **Module 14 (Discovery Triage)**.
   * *Detailed Specifications*: See [`docs/AUDIMOTE_USER_GUIDE.md`](file:///c:/Users/USER/Desktop/APPS/Playlist%20Haven/Playlist-Haven/docs/AUDIMOTE_USER_GUIDE.md), [`docs/AUDIMOTE_ALGORITHMS_AUDIT.md`](file:///c:/Users/USER/Desktop/APPS/Playlist%20Haven/Playlist-Haven/docs/AUDIMOTE_ALGORITHMS_AUDIT.md), and [`docs/AUDIMOTE_AFFECTIVE_CIRCUMPLEX_SPEC.md`](file:///c:/Users/USER/Desktop/APPS/Playlist%20Haven/Playlist-Haven/docs/AUDIMOTE_AFFECTIVE_CIRCUMPLEX_SPEC.md).
 
+### Module 19: 📻 Spotify Intake & Bridge (`SpotifyIntakeBridgeView.tsx`)
+* **Purpose**: Completely eliminates third-party export dependencies (TuneMyMusic, Soundiiz) and bypasses Spotify's 2024 Developer Web API HTTP 403 Forbidden paywall. Ingests public or shared Spotify playlists directly into Playlist Haven via 100% pure client-side TypeScript without requiring external Python daemon sidecars or user account logins.
+* **Key Architecture & Features**:
+  * **Zero Python Daemon (Web-Standards Cryptography)**: Generates anonymous Spotify Web Player session tokens by calculating RFC 6238 TOTP codes directly inside the browser using the native **Web Crypto API** (`crypto.subtle` HMAC-SHA1). Synchronizes with Spotify server time (`/api/spotify-servertime`), derives key bytes from embedded Web Player secrets, and exchanges for anonymous `accessToken` + `clientToken` via lightweight proxy headers.
+  * **Multi-Batch Pathfinder GraphQL Pagination**: Queries Spotify's internal Pathfinder GraphQL service (`operationName: 'fetchPlaylist'`, `sha256Hash: bb67e0af06e8d6f52b531f97468ee4acd44cd0f82b988e15c2ea47b1148efc77`) in batches of 300 tracks. Successfully extracts massive playlists (e.g. 389 of 389 tracks) where static embeds cap out at 100.
+  * **Direct Reusable Inline Album Artwork**: Reuses `components/SongCoverArt.tsx` to render high-resolution Spotify CDN artwork (`https://i.scdn.co/image/...`) directly inside each table row. Incorporates lazy-loading, smooth opacity transition, skeleton loader pulse, and vinyl record crate fallback rings on image error. Decouples visual album display completely from Apple iTunes.
+  * **In-App Audio Preview Integration**: Links `coverArtUrl` to `components/AudioPreviewButton.tsx`, streaming 30-second `.m4a` snippets and ensuring the bottom global floating player bar immediately renders Spotify's album art without waiting for or depending on iTunes artwork lookups.
+  * **Universal Multi-Format Exporters**:
+    * *RFC 4180 CSV (UTF-8 BOM)*: Prepends `\uFEFF` and outputs `['Artist', 'Track Name', 'Album', 'Duration', 'Spotify URI', 'Cover Art URL']`, protecting Japanese, Korean, and international characters from mojibake in Microsoft Excel and Google Sheets.
+    * *#EXTM3U Playlist*: Standard `#EXTINF` duration headers and filenames for local offline media players like Musicolet.
+    * *TSV (Tab-Separated Values)*: Clean clipboard export for spreadsheet grids.
+    * *Spotify Desktop URIs (`spotify:track:...`)*: One-click clipboard copy for native Spotify desktop client paste (`Ctrl+V`).
+  * **Cross-Engine Cover Ingestion Resilience**: Updated `services/triageEngine.ts` (Module 14) and `services/consensusEngine.ts` (Module 17) to detect and parse `Cover Art URL` from imported CSVs, providing permanent cover art persistence throughout Playlist Haven even if the iTunes Search API is rate-limited or offline.
+  * **Downstream Curation Bridges**: 1-click staging into **Module 14 (Discovery Triage)** (`playlist_haven_triage_intake`) and **Module 17 (Consensus Aggregator)** (`playlist_haven_consensus_seed`) with full cover art and metadata retention.
+  * **Air-Gapped Page Source Mode**: Fallback tab allowing users on air-gapped or proxy-restricted networks to paste raw Spotify embed/page HTML directly for offline parsing via `parseSpotifyEmbedHtml`.
+  * *Detailed Specifications*: See [`docs/SPOTIFY_INTAKE_BRIDGE_GUIDE.md`](file:///c:/Users/USER/Desktop/APPS/Playlist%20Haven/Playlist-Haven/docs/SPOTIFY_INTAKE_BRIDGE_GUIDE.md).
+
 ---
 
 ## 4. ⚙️ Technical Stack & System Architecture

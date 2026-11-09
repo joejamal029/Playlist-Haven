@@ -30,7 +30,7 @@ $$\text{Layer 1: Discovery (Pure Exploration)} \xrightarrow{\text{Intake Cohorts
 
 ---
 
-## 2. 🎛️ The 16-Module Architectural Matrix
+## 2. 🎛️ The 19-Module Architectural Matrix
 
 | # | Module Name | Lifecycle Layer | DAESO Role | Core Engine / Algorithm | Primary Outputs |
 | :-: | :--- | :--- | :--- | :--- | :--- |
@@ -52,6 +52,9 @@ $$\text{Layer 1: Discovery (Pure Exploration)} \xrightarrow{\text{Intake Cohorts
 | **16**| **Playlist Resequencer** | **L2: Ingestion** | Repair | 2-Tier matching (Clean baseline + 10-category AI) + Chronology restorer | Restored Spotify CSV with Provenance |
 | **17**| **Consensus Aggregator** | **L1: Discovery** | Crate-Digging | Multi-source 'Best Of' cross-tabulation + Jaro-Winkler consensus thresholding + Audio Previews | Consensus Masterpiece CSV / M3U |
 | **18**| **Audimote 🐣** | **L2: Triage** | Intelligence | Essentia.js Wasm + 3-Tier Multi-Band Consensus BPM + Camelot Wheel + 2D Mood Circumplex | Harmonic DJ M3U / Focus M3U / Dense Acoustic CSV |
+| **19**| **Spotify Intake & Bridge** | **L1 / L2 Bridge** | Ingestion | Client-side Web Crypto RFC 6238 TOTP + Pathfinder GraphQL pagination + Spotify CDN album art | UTF-8 BOM CSV (with Cover Art URLs) / M3U / TSV / URIs |
+| **20**| **Discovery Intelligence Layer** | **L1 / Macro Graph** | Discovery Intelligence | Bipartite Graph Engine + Louvain Modularity + DNA/Archaeology + Curator Intelligence + 5 AI Personas/Cortex + 5 Visualization Lenses (Infinite Galaxy, World Cultural Atlas, Artist Network, Wander Odyssey, Acoustic Mood Map) | UTF-8 BOM CSV / M3U / TSV + Staging to M14/M3 |
+
 
 ---
 
@@ -101,6 +104,14 @@ $$\text{Layer 1: Discovery (Pure Exploration)} \xrightarrow{\text{Intake Cohorts
   * **2D Affective Circumplex**: Visualizes tracks on Russell's Valence-Arousal plane across 4 macro quadrants, 8 nuanced octants, and a central Balanced ⚖️ equilibrium core ($|V| \le 0.18, |A| \le 0.18$).
   * **Fail-Open Network & Self-Healing IndexedDB (v4)**: Database cache checks never block live Apple CDN searches; automatic version recovery handles schema migrations transparently.
 
+### 7. 📻 Spotify Intake & Bridge Engine (Module 19)
+* Pure client-side zero-auth Spotify playlist extractor eliminating TuneMyMusic/Soundiiz dependencies:
+  * **Zero Python Daemon**: Built completely in pure TypeScript using browser Web Crypto (`crypto.subtle` HMAC-SHA1 RFC 6238 TOTP).
+  * **Pathfinder GraphQL Multi-Batch Pagination**: Ingests massive public playlists (300+ tracks) via internal persisted query hash `bb67e0af06e8d6f52b531f97468ee4acd44cd0f82b988e15c2ea47b1148efc77`.
+  * **Reusable Inline Cover Art**: Directly leverages Spotify CDN artwork (`https://i.scdn.co/image/...`) via `SongCoverArt.tsx` with vinyl crate fallbacks, fully insulating the app when external iTunes searches fail.
+  * **Universal Exporters with Image URLs**: One-click output to UTF-8 BOM CSV (with 'Cover Art URL' column), M3U playlists, TSV, and desktop Spotify URIs (`spotify:track:...`).
+  * **Cross-Module Cover Ingestion**: Discovery Triage (Module 14) and Consensus Aggregator (Module 17) automatically parse and preserve Cover Art URLs from imported CSVs.
+
 ---
 
 ## 4. ⚙️ Technical Architecture & Quality Guarantees
@@ -122,7 +133,8 @@ $$\text{Layer 1: Discovery (Pure Exploration)} \xrightarrow{\text{Intake Cohorts
 ## 5. 📚 Architectural Documentation Ecosystem
 
 * 🏠 **[README.md](file:///c:/Users/USER/Desktop/APPS/Playlist%20Haven/Playlist-Haven/README.md)**: The welcoming, human-friendly storefront and user guide for music lovers and developers.
-* 📘 **[Comprehensive System Brief (`docs/PLAYLIST_HAVEN_SYSTEM_BRIEF.md`)](file:///c:/Users/USER/Desktop/APPS/Playlist%20Haven/Playlist-Haven/docs/PLAYLIST_HAVEN_SYSTEM_BRIEF.md)**: The complete, exhaustive 18-module technical specification and protocol manual.
+* 📘 **[Comprehensive System Brief (`docs/PLAYLIST_HAVEN_SYSTEM_BRIEF.md`)](file:///c:/Users/USER/Desktop/APPS/Playlist%20Haven/Playlist-Haven/docs/PLAYLIST_HAVEN_SYSTEM_BRIEF.md)**: The complete, exhaustive 19-module technical specification and protocol manual.
+* 📻 **[Spotify Intake & Bridge Guide (`docs/SPOTIFY_INTAKE_BRIDGE_GUIDE.md`)](file:///c:/Users/USER/Desktop/APPS/Playlist%20Haven/Playlist-Haven/docs/SPOTIFY_INTAKE_BRIDGE_GUIDE.md)**: Operator and architecture manual for Module 19 zero-daemon Spotify playlist ingestion, Web Crypto TOTP, and multi-format exporters.
 * 🐣 **[Audimote User Guide (`docs/AUDIMOTE_USER_GUIDE.md`)](file:///c:/Users/USER/Desktop/APPS/Playlist%20Haven/Playlist-Haven/docs/AUDIMOTE_USER_GUIDE.md)**: Operator manual for Module 18 acoustic triage, 3-tier consensus BPM, Camelot wheel, and circumplex models.
 * 🔬 **[Audimote Algorithms Audit (`docs/AUDIMOTE_ALGORITHMS_AUDIT.md`)](file:///c:/Users/USER/Desktop/APPS/Playlist%20Haven/Playlist-Haven/docs/AUDIMOTE_ALGORITHMS_AUDIT.md)**: Exhaustive DSP audit, mathematical equations, vocal fold arbitration trees, and test suite matrix.
 * 📋 **[Module 17 Handoff (`docs/HANDOFF_MODULE_17_CONSENSUS_AGGREGATOR.md`)](file:///c:/Users/USER/Desktop/APPS/Playlist%20Haven/Playlist-Haven/docs/HANDOFF_MODULE_17_CONSENSUS_AGGREGATOR.md)**: Engineering blueprint for the Consensus Aggregator module.

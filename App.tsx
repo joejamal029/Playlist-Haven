@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layers, Merge, Music, Settings, Github, Activity, Scissors, Shuffle, Eraser, Type, BarChart3, Eye, Filter, SlidersHorizontal, Wand2, HelpCircle, Sparkles, BookOpen, GitCompare, Globe, Compass, Database, ArrowUpDown, Headphones } from 'lucide-react';
+import { Layers, Merge, Music, Settings, Github, Activity, Scissors, Shuffle, Eraser, Type, BarChart3, Eye, Filter, SlidersHorizontal, Wand2, HelpCircle, Sparkles, BookOpen, GitCompare, Globe, Compass, Database, ArrowUpDown, Headphones, Radio, Network } from 'lucide-react';
 import SonicSieveView from './views/SonicSieveView';
 import PlaylistMergerView from './views/PlaylistMergerView';
 import PlaylistSplitterView from './views/PlaylistSplitterView';
@@ -18,12 +18,14 @@ import DeepMetadataEnrichmentView from './views/DeepMetadataEnrichmentView';
 import PlaylistResequencerView from './views/PlaylistResequencerView';
 import ConsensusAggregatorView from './views/ConsensusAggregatorView';
 import AudimoteView from './views/AudimoteView';
+import SpotifyIntakeBridgeView from './views/SpotifyIntakeBridgeView';
+import DiscoveryLayerView from './views/DiscoveryLayerView';
 import HelpGuideModal from './components/HelpGuideModal';
 import ErrorBoundary from './components/ErrorBoundary';
 import { AudioPreviewProvider } from './components/AudioPreviewContext';
 import AudioPlayerBar from './components/AudioPlayerBar';
 
-type AppView = 'dashboard' | 'sieve' | 'merger' | 'splitter' | 'randomizer' | 'pruner' | 'renamer' | 'appearance' | 'vision' | 'tier' | 'manipulator' | 'matcher' | 'stripper' | 'clustering' | 'triage' | 'enrichment' | 'resequencer' | 'consensus' | 'audimote';
+type AppView = 'dashboard' | 'sieve' | 'merger' | 'splitter' | 'randomizer' | 'pruner' | 'renamer' | 'appearance' | 'vision' | 'tier' | 'manipulator' | 'matcher' | 'stripper' | 'clustering' | 'triage' | 'enrichment' | 'resequencer' | 'consensus' | 'audimote' | 'spotify-intake' | 'discovery-layer';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<AppView>('dashboard');
@@ -93,6 +95,21 @@ export default function App() {
           <AudimoteView 
             onBack={() => setCurrentView('dashboard')} 
             onOpenHelp={() => setIsHelpModalOpen(true)} 
+            onViewSelect={setCurrentView}
+          />
+        );
+      case 'spotify-intake':
+        return (
+          <SpotifyIntakeBridgeView
+            onBack={() => setCurrentView('dashboard')}
+            onOpenHelp={() => setIsHelpModalOpen(true)}
+            onViewSelect={setCurrentView}
+          />
+        );
+      case 'discovery-layer':
+        return (
+          <DiscoveryLayerView
+            onBack={() => setCurrentView('dashboard')}
             onViewSelect={setCurrentView}
           />
         );
@@ -185,6 +202,60 @@ const Dashboard = ({
 
         {/* Unified, Balanced & Fully Responsive Tools Grid */}
         <div className="grid grid-cols-2 gap-4">
+
+          {/* Discovery Intelligence Layer Card - Capstone (Module 20) */}
+          <button 
+            onClick={() => onViewSelect('discovery-layer')}
+            className="group relative overflow-hidden p-6 bg-slate-900 border border-rose-500/40 rounded-2xl text-left transition-all hover:border-rose-500/80 hover:shadow-2xl hover:shadow-rose-950/40 active:scale-[0.98] col-span-2"
+          >
+            <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-25 transition-opacity">
+              <Network size={80} className="text-rose-400" />
+            </div>
+            <div className="relative z-10">
+              <div className="w-10 h-10 bg-rose-500/20 text-rose-400 rounded-xl flex items-center justify-center mb-4 group-hover:bg-rose-500 group-hover:text-slate-950 transition-colors">
+                <Network size={20} />
+              </div>
+              <div className="flex items-center space-x-2">
+                <h2 className="text-xl font-bold text-slate-100 mb-1">Discovery Intelligence Layer</h2>
+                <span className="text-[9px] bg-rose-500/20 text-rose-300 border border-rose-500/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono">
+                  Module 20 Capstone
+                </span>
+                <span className="text-[9px] bg-rose-900/60 text-rose-200 border border-rose-700/50 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono hidden sm:inline">
+                  Graph Intelligence 🌌
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed font-medium">
+                High-performance consensus matrix & multi-corpus graph inversion. Ingest 78k+ library archives, uncover universal consensus gems across playlists, view provenance lineage, and stage directly into Triage, Audimote, or Consensus Aggregator.
+              </p>
+            </div>
+          </button>
+
+          {/* Spotify Intake & Bridge Card - Featured (Module 19) */}
+          <button 
+            onClick={() => onViewSelect('spotify-intake')}
+            className="group relative overflow-hidden p-6 bg-slate-900 border border-emerald-500/40 rounded-2xl text-left transition-all hover:border-emerald-500/70 hover:shadow-2xl hover:shadow-emerald-950/30 active:scale-[0.98] col-span-2"
+          >
+            <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-25 transition-opacity">
+              <Radio size={80} className="text-emerald-400" />
+            </div>
+            <div className="relative z-10">
+              <div className="w-10 h-10 bg-emerald-500/20 text-emerald-400 rounded-xl flex items-center justify-center mb-4 group-hover:bg-emerald-500 group-hover:text-slate-950 transition-colors">
+                <Radio size={20} />
+              </div>
+              <div className="flex items-center space-x-2">
+                <h2 className="text-xl font-bold text-slate-100 mb-1">Spotify Intake & Bridge</h2>
+                <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono">
+                  Module 19
+                </span>
+                <span className="text-[9px] bg-emerald-900/60 text-emerald-200 border border-emerald-700/50 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider font-mono hidden sm:inline">
+                  Direct Ingestion ⚡
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed font-medium">
+                Eliminate TuneMyMusic export dependencies. Directly ingest public Spotify playlists into Playlist Haven via direct URL or air-gapped page source. Export to CSV (with UTF-8 BOM), M3U, TSV, or Spotify URIs, and stage straight into Discovery Triage or Consensus Aggregator.
+              </p>
+            </div>
+          </button>
 
           {/* Discovery Triage & Honing Card - Featured (Module 14) */}
           <button 

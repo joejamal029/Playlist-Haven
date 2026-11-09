@@ -1465,7 +1465,7 @@ export default function DeepMetadataEnrichmentView({ onBack }: DeepMetadataEnric
           itunesEnriched: (tableStats.itunesEnriched || 0) + supplementedCount,
           needsResolution: tableStats.needsResolution,
           aiSynthesized: tableStats.aiSynthesized,
-          manualResolved: tableStats.manualResolved,
+          manualResolved: (tableStats as any).manualResolved || 0,
         },
       });
 
@@ -1505,7 +1505,7 @@ export default function DeepMetadataEnrichmentView({ onBack }: DeepMetadataEnric
       r.resolution?.status === 'ai_synthesized_fallback' ||
       r.resolution?.source === 'ai_synthesized_fallback' ||
       r.resolution?.isAiSynthesized ||
-      (r.resolution?.status === 'needs_resolution' && r.resolution?.failureReason === 'PURGED_FOR_RETRY')
+      (r.resolution?.status === 'needs_resolution' && (r.resolution?.failureReason as any) === 'PURGED_FOR_RETRY')
     );
 
     if (targets.length === 0) {
@@ -1546,7 +1546,7 @@ export default function DeepMetadataEnrichmentView({ onBack }: DeepMetadataEnric
           itunesEnriched: (tableStats.itunesEnriched || 0) + itunesFound,
           needsResolution: stillUnresolved,
           aiSynthesized: targets.length - i - 1,
-          manualResolved: tableStats.manualResolved,
+          manualResolved: (tableStats as any).manualResolved || 0,
         },
       });
 

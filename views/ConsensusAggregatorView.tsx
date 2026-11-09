@@ -151,6 +151,35 @@ export default function ConsensusAggregatorView({
       });
   }, [rawConsensusTracks, groundedTracks, isGrounded, minThreshold, searchQuery]);
 
+  // Check for incoming seed from Module 19 (Spotify Intake) or other modules
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('playlist_haven_consensus_seed');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && (parsed.tracks || parsed.textDump)) {
+          setSections(prev => [
+            ...prev,
+            {
+              id: `section-spotify-${Date.now()}`,
+              name: parsed.sourceName || 'Spotify Playlist Import',
+              inputType: 'text',
+              files: [],
+              textDump: parsed.textDump || '',
+              enabled: true,
+              trackCount: parsed.tracks?.length || 0,
+              tracks: parsed.tracks || [],
+            },
+          ]);
+          showToast(`Loaded ${parsed.tracks?.length || 'playlist'} tracks from Spotify Intake into a new source!`);
+          localStorage.removeItem('playlist_haven_consensus_seed');
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to parse consensus seed:', e);
+    }
+  }, []);
+
   // Section Management Helpers
   const handleAddSection = () => {
     const newId = `section-${Date.now()}`;

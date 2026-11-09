@@ -783,6 +783,74 @@ export default function HelpGuideModal({ isOpen, onClose, initialTab = 'why' }: 
         </div>
       )
     },
+    {
+      id: 'tool-spotify-intake',
+      category: 'tools',
+      title: '📻 Module 19: Spotify Intake & Bridge (Zero-Auth Ingestion)',
+      badge: 'Zero-Auth Direct ⚡',
+      badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+      summary: 'Directly ingest public Spotify playlists into Playlist Haven without developer API keys, Spotify Premium paywalls, or third-party intermediaries.',
+      tags: ['spotify', 'module 19', 'intake', 'bridge', 'embed', 'csv', 'm3u', 'tsv', 'uri', 'triage', 'consensus', 'offline'],
+      content: (
+        <div className="space-y-3 text-xs text-slate-300">
+          <p>
+            Spotify's 2024 developer policy change blocks free developer accounts from accessing the Web API with an HTTP 403 paywall. <strong>Module 19</strong> eliminates TuneMyMusic and external Python sidecars completely by running 100% in pure client-side TypeScript:
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <span className="font-bold text-emerald-300">⚡ Web Crypto TOTP & Pathfinder</span>
+              <p className="text-slate-400">Uses browser native <code>crypto.subtle</code> HMAC-SHA1 to calculate RFC 6238 TOTPs and mint anonymous session tokens, paginating Spotify's internal Pathfinder GraphQL service in 300-track batches (extracts all 389+ tracks with zero truncation).</p>
+            </div>
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <span className="font-bold text-cyan-300">🖼️ Direct Inline Album Artwork</span>
+              <p className="text-slate-400">Pulls direct, unmetered Spotify CDN images (<code>https://i.scdn.co/image/...</code>) into the table with lazy-loading and vinyl crate fallbacks, fully decoupling artwork display from Apple iTunes.</p>
+            </div>
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <span className="font-bold text-violet-300">📦 Multi-Format Exporters</span>
+              <p className="text-slate-400">Export UTF-8 BOM CSV (with a dedicated <code>Cover Art URL</code> column), standard #EXTM3U, tab-separated TSV for spreadsheets, or raw Spotify URIs for 1-click desktop client paste.</p>
+            </div>
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <span className="font-bold text-amber-300">🧭 1-Click Curation Bridges</span>
+              <p className="text-slate-400">Stage directly into <strong>Discovery Triage (Module 14)</strong> or route as an active nomination source into <strong>Consensus Aggregator (Module 17)</strong> with full cover art and metadata retention.</p>
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'tool-discovery-layer',
+      category: 'tools',
+      title: '🌌 Module 20: Discovery Intelligence Layer (Graph & Constellation)',
+      badge: 'Macro Graph Engine ⚡',
+      badgeColor: 'bg-rose-500/20 text-rose-300 border-rose-500/30',
+      summary: 'Macro-scale bipartite graph intelligence across 1,000+ playlists (78k+ tracks). Multi-tier deduplication, sparse Jaccard, Louvain communities, DNA & archaeology, Curatorial pipelines, AI Agent personas & Cortex, and 5 interactive visualization lenses.',
+      tags: ['module 20', 'discovery', 'graph', 'consensus', 'jaccard', 'louvain', 'constellation', 'world atlas', 'odyssey', 'mood map', 'agents', 'cortex', 'curators'],
+      content: (
+        <div className="space-y-3 text-xs text-slate-300">
+          <p>
+            <strong>Discovery Intelligence Layer (Module 20)</strong> scales curatorial discovery to massive personal archives, handling 78,000+ tracks and 1,000+ playlists client-side with zero server dependencies:
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <span className="font-bold text-rose-300">🌌 Infinite Galaxy & Solar System</span>
+              <p className="text-slate-400">Hardware-accelerated Louvain community nebulae connected by Jaccard gravitational strands. Zoom into any playlist star to reveal its planetary track orbit and fire Graph Inversion laser beams across the library.</p>
+            </div>
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <span className="font-bold text-emerald-300">🗺️ Global Cultural Music Atlas</span>
+              <p className="text-slate-400">Interactive Mercator world map mapping library density across 20 canonical regional centroids (Naija, J-Pop, K-Pop, Filipino, etc.) with direct 30s preview streaming from map pins, Regional Capsule drawers, and Trans-Continental Flight tours.</p>
+            </div>
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <span className="font-bold text-amber-300">🧭 Wander Odyssey Continuous Player</span>
+              <p className="text-slate-400">Algorithmic graph-walking engine that walks topological bridges between playlists, auto-advancing 30s audio previews with curatorial step rationales and 1-click staging to M14 Triage & M3 Manipulator.</p>
+            </div>
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+              <span className="font-bold text-cyan-300">🎭 Acoustic Mood Map (2D Circumplex)</span>
+              <p className="text-slate-400">2D scatter plot mapping tracks on Russell's Valence vs. Arousal plane (Exuberant, Intense, Serene, Melancholic) powered by Audimote Essentia.js Wasm profiles with instant audio auditioning.</p>
+            </div>
+          </div>
+        </div>
+      )
+    },
 
     // --- GLOSSARY & FORMATS ---
     {

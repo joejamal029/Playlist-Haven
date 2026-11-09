@@ -388,7 +388,7 @@ export default function PlaylistResequencerView({ onBack, onOpenHelp }: Playlist
     // If the track is part of multi-selection, move the whole batch together!
     const isPartOfSelection = selectedTargetIds.has(trackId);
     const idsToMove = isPartOfSelection && selectedTargetIds.size > 1
-      ? Array.from(selectedTargetIds)
+      ? (Array.from(selectedTargetIds) as string[])
       : [trackId];
 
     const currentTrack = resequencedTracks.find(t => t.id === trackId);
